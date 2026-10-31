@@ -11,20 +11,24 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.AccountCircle
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.CloudSync
 import androidx.compose.material.icons.filled.ErrorOutline
+import androidx.compose.material.icons.filled.Key
 import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.Radio
 import androidx.compose.material.icons.filled.Visibility
 import androidx.compose.material.icons.filled.VisibilityOff
+import com.example.musicplayer.data.lastfm.LastFmConfig
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
@@ -65,7 +69,10 @@ fun LastFmDialog(
     errorMessage: String?,
     lastStatusMessage: String?,
     pendingCount: Int = 0,
-    onLogin: (String, String) -> Unit,
+    initialApiKey: String = "",
+    initialSharedSecret: String = "",
+    hasBuiltInKeys: Boolean = LastFmConfig.hasBuildConfigKeys,
+    onLogin: (username: String, password: String, apiKey: String?, sharedSecret: String?) -> Unit,
     onLogout: () -> Unit,
     onSyncPending: () -> Unit = {},
     onDismiss: () -> Unit
@@ -73,6 +80,13 @@ fun LastFmDialog(
     var inputUsername by remember { mutableStateOf("") }
     var inputPassword by remember { mutableStateOf("") }
     var passwordVisible by remember { mutableStateOf(false) }
+    var inputApiKey by remember(initialApiKey) { mutableStateOf(initialApiKey) }
+    var inputSharedSecret by remember(initialSharedSecret) { mutableStateOf(initialSharedSecret) }
+    var secretVisible by remember { mutableStateOf(false) }
+    var showCustomApiFields by remember(hasBuiltInKeys, initialApiKey) {
+        mutableStateOf(!hasBuiltInKeys || initialApiKey.isNotBlank())
+    }
+    val hasValidApiKeys = hasBuiltInKeys || (inputApiKey.isNotBlank() && inputSharedSecret.isNotBlank())
 
     AlertDialog(
         onDismissRequest = { if (!isLoading) onDismiss() },
@@ -103,7 +117,9 @@ fun LastFmDialog(
         },
         text = {
             Column(
-                modifier = Modifier.fillMaxWidth(),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .verticalScroll(rememberScrollState()),
                 verticalArrangement = Arrangement.spacedBy(12.dp)
             ) {
                 if (isLoggedIn) {
@@ -280,14 +296,92 @@ fun LastFmDialog(
                         ),
                         keyboardActions = KeyboardActions(
                             onDone = {
-                                if (inputUsername.isNotBlank() && inputPassword.isNotBlank()) {
-                                    onLogin(inputUsername, inputPassword)
+                                if (inputUsername.isNotBlank() && inputPassword.isNotBlank() && hasValidApiKeys) {
+                                    onLogin(
+                                        inputUsername,
+                                        inputPassword,
+                                        inputApiKey.takeIf { showCustomApiFields },
+                                        inputSharedSecret.takeIf { showCustomApiFields }
+                                    )
                                 }
                             }
                         ),
                         enabled = !isLoading,
                         modifier = Modifier.fillMaxWidth()
                     )
+
+                    if (hasBuiltInKeys && !showCustomApiFields) {
+                        TextButton(
+                            onClick = { showCustomApiFields = true },
+                            enabled = !isLoading
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.Key,
+                                contentDescription = null,
+                                modifier = Modifier.size(16.dp)
+                            )
+                            Spacer(modifier = Modifier.width(6.dp))
+                            Text("Configura API Key personalizzate")
+                        }
+                    }
+
+                    if (showCustomApiFields) {
+                        Text(
+                            text = "Chiavi API Last.fm (creabili gratis su last.fm/api/account/create):",
+                            style = MaterialTheme.typography.labelMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+
+                        OutlinedTextField(
+                            value = inputApiKey,
+                            onValueChange = { inputApiKey = it },
+                            label = { Text("API Key Last.fm") },
+                            leadingIcon = {
+                                Icon(Icons.Default.Key, contentDescription = null)
+                            },
+                            singleLine = true,
+                            keyboardOptions = KeyboardOptions(imeAction = ImeAction.Next),
+                            enabled = !isLoading,
+                            modifier = Modifier.fillMaxWidth()
+                        )
+
+                        OutlinedTextField(
+                            value = inputSharedSecret,
+                            onValueChange = { inputSharedSecret = it },
+                            label = { Text("Shared Secret Last.fm") },
+                            leadingIcon = {
+                                Icon(Icons.Default.Lock, contentDescription = null)
+                            },
+                            trailingIcon = {
+                                IconButton(onClick = { secretVisible = !secretVisible }) {
+                                    Icon(
+                                        imageVector = if (secretVisible) Icons.Default.VisibilityOff else Icons.Default.Visibility,
+                                        contentDescription = if (secretVisible) "Nascondi secret" else "Mostra secret"
+                                    )
+                                }
+                            },
+                            singleLine = true,
+                            visualTransformation = if (secretVisible) VisualTransformation.None else PasswordVisualTransformation(),
+                            keyboardOptions = KeyboardOptions(
+                                keyboardType = KeyboardType.Password,
+                                imeAction = ImeAction.Done
+                            ),
+                            keyboardActions = KeyboardActions(
+                                onDone = {
+                                    if (inputUsername.isNotBlank() && inputPassword.isNotBlank() && hasValidApiKeys) {
+                                        onLogin(
+                                            inputUsername,
+                                            inputPassword,
+                                            inputApiKey,
+                                            inputSharedSecret
+                                        )
+                                    }
+                                }
+                            ),
+                            enabled = !isLoading,
+                            modifier = Modifier.fillMaxWidth()
+                        )
+                    }
 
                     if (!errorMessage.isNullOrBlank()) {
                         Card(
@@ -328,8 +422,15 @@ fun LastFmDialog(
                 }
             } else {
                 Button(
-                    onClick = { onLogin(inputUsername, inputPassword) },
-                    enabled = !isLoading && inputUsername.isNotBlank() && inputPassword.isNotBlank()
+                    onClick = {
+                        onLogin(
+                            inputUsername,
+                            inputPassword,
+                            inputApiKey.takeIf { showCustomApiFields },
+                            inputSharedSecret.takeIf { showCustomApiFields }
+                        )
+                    },
+                    enabled = !isLoading && inputUsername.isNotBlank() && inputPassword.isNotBlank() && hasValidApiKeys
                 ) {
                     if (isLoading) {
                         CircularProgressIndicator(

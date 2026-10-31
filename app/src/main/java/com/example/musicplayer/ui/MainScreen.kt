@@ -217,6 +217,8 @@ fun MainScreen(
     val lastFmAuthLoading by viewModel.lastFmAuthLoading.collectAsStateWithLifecycle()
     val lastFmAuthError by viewModel.lastFmAuthError.collectAsStateWithLifecycle()
     val lastFmStatusMessage by viewModel.lastFmStatusMessage.collectAsStateWithLifecycle()
+    val lastFmCustomApiKey by viewModel.lastFmCustomApiKey.collectAsStateWithLifecycle()
+    val lastFmCustomSharedSecret by viewModel.lastFmCustomSharedSecret.collectAsStateWithLifecycle()
     val pendingScrobblesCount by viewModel.pendingScrobblesCount.collectAsStateWithLifecycle()
     var showLastFmDialog by remember { mutableStateOf(false) }
     var showSettingsDialog by remember { mutableStateOf(false) }
@@ -1193,7 +1195,11 @@ fun MainScreen(
             errorMessage = lastFmAuthError,
             lastStatusMessage = lastFmStatusMessage,
             pendingCount = pendingScrobblesCount,
-            onLogin = { user, pass -> viewModel.loginLastFm(user, pass) },
+            initialApiKey = lastFmCustomApiKey,
+            initialSharedSecret = lastFmCustomSharedSecret,
+            onLogin = { user, pass, apiKey, secret ->
+                viewModel.loginLastFm(user, pass, apiKey, secret)
+            },
             onLogout = { viewModel.logoutLastFm() },
             onSyncPending = { viewModel.syncOfflineScrobbles() },
             onDismiss = { showLastFmDialog = false }

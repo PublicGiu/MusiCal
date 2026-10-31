@@ -78,4 +78,18 @@ class LastFmConfigTest {
             assertEquals(32, LastFmConfig.SHARED_SECRET.length)
         }
     }
+
+    @Test
+    fun testCustomCredentialsOverrideAndReset() {
+        try {
+            LastFmConfig.setCustomCredentials("0123456789abcdef0123456789abcdef", "fedcba9876543210fedcba9876543210")
+            assertEquals("0123456789abcdef0123456789abcdef", LastFmConfig.API_KEY)
+            assertEquals("fedcba9876543210fedcba9876543210", LastFmConfig.SHARED_SECRET)
+            assert(LastFmConfig.hasCustomKeys)
+            assert(LastFmConfig.isConfigured)
+        } finally {
+            LastFmConfig.setCustomCredentials(null, null)
+            assertFalse(LastFmConfig.hasCustomKeys)
+        }
+    }
 }

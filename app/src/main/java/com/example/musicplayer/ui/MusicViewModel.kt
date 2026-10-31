@@ -123,6 +123,12 @@ class MusicViewModel(application: Application) : AndroidViewModel(application) {
     private val _lastFmStatusMessage = MutableStateFlow<String?>(null)
     val lastFmStatusMessage: StateFlow<String?> = _lastFmStatusMessage.asStateFlow()
 
+    private val _lastFmCustomApiKey = MutableStateFlow(lastFmSessionManager.getCustomApiKey() ?: "")
+    val lastFmCustomApiKey: StateFlow<String> = _lastFmCustomApiKey.asStateFlow()
+
+    private val _lastFmCustomSharedSecret = MutableStateFlow(lastFmSessionManager.getCustomSharedSecret() ?: "")
+    val lastFmCustomSharedSecret: StateFlow<String> = _lastFmCustomSharedSecret.asStateFlow()
+
     val pendingScrobblesCount: StateFlow<Int> = syncManager.pendingCountFlow
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), 0)
 
@@ -870,9 +876,31 @@ class MusicViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     // --- Metodi Pubblici Last.fm ---
-    fun loginLastFm(username: String, password: String) {
+    fun saveLastFmApiCredentials(apiKey: String, sharedSecret: String) {
+        val cleanKey = apiKey.trim()
+        val cleanSecret = sharedSecret.trim()
+        if (cleanKey.isBlank() && cleanSecret.isBlank()) {
+            lastFmSessionManager.clearCustomApiCredentials()
+            _lastFmCustomApiKey.value = ""
+            _lastFmCustomSharedSecret.value = ""
+        } else {
+            lastFmSessionManager.saveCustomApiCredentials(cleanKey, cleanSecret)
+            _lastFmCustomApiKey.value = cleanKey
+            _lastFmCustomSharedSecret.value = cleanSecret
+        }
+    }
+
+    fun loginLastFm(
+        username: String,
+        password: String,
+        customApiKey: String? = null,
+        customSharedSecret: String? = null
+    ) {
+        if (!customApiKey.isNullOrBlank() && !customSharedSecret.isNullOrBlank()) {
+            saveLastFmApiCredentials(customApiKey, customSharedSecret)
+        }
         if (!LastFmConfig.isConfigured) {
-            _lastFmAuthError.value = "Credenziali Last.fm non configurate. Aggiungile in local.properties."
+            _lastFmAuthError.value = "Inserisci API Key e Shared Secret di Last.fm per continuare."
             return
         }
         if (username.isBlank() || password.isBlank()) {

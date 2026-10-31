@@ -7,15 +7,45 @@ import java.security.MessageDigest
  * Configurazione e utility di firma per le API Last.fm.
  */
 object LastFmConfig {
-    val API_KEY: String = BuildConfig.LASTFM_API_KEY
-    val SHARED_SECRET: String = BuildConfig.LASTFM_SHARED_SECRET
+    @Volatile
+    private var customApiKey: String? = null
+
+    @Volatile
+    private var customSharedSecret: String? = null
+
+    val API_KEY: String
+        get() = customApiKey?.takeIf { it.isNotBlank() } ?: BuildConfig.LASTFM_API_KEY
+
+    val SHARED_SECRET: String
+        get() = customSharedSecret?.takeIf { it.isNotBlank() } ?: BuildConfig.LASTFM_SHARED_SECRET
+
     const val BASE_URL = "https://ws.audioscrobbler.com/2.0/"
 
     /**
-     * Verifica se le credenziali API sono state configurate.
+     * Indica se l'APK contiene chiavi preconfigurate in fase di build (da local.properties).
+     */
+    val hasBuildConfigKeys: Boolean
+        get() = BuildConfig.LASTFM_API_KEY.isNotBlank() && BuildConfig.LASTFM_SHARED_SECRET.isNotBlank()
+
+    /**
+     * Indica se l'utente ha configurato chiavi API personalizzate dall'interfaccia dell'app.
+     */
+    val hasCustomKeys: Boolean
+        get() = !customApiKey.isNullOrBlank() && !customSharedSecret.isNullOrBlank()
+
+    /**
+     * Verifica se le credenziali API sono disponibili (da configurazione utente o da BuildConfig).
      */
     val isConfigured: Boolean
         get() = API_KEY.isNotBlank() && SHARED_SECRET.isNotBlank()
+
+    /**
+     * Imposta o rimuove le credenziali API personalizzate a runtime.
+     */
+    fun setCustomCredentials(apiKey: String?, sharedSecret: String?) {
+        customApiKey = apiKey?.trim()?.takeIf { it.isNotBlank() }
+        customSharedSecret = sharedSecret?.trim()?.takeIf { it.isNotBlank() }
+    }
 
     /**
      * Calcola la firma api_sig richiesta da Last.fm:

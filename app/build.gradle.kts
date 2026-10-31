@@ -14,13 +14,19 @@ val localProperties = Properties().apply {
     }
 }
 
-val lastFmApiKey: String = System.getenv("LASTFM_API_KEY")
-    ?: localProperties.getProperty("lastfm.apiKey")
-    ?: ""
+val excludeLastFmKeys = project.findProperty("excludeLastFmKeys")?.toString()?.toBoolean() == true
 
-val lastFmSharedSecret: String = System.getenv("LASTFM_SHARED_SECRET")
-    ?: localProperties.getProperty("lastfm.sharedSecret")
-    ?: ""
+val lastFmApiKey: String = if (excludeLastFmKeys) "" else (
+    System.getenv("LASTFM_API_KEY")
+        ?: localProperties.getProperty("lastfm.apiKey")
+        ?: ""
+)
+
+val lastFmSharedSecret: String = if (excludeLastFmKeys) "" else (
+    System.getenv("LASTFM_SHARED_SECRET")
+        ?: localProperties.getProperty("lastfm.sharedSecret")
+        ?: ""
+)
 
 android {
     namespace = "com.example.musicplayer"

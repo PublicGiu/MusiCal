@@ -98,10 +98,16 @@ app/src/main/java/com/example/musicplayer/
 
 ## 🔒 Sicurezza delle Chiavi API
 
-Il repository è strutturato per non esporre mai credenziali o chiavi segrete nel codice sorgente:
-1. Le chiavi API di Last.fm (`lastfm.apiKey` e `lastfm.sharedSecret`) vengono lette esclusivamente dal file locale `local.properties` (escluso da Git tramite `.gitignore`) o da variabili d'ambiente, e iniettate in `BuildConfig` in fase di compilazione.
-2. Nel repository è incluso il template sicuro [`local.properties.example`](local.properties.example).
-3. Se compili l'app senza configurare le chiavi Last.fm, **l'applicazione compila e funziona regolarmente** in tutte le sue funzioni di lettore musicale locale, disabilitando in modo trasparente il solo login Last.fm.
+Il repository e gli APK distribuiti sono progettati per non esporre mai credenziali o chiavi segrete:
+1. **Configurazione in-app (per chi scarica l'APK dalle Releases)**: Aprendo **Impostazioni → Last.fm Scrobbler** è possibile inserire direttamente la propria `API Key` e il proprio `Shared Secret` (creabili gratuitamente su [last.fm/api/account/create](https://www.last.fm/api/account/create)), che vengono salvati localmente sul dispositivo.
+2. **Configurazione in fase di build (`local.properties`)**: Per chi compila da sorgente, le chiavi possono essere inserite nel file locale `local.properties` (escluso da Git tramite `.gitignore`) usando il template [`local.properties.example`](local.properties.example).
+3. Se non vengono configurate chiavi Last.fm, **l'applicazione funziona regolarmente** in tutte le sue funzioni di lettore musicale locale.
+
+---
+
+## 📲 Download Diretto APK
+
+Se vuoi installare subito **MusiCal** sul tuo dispositivo Android 16 senza compilare il codice sorgente, scarica il file `.apk` dalla sezione [**Releases**](https://github.com/PublicGiu/MusiCal/releases) di questo repository.
 
 ---
 

@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">MusiCal</string>
+    <string name="permission_rationale">L\'applicazione richiede i permessi per accedere ai brani audio e mostrare i controlli di riproduzione nelle notifiche.</string>
+    <string name="grant_permissions">Concedi permessi</string>
+    <string name="no_songs_found">Nessun file audio trovato sul dispositivo.</string>
+</resources>

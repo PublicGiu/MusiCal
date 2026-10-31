@@ -1,0 +1,12 @@
+## Template per la configurazione locale di sviluppo (local.properties).
+## Copia questo file rinominandolo in 'local.properties' nella directory principale del progetto
+## e configura il percorso del tuo Android SDK e le tue credenziali Last.fm.
+## Questo file NON deve contenere chiavi segrete reali.
+
+# Percorso di installazione dell'Android SDK locale
+sdk.dir=C\:\\Users\\USERNAME\\AppData\\Local\\Android\\Sdk
+
+# Credenziali API di Last.fm (ottenibili gratuitamente da https://www.last.fm/api/account/create)
+# Se lasciate vuote, l'applicazione compilerà comunque ma le funzionalità Last.fm risulteranno disabilitate.
+lastfm.apiKey=INSERISCI_QUI_LA_TUA_API_KEY
+lastfm.sharedSecret=INSERISCI_QUI_IL_TUO_SHARED_SECRET

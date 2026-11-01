@@ -661,18 +661,39 @@ fun PlaylistDetailView(
                     key = { index, track -> "${track.id}_$index" },
                     contentType = { _, _ -> "playlist_track_item" }
                 ) { index, track ->
-                    TrackListItem(
-                        track = track,
-                        isSelected = currentTrack?.id == track.id,
-                        isPlaying = isPlaying && currentTrack?.id == track.id,
-                        onClick = { onPlayTrackIndex(index) },
-                        onAddToQueueClick = onAddToQueueClick,
-                        onAddToPlaylistClick = onAddToPlaylistClick,
-                        onAddToFavoritesClick = if (!playlist.isFavorites) onAddToFavoritesClick?.let { cb -> { cb(track) } } else null,
-                        isFavorite = track.id in favoriteTrackIds,
-                        onRemoveClick = { onRemoveTrack(track.id) },
-                        removeLabel = if (playlist.isFavorites) "Rimuovi dai brani preferiti" else "Rimuovi da playlist"
-                    )
+                    if (onAddToQueueClick != null) {
+                        SwipeToQueueTrackItem(
+                            track = track,
+                            onSwipeToQueue = { onAddToQueueClick(track) },
+                            key = "${track.id}_$index"
+                        ) {
+                            TrackListItem(
+                                track = track,
+                                isSelected = currentTrack?.id == track.id,
+                                isPlaying = isPlaying && currentTrack?.id == track.id,
+                                onClick = { onPlayTrackIndex(index) },
+                                onAddToQueueClick = onAddToQueueClick,
+                                onAddToPlaylistClick = onAddToPlaylistClick,
+                                onAddToFavoritesClick = if (!playlist.isFavorites) onAddToFavoritesClick?.let { cb -> { cb(track) } } else null,
+                                isFavorite = track.id in favoriteTrackIds,
+                                onRemoveClick = { onRemoveTrack(track.id) },
+                                removeLabel = if (playlist.isFavorites) "Rimuovi dai brani preferiti" else "Rimuovi da playlist"
+                            )
+                        }
+                    } else {
+                        TrackListItem(
+                            track = track,
+                            isSelected = currentTrack?.id == track.id,
+                            isPlaying = isPlaying && currentTrack?.id == track.id,
+                            onClick = { onPlayTrackIndex(index) },
+                            onAddToQueueClick = onAddToQueueClick,
+                            onAddToPlaylistClick = onAddToPlaylistClick,
+                            onAddToFavoritesClick = if (!playlist.isFavorites) onAddToFavoritesClick?.let { cb -> { cb(track) } } else null,
+                            isFavorite = track.id in favoriteTrackIds,
+                            onRemoveClick = { onRemoveTrack(track.id) },
+                            removeLabel = if (playlist.isFavorites) "Rimuovi dai brani preferiti" else "Rimuovi da playlist"
+                        )
+                    }
                 }
             }
         }

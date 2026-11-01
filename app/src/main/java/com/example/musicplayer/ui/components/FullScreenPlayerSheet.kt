@@ -128,7 +128,7 @@ fun FullScreenPlayerSheet(
         }
     }
 
-    val initialPage = remember(effectiveQueue) {
+    val initialPage = remember {
         if (effectiveQueue.isEmpty()) 0
         else currentQueueIndex.coerceIn(0, effectiveQueue.size - 1)
     }
@@ -138,13 +138,24 @@ fun FullScreenPlayerSheet(
         pageCount = { effectiveQueue.size }
     )
 
-    // Sincronizzazione con ExoPlayer: quando la pagina cambia effettivamente (settledPage)
     val currentOnSkipToQueueItem by rememberUpdatedState(onSkipToQueueItem)
-    LaunchedEffect(pagerState, effectiveQueue) {
-        snapshotFlow { pagerState.settledPage }
-            .collect { settledPage ->
-                if (effectiveQueue.isNotEmpty() && settledPage in effectiveQueue.indices) {
-                    if (settledPage != currentQueueIndex) {
+    val latestQueueIndex by rememberUpdatedState(currentQueueIndex)
+    val latestEffectiveQueue by rememberUpdatedState(effectiveQueue)
+    var isProgrammaticScroll by remember { mutableStateOf(false) }
+
+    // Sincronizzazione con ExoPlayer: quando l'utente trascina manualmente la copertina e il Pager si assesta
+    LaunchedEffect(pagerState) {
+        var userDragged = false
+        snapshotFlow { Triple(pagerState.isScrollInProgress, pagerState.settledPage, isProgrammaticScroll) }
+            .collect { (inProgress, settledPage, programmatic) ->
+                if (inProgress && !programmatic) {
+                    userDragged = true
+                }
+                if (!inProgress && !programmatic && userDragged) {
+                    userDragged = false
+                    val queueSnapshot = latestEffectiveQueue
+                    val targetQueueIdx = latestQueueIndex
+                    if (queueSnapshot.isNotEmpty() && settledPage in queueSnapshot.indices && settledPage != targetQueueIdx) {
                         currentOnSkipToQueueItem(settledPage)
                     }
                 }
@@ -152,11 +163,16 @@ fun FullScreenPlayerSheet(
     }
 
     // Sincronizzazione inversa: se il brano cambia dall'esterno (fine brano, notifiche, tasti Next/Prev),
-    // aggiorna la posizione del Pager con transizione animata
+    // aggiorna la posizione del Pager con transizione animata senza innescare un falso swipe
     LaunchedEffect(currentQueueIndex, effectiveQueue) {
         if (effectiveQueue.isNotEmpty() && currentQueueIndex in 0 until pagerState.pageCount) {
             if (pagerState.currentPage != currentQueueIndex) {
-                pagerState.animateScrollToPage(currentQueueIndex)
+                isProgrammaticScroll = true
+                try {
+                    pagerState.animateScrollToPage(currentQueueIndex)
+                } finally {
+                    isProgrammaticScroll = false
+                }
             }
         }
     }
@@ -568,6 +584,12 @@ private fun FullScreenProgressBar(
         formatDurationMs(durationMs)
     }
 
+    val sliderColors = SliderDefaults.colors(
+        thumbColor = Color.White,
+        activeTrackColor = Color.White,
+        inactiveTrackColor = Color.White.copy(alpha = 0.22f)
+    )
+
     Column(modifier = modifier.fillMaxWidth()) {
         Slider(
             value = displayedSliderValue,
@@ -584,11 +606,7 @@ private fun FullScreenProgressBar(
             modifier = Modifier
                 .fillMaxWidth()
                 .height(30.dp),
-            colors = SliderDefaults.colors(
-                thumbColor = Color.White,
-                activeTrackColor = Color(0xFFA855F7),
-                inactiveTrackColor = Color.White.copy(alpha = 0.25f)
-            ),
+            colors = sliderColors,
             thumb = {
                 val neonColor = Color(0xFFA855F7)
                 Spacer(
@@ -628,6 +646,7 @@ private fun FullScreenProgressBar(
             track = { sliderState ->
                 SliderDefaults.Track(
                     sliderState = sliderState,
+                    colors = sliderColors,
                     modifier = Modifier.height(4.dp),
                     drawStopIndicator = null,
                     thumbTrackGapSize = 0.dp

@@ -1,6 +1,6 @@
 # 🎵 MusiCal — Lettore Musicale Nativo per Android 16
 
-![Versione](https://img.shields.io/badge/versione-0.1.0-8B5CF6)
+![Versione](https://img.shields.io/badge/versione-0.1.1-8B5CF6)
 ![Android](https://img.shields.io/badge/Android-16%20(API%2036)-7C3AED)
 ![Kotlin](https://img.shields.io/badge/Kotlin-2.1.0-A855F7)
 ![Jetpack Compose](https://img.shields.io/badge/UI-Jetpack%20Compose%20%2B%20Material%203-C084FC)
@@ -31,8 +31,10 @@ Realizzato interamente in **Kotlin** e **Jetpack Compose** con un'identità visi
   - **Riproduzione Automatica (Finestra Rolling di 15 brani)**: mantiene costantemente pronti 15 brani successivi (proseguimento dell'album/playlist o selezione intelligente anti-ripetizione dalla libreria), reintegrando automaticamente un nuovo brano ogni volta che uno viene riprodotto o rimosso.
 - **Controllo totale in `QueueBottomSheet`**:
   - Riordinamento fluido tramite **Drag & Drop**, pulsante **`↑`** per spostare istantaneamente qualsiasi traccia in cima alla coda e pulsante **`X`** per rimuoverla.
-- **Swipe-to-Queue negli Album**:
-  - Nella vista di dettaglio di un album, basta trascinare un brano verso sinistra con il dito per metterlo rapidamente in coda con resistenza elastica e feedback visivo animato.
+- **Swipe-to-Queue negli Album e nelle Playlist**:
+  - Nelle viste di dettaglio di album e playlist (inclusa *"Brani preferiti"*), basta trascinare un brano verso sinistra con il dito per metterlo rapidamente in coda con resistenza elastica e feedback visivo animato.
+- **Menu contestuale rapido (Long Press o `⋮`)**:
+  - Puoi aprire le opzioni di qualsiasi brano sia toccando l'icona a tre puntini (`⋮`) sia tenendo premuto direttamente sulla riga del brano.
 
 ### 💜 3. "Brani preferiti" & Playlist con Copertina Personalizzata
 - **Playlist di sistema "Brani preferiti"**:
@@ -71,7 +73,7 @@ Realizzato interamente in **Kotlin** e **Jetpack Compose** con un'identità visi
 | **Audio & Background** | AndroidX Media3 `1.5.1` (`ExoPlayer`, `MediaSessionService`, `MediaController`, `ForwardingPlayer`, custom `Media3BitmapLoader`) |
 | **Persistenza Locale** | `AtomicFile` JSON (`playlists.json`, `track_stats.json`), Room Database `2.6.1` (`scrobble_cache.db`), `SharedPreferences` |
 | **Immagini & Rete** | Coil Compose `2.7.0`, OkHttp `4.12.0` |
-| **Test Automatizzati** | JUnit 4, Mockito Core, suite di **221 unit test** su JVM |
+| **Test Automatizzati** | JUnit 4, Mockito Core, suite di **224 unit test** su JVM |
 
 ```
 app/src/main/java/com/example/musicplayer/
@@ -147,7 +149,7 @@ Se vuoi installare subito **MusiCal** sul tuo dispositivo Android 16 senza compi
    .\gradlew.bat installDebug
    ```
 
-4. **Esegui la suite di Test Unitari (221 test su JVM)**:
+4. **Esegui la suite di Test Unitari (224 test su JVM)**:
    ```powershell
    .\gradlew.bat testDebugUnitTest
    ```

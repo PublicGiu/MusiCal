@@ -45,11 +45,13 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -121,6 +123,19 @@ fun PlayerBottomBar(
     var seekFraction by remember { mutableFloatStateOf(0f) }
     val barWidthPx = remember { mutableFloatStateOf(1f) }
     val swipeOffsetX = remember { Animatable(0f) }
+
+    // Garanzia di riallineamento a 0f ad ogni cambio brano
+    LaunchedEffect(currentTrack?.id) {
+        if (swipeOffsetX.value != 0f) {
+            swipeOffsetX.animateTo(
+                targetValue = 0f,
+                animationSpec = spring(
+                    dampingRatio = Spring.DampingRatioMediumBouncy,
+                    stiffness = Spring.StiffnessMedium
+                )
+            )
+        }
+    }
 
     Box(
         modifier = modifier
@@ -202,6 +217,9 @@ private fun PlayerTrackInfoRow(
     val density = LocalDensity.current
     val swipeThresholdPx = with(density) { 48.dp.toPx() }
     val verticalThresholdPx = with(density) { 24.dp.toPx() }
+    val currentOnPreviousClick by rememberUpdatedState(onPreviousClick)
+    val currentOnNextClick by rememberUpdatedState(onNextClick)
+    val currentOnOpenFullScreen by rememberUpdatedState(onOpenFullScreen)
 
     val imageRequest = remember(currentTrack?.albumArtUri) {
         currentTrack?.albumArtUri?.let { uri ->
@@ -226,7 +244,7 @@ private fun PlayerTrackInfoRow(
             modifier = Modifier
                 .weight(1f)
                 .clip(RoundedCornerShape(12.dp))
-                .pointerInput(currentTrack?.id) {
+                .pointerInput(Unit) {
                     awaitEachGesture {
                         val down = awaitFirstDown(requireUnconsumed = false)
                         var totalDragX = 0f
@@ -235,59 +253,79 @@ private fun PlayerTrackInfoRow(
                         var isVerticalDrag = false
                         var actionTriggered = false
 
-                        while (true) {
-                            val event = awaitPointerEvent()
-                            val change = event.changes.firstOrNull { it.id == down.id } ?: break
-                            if (!change.pressed) break
+                        try {
+                            while (true) {
+                                val event = awaitPointerEvent()
+                                val change = event.changes.firstOrNull { it.id == down.id } ?: break
+                                if (!change.pressed) break
 
-                            val deltaX = change.position.x - down.position.x
-                            val deltaY = change.position.y - down.position.y
-                            totalDragX = deltaX
-                            totalDragY = deltaY
+                                val deltaX = change.position.x - down.position.x
+                                val deltaY = change.position.y - down.position.y
+                                totalDragX = deltaX
+                                totalDragY = deltaY
 
-                            if (!isHorizontalDrag && !isVerticalDrag) {
-                                if (abs(deltaY) > abs(deltaX) && deltaY < -verticalThresholdPx) {
-                                    isVerticalDrag = true
+                                if (!isHorizontalDrag && !isVerticalDrag) {
+                                    if (abs(deltaY) > abs(deltaX) && deltaY < -verticalThresholdPx) {
+                                        isVerticalDrag = true
+                                        change.consume()
+                                        actionTriggered = true
+                                        currentOnOpenFullScreen()
+                                        break
+                                    } else if (abs(deltaX) > 18f && abs(deltaX) > abs(deltaY)) {
+                                        isHorizontalDrag = true
+                                    }
+                                }
+
+                                if (isHorizontalDrag && !actionTriggered) {
                                     change.consume()
-                                    actionTriggered = true
-                                    onOpenFullScreen()
-                                    break
-                                } else if (abs(deltaX) > 18f && abs(deltaX) > abs(deltaY)) {
-                                    isHorizontalDrag = true
+                                    val dampedOffset = totalDragX * 0.4f
+                                    coroutineScope.launch {
+                                        swipeOffsetX.snapTo(dampedOffset.coerceIn(-120f, 120f))
+                                    }
+
+                                    if (totalDragX > swipeThresholdPx) {
+                                        actionTriggered = true
+                                        coroutineScope.launch {
+                                            swipeOffsetX.animateTo(
+                                                targetValue = 0f,
+                                                animationSpec = spring(
+                                                    dampingRatio = Spring.DampingRatioMediumBouncy,
+                                                    stiffness = Spring.StiffnessMedium
+                                                )
+                                            )
+                                        }
+                                        currentOnPreviousClick()
+                                    } else if (totalDragX < -swipeThresholdPx) {
+                                        actionTriggered = true
+                                        coroutineScope.launch {
+                                            swipeOffsetX.animateTo(
+                                                targetValue = 0f,
+                                                animationSpec = spring(
+                                                    dampingRatio = Spring.DampingRatioMediumBouncy,
+                                                    stiffness = Spring.StiffnessMedium
+                                                )
+                                            )
+                                        }
+                                        currentOnNextClick()
+                                    }
                                 }
                             }
 
-                            if (isHorizontalDrag && !actionTriggered) {
-                                change.consume()
-                                val dampedOffset = totalDragX * 0.4f
-                                coroutineScope.launch {
-                                    swipeOffsetX.snapTo(dampedOffset.coerceIn(-120f, 120f))
-                                }
-
-                                if (totalDragX > swipeThresholdPx) {
-                                    actionTriggered = true
-                                    onPreviousClick()
-                                } else if (totalDragX < -swipeThresholdPx) {
-                                    actionTriggered = true
-                                    onNextClick()
-                                }
+                            // Tap rapido se non c'è stato trascinamento significativo
+                            if (!isHorizontalDrag && !isVerticalDrag && !actionTriggered && abs(totalDragX) < 12f && abs(totalDragY) < 12f) {
+                                currentOnOpenFullScreen()
                             }
-                        }
-
-                        // Tap rapido se non c'è stato trascinamento significativo
-                        if (!isHorizontalDrag && !isVerticalDrag && !actionTriggered && abs(totalDragX) < 12f && abs(totalDragY) < 12f) {
-                            onOpenFullScreen()
-                        }
-
-                        // Ritorno elastico con animazione a molla (spring)
-                        coroutineScope.launch {
-                            swipeOffsetX.animateTo(
-                                targetValue = 0f,
-                                animationSpec = spring(
-                                    dampingRatio = Spring.DampingRatioMediumBouncy,
-                                    stiffness = Spring.StiffnessLow
+                        } finally {
+                            // Garantisce SEMPRE il ritorno fluido a 0f
+                            coroutineScope.launch {
+                                swipeOffsetX.animateTo(
+                                    targetValue = 0f,
+                                    animationSpec = spring(
+                                        dampingRatio = Spring.DampingRatioMediumBouncy,
+                                        stiffness = Spring.StiffnessLow
+                                    )
                                 )
-                            )
+                            }
                         }
                     }
                 },

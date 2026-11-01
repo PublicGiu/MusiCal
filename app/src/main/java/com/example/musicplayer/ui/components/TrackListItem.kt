@@ -1,7 +1,8 @@
 package com.example.musicplayer.ui.components
 
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -47,6 +48,7 @@ import coil.request.ImageRequest
 import coil.size.Precision
 import com.example.musicplayer.data.AudioTrack
 
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
 fun TrackListItem(
     track: AudioTrack,
@@ -63,6 +65,7 @@ fun TrackListItem(
     playCount: Int = 0
 ) {
     var menuExpanded by remember { mutableStateOf(false) }
+    val hasOptionsMenu = onAddToQueueClick != null || onAddToFavoritesClick != null || onAddToPlaylistClick != null || onRemoveClick != null
 
     val backgroundColor = if (isSelected) {
         MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.6f)
@@ -81,7 +84,14 @@ fun TrackListItem(
             .fillMaxWidth()
             .padding(horizontal = 12.dp, vertical = 4.dp)
             .clip(RoundedCornerShape(12.dp))
-            .clickable(onClick = onClick),
+            .combinedClickable(
+                onClick = onClick,
+                onLongClick = if (hasOptionsMenu) {
+                    { menuExpanded = true }
+                } else {
+                    null
+                }
+            ),
         color = backgroundColor,
         shape = RoundedCornerShape(12.dp)
     ) {

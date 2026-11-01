@@ -204,4 +204,43 @@ class QueueOrderTest {
         assertEquals("Track_1", autoplayQueue[1])
         assertEquals(15, autoplayQueue.size)
     }
+
+    @Test
+    fun testPlayCustomQueuePreservesPreviousTracksForPlayPrevious() {
+        val albumTracks = listOf("T1", "T2", "T3", "T4", "T5")
+        val startIndex = 3 // Utente avvia T4
+        val previousInList = albumTracks.subList(0, startIndex)
+        val current = albumTracks[startIndex]
+        val upcoming = albumTracks.subList(startIndex + 1, albumTracks.size)
+
+        val timeline = previousInList + listOf(current) + upcoming
+        val initialExoIndex = previousInList.size
+
+        assertEquals(3, initialExoIndex)
+        assertEquals("T4", timeline[initialExoIndex])
+        // Verifica che il brano precedente sia disponibile immediatamente a initialExoIndex - 1
+        assertTrue(initialExoIndex > 0)
+        assertEquals("T3", timeline[initialExoIndex - 1])
+    }
+
+    @Test
+    fun testPlayTrackPreservesPlayedHistoryAndAllowsSteppingBack() {
+        val existingQueue = listOf("Played_1", "Played_2", "Auto_1", "Auto_2")
+        val currentIdx = 1 // In riproduzione Played_2
+        val newTrack = "Clicked_3"
+
+        val historyTracks = existingQueue
+            .take(currentIdx + 1)
+            .dropLastWhile { it == newTrack }
+            .takeLast(25)
+        val autoplay = listOf("NewAuto_1", "NewAuto_2")
+
+        val timeline = historyTracks + listOf(newTrack) + autoplay
+        val startIndex = historyTracks.size
+
+        assertEquals(2, startIndex)
+        assertEquals("Clicked_3", timeline[startIndex])
+        assertEquals("Played_2", timeline[startIndex - 1])
+        assertEquals("Played_1", timeline[startIndex - 2])
+    }
 }

@@ -336,10 +336,11 @@ fun AlbumDetailView(
  * senza interferire con lo scorrimento verticale della LazyColumn.
  */
 @Composable
-private fun SwipeToQueueTrackItem(
+internal fun SwipeToQueueTrackItem(
     track: AudioTrack,
     onSwipeToQueue: () -> Unit,
     modifier: Modifier = Modifier,
+    key: Any = track.id,
     content: @Composable () -> Unit
 ) {
     val coroutineScope = rememberCoroutineScope()
@@ -348,7 +349,7 @@ private fun SwipeToQueueTrackItem(
     val thresholdPx = with(density) { 72.dp.toPx() }
     val maxElasticOffsetPx = with(density) { 120.dp.toPx() }
 
-    val swipeOffsetX = remember(track.id) { Animatable(0f) }
+    val swipeOffsetX = remember(key) { Animatable(0f) }
     val isThresholdReached by remember {
         derivedStateOf { swipeOffsetX.value <= -thresholdPx }
     }
@@ -395,7 +396,7 @@ private fun SwipeToQueueTrackItem(
     Box(
         modifier = modifier
             .fillMaxWidth()
-            .pointerInput(track.id) {
+            .pointerInput(key) {
                 awaitEachGesture {
                     val down = awaitFirstDown(requireUnconsumed = false)
                     var pointerId = down.id

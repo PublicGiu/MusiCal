@@ -23,6 +23,7 @@ import com.example.musicplayer.data.StatsRepository
 import com.example.musicplayer.data.TrackStats
 import com.example.musicplayer.data.groupTracksIntoAlbums
 import com.example.musicplayer.data.loadAudioFiles
+import com.example.musicplayer.data.sortTracks
 import com.example.musicplayer.data.lastfm.LastFmClient
 import com.example.musicplayer.data.lastfm.LastFmConfig
 import com.example.musicplayer.data.lastfm.LastFmSessionManager
@@ -150,6 +151,7 @@ class MusicViewModel(application: Application) : AndroidViewModel(application) {
     private var currentTrackStartTimeSeconds: Long = 0L
     private var scrobbleSentForCurrentTrack: Boolean = false
     private var currentScrobbleTrackId: Long? = null
+    private var lastKnownQueueIndex: Int = 0
 
     // --- Riferimenti interni ---
     private var mediaController: MediaController? = null
@@ -178,6 +180,11 @@ class MusicViewModel(application: Application) : AndroidViewModel(application) {
 
         override fun onMediaItemTransition(mediaItem: MediaItem?, reason: Int) {
             mediaItem?.let { item ->
+                val controller = mediaController
+                val newIndex = controller?.currentMediaItemIndex ?: 0
+                val isSteppingBack = newIndex < lastKnownQueueIndex
+                lastKnownQueueIndex = newIndex
+
                 val trackId = item.mediaId.toLongOrNull()
                 val foundTrack = _tracks.value.find { it.id == trackId }
                 val current = foundTrack ?: AudioTrack(
@@ -196,16 +203,45 @@ class MusicViewModel(application: Application) : AndroidViewModel(application) {
                 }
                 handleTrackStartedForScrobble(current)
 
-                // Gestione consumo Coda Utente vs Riproduzione Automatica
-                val userList = _userQueue.value
-                val userIndex = userList.indexOfFirst { it.id == current.id }
-                if (userIndex != -1) {
-                    _userQueue.value = userList.drop(userIndex + 1)
+                if (isSteppingBack && controller != null) {
+                    // Ritorno a un brano precedente: riallinea _autoplayQueue con gli elementi effettivi dopo _userQueue
+                    val allTracks = _tracks.value
+                    val autoStartExo = (newIndex + 1 + _userQueue.value.size).coerceAtMost(controller.mediaItemCount)
+                    val rebuiltAutoplay = mutableListOf<AudioTrack>()
+                    for (i in autoStartExo until controller.mediaItemCount) {
+                        val mItem = controller.getMediaItemAt(i)
+                        val tId = mItem.mediaId.toLongOrNull()
+                        val resolved = allTracks.find { it.id == tId } ?: AudioTrack(
+                            id = tId ?: i.toLong(),
+                            title = mItem.mediaMetadata.title?.toString() ?: "Sconosciuto",
+                            artist = mItem.mediaMetadata.artist?.toString() ?: "Sconosciuto",
+                            duration = 0L,
+                            uri = mItem.requestMetadata.mediaUri ?: android.net.Uri.EMPTY,
+                            albumArtUri = mItem.mediaMetadata.artworkUri
+                        )
+                        rebuiltAutoplay.add(resolved)
+                    }
+                    if (rebuiltAutoplay.size > 15) {
+                        val excessStart = autoStartExo + 15
+                        if (excessStart < controller.mediaItemCount) {
+                            controller.removeMediaItems(excessStart, controller.mediaItemCount)
+                        }
+                        _autoplayQueue.value = rebuiltAutoplay.take(15)
+                    } else {
+                        _autoplayQueue.value = rebuiltAutoplay
+                    }
                 } else {
-                    val autoList = _autoplayQueue.value
-                    val autoIndex = autoList.indexOfFirst { it.id == current.id }
-                    if (autoIndex != -1) {
-                        _autoplayQueue.value = autoList.drop(autoIndex + 1)
+                    // Gestione consumo Coda Utente vs Riproduzione Automatica in avanzamento
+                    val userList = _userQueue.value
+                    val userIndex = userList.indexOfFirst { it.id == current.id }
+                    if (userIndex != -1) {
+                        _userQueue.value = userList.drop(userIndex + 1)
+                    } else {
+                        val autoList = _autoplayQueue.value
+                        val autoIndex = autoList.indexOfFirst { it.id == current.id }
+                        if (autoIndex != -1) {
+                            _autoplayQueue.value = autoList.drop(autoIndex + 1)
+                        }
                     }
                 }
                 replenishAutoplayIfNeeded(current)
@@ -213,6 +249,7 @@ class MusicViewModel(application: Application) : AndroidViewModel(application) {
                 _currentTrack.value = null
                 currentScrobbleTrackId = null
                 scrobbleSentForCurrentTrack = false
+                lastKnownQueueIndex = 0
             }
             updateDuration()
             updateQueueFromController()
@@ -671,6 +708,7 @@ class MusicViewModel(application: Application) : AndroidViewModel(application) {
         if (trackList.isEmpty()) return
 
         val safeIndex = startIndex.coerceIn(0, trackList.size - 1)
+        val previousInList = trackList.subList(0, safeIndex)
         val current = trackList[safeIndex]
         _userQueue.value = emptyList()
 
@@ -687,8 +725,9 @@ class MusicViewModel(application: Application) : AndroidViewModel(application) {
         val initialAutoplay = (upcomingInList + autoplaySupplement).take(15)
         _autoplayQueue.value = initialAutoplay
 
-        val allItems = (listOf(current) + initialAutoplay).map { trackToMediaItem(it) }
-        controller.setMediaItems(allItems, 0, 0L)
+        val allItems = (previousInList + listOf(current) + initialAutoplay).map { trackToMediaItem(it) }
+        lastKnownQueueIndex = previousInList.size
+        controller.setMediaItems(allItems, previousInList.size, 0L)
         controller.prepare()
         controller.play()
         _currentTrack.value = current
@@ -710,6 +749,19 @@ class MusicViewModel(application: Application) : AndroidViewModel(application) {
 
     fun playTrack(track: AudioTrack) {
         val controller = mediaController ?: return
+        val currentQueueSnapshot = _queue.value
+        val currentIdxSnapshot = _currentQueueIndex.value
+
+        // Preserva i brani già riprodotti nella sessione corrente (fino a max 25 brani) per consentire il tasto Precedente
+        val rawHistory = if (currentQueueSnapshot.isNotEmpty() && currentIdxSnapshot in currentQueueSnapshot.indices) {
+            currentQueueSnapshot.take(currentIdxSnapshot + 1)
+        } else {
+            emptyList()
+        }
+        val historyTracks = rawHistory
+            .dropLastWhile { it.id == track.id }
+            .takeLast(25)
+
         _userQueue.value = emptyList()
 
         val autoplayCandidates = if (_isAutoplayEnabled.value) {
@@ -719,8 +771,10 @@ class MusicViewModel(application: Application) : AndroidViewModel(application) {
         }
         _autoplayQueue.value = autoplayCandidates
 
-        val allItems = (listOf(track) + autoplayCandidates).map { trackToMediaItem(it) }
-        controller.setMediaItems(allItems, 0, 0L)
+        val allItems = (historyTracks + listOf(track) + autoplayCandidates).map { trackToMediaItem(it) }
+        val startIndex = historyTracks.size
+        lastKnownQueueIndex = startIndex
+        controller.setMediaItems(allItems, startIndex, 0L)
         controller.prepare()
         controller.play()
         _currentTrack.value = track
@@ -755,12 +809,40 @@ class MusicViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     fun playPrevious() {
-        mediaController?.let { controller ->
-            if (controller.hasPreviousMediaItem()) {
-                controller.seekToPreviousMediaItem()
-            } else {
-                controller.seekTo(0L)
-            }
+        val controller = mediaController ?: return
+        val currentIndex = controller.currentMediaItemIndex
+        if (currentIndex > 0) {
+            controller.seekToDefaultPosition(currentIndex - 1)
+            controller.play()
+            return
+        }
+
+        if (controller.hasPreviousMediaItem()) {
+            controller.seekToPreviousMediaItem()
+            controller.play()
+            return
+        }
+
+        // Se siamo all'indice 0 senza brani precedenti nella timeline di ExoPlayer,
+        // cerca il brano precedente nella libreria ordinata corrente e inseriscilo in testa
+        val current = _currentTrack.value
+        val currentSorted = _tracks.value.sortTracks(_sortOption.value, _stats.value, _isAscending.value)
+        val idxInSorted = if (current != null) currentSorted.indexOfFirst { it.id == current.id } else -1
+        val prevTrack = when {
+            idxInSorted > 0 -> currentSorted[idxInSorted - 1]
+            idxInSorted == 0 && currentSorted.size > 1 -> currentSorted.last()
+            else -> null
+        }
+
+        if (prevTrack != null && controller.mediaItemCount > 0) {
+            controller.addMediaItem(0, trackToMediaItem(prevTrack))
+            lastKnownQueueIndex = 1
+            controller.seekToDefaultPosition(0)
+            controller.play()
+            updateQueueFromController()
+        } else {
+            controller.seekTo(0L)
+            _currentPositionMs.value = 0L
             controller.play()
         }
     }

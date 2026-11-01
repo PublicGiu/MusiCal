@@ -961,6 +961,9 @@ fun MainScreen(
                         onPlayAllClick = {
                             viewModel.playAlbum(currentAlbum, 0)
                         },
+                        onPlayPauseClick = {
+                            viewModel.togglePlayPause()
+                        },
                         onAddToPlaylistClick = { trackToAddToPlaylist = it },
                         onAddToQueueClick = handleAddTrackToQueue,
                         onAddAlbumToQueueClick = handleAddAlbumToQueue,
@@ -993,6 +996,9 @@ fun MainScreen(
                         },
                         onPlayAllClick = {
                             viewModel.playPlaylist(playlistTracks, 0)
+                        },
+                        onPlayPauseClick = {
+                            viewModel.togglePlayPause()
                         },
                         onRemoveTrack = { trackId ->
                             viewModel.removeTrackFromPlaylist(activePlaylist.id, trackId)

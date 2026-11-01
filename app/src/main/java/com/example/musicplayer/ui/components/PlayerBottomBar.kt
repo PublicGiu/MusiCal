@@ -1,5 +1,6 @@
 package com.example.musicplayer.ui.components
 
+import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.AnimationVector1D
@@ -12,6 +13,7 @@ import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.scaleIn
 import androidx.compose.animation.scaleOut
+import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
@@ -412,7 +414,7 @@ private fun PlayerTrackInfoRow(
 
         Spacer(modifier = Modifier.width(8.dp))
 
-        // Pulsante circolare viola Play / Pause
+        // Pulsante circolare viola Play / Pause con micro-animazione fluida
         FilledIconButton(
             onClick = onPlayPauseClick,
             modifier = Modifier.size(44.dp),
@@ -422,11 +424,24 @@ private fun PlayerTrackInfoRow(
                 contentColor = MaterialTheme.colorScheme.onPrimary
             )
         ) {
-            Icon(
-                imageVector = if (isPlaying) Icons.Default.Pause else Icons.Default.PlayArrow,
-                contentDescription = if (isPlaying) "Pausa" else "Riproduci",
-                modifier = Modifier.size(26.dp)
-            )
+            AnimatedContent(
+                targetState = isPlaying,
+                transitionSpec = {
+                    (fadeIn(animationSpec = tween(180)) +
+                        scaleIn(initialScale = 0.72f, animationSpec = tween(180)))
+                        .togetherWith(
+                            fadeOut(animationSpec = tween(140)) +
+                                scaleOut(targetScale = 0.72f, animationSpec = tween(140))
+                        )
+                },
+                label = "MiniPlayerPlayPauseIconAnimation"
+            ) { playing ->
+                Icon(
+                    imageVector = if (playing) Icons.Default.Pause else Icons.Default.PlayArrow,
+                    contentDescription = if (playing) "Pausa" else "Riproduci",
+                    modifier = Modifier.size(26.dp)
+                )
+            }
         }
     }
 }

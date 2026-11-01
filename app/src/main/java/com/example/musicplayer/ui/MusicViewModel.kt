@@ -586,6 +586,8 @@ class MusicViewModel(application: Application) : AndroidViewModel(application) {
         if (targetIndex in 0 until controller.mediaItemCount) {
             controller.seekToDefaultPosition(targetIndex)
             controller.play()
+            _isPlaying.value = true
+            startProgressTicker()
         }
     }
 
@@ -635,6 +637,8 @@ class MusicViewModel(application: Application) : AndroidViewModel(application) {
         if (targetIndex in 0 until controller.mediaItemCount) {
             controller.seekToDefaultPosition(targetIndex)
             controller.play()
+            _isPlaying.value = true
+            startProgressTicker()
         }
     }
 
@@ -700,6 +704,8 @@ class MusicViewModel(application: Application) : AndroidViewModel(application) {
         if (index in 0 until controller.mediaItemCount) {
             controller.seekToDefaultPosition(index)
             controller.play()
+            _isPlaying.value = true
+            startProgressTicker()
         }
     }
 
@@ -731,6 +737,8 @@ class MusicViewModel(application: Application) : AndroidViewModel(application) {
         controller.prepare()
         controller.play()
         _currentTrack.value = current
+        _isPlaying.value = true
+        startProgressTicker()
         updateQueueFromController()
     }
 
@@ -778,6 +786,8 @@ class MusicViewModel(application: Application) : AndroidViewModel(application) {
         controller.prepare()
         controller.play()
         _currentTrack.value = track
+        _isPlaying.value = true
+        startProgressTicker()
         updateQueueFromController()
     }
 
@@ -785,12 +795,16 @@ class MusicViewModel(application: Application) : AndroidViewModel(application) {
         val controller = mediaController ?: return
         if (controller.isPlaying) {
             controller.pause()
+            _isPlaying.value = false
+            stopProgressTicker()
         } else {
             if (controller.playbackState == Player.STATE_IDLE && _tracks.value.isNotEmpty()) {
                 val trackToPlay = _currentTrack.value ?: _tracks.value.first()
                 playTrack(trackToPlay)
             } else {
                 controller.play()
+                _isPlaying.value = true
+                startProgressTicker()
             }
         }
     }
@@ -805,6 +819,8 @@ class MusicViewModel(application: Application) : AndroidViewModel(application) {
                 controller.seekToNextMediaItem()
             }
             controller.play()
+            _isPlaying.value = true
+            startProgressTicker()
         }
     }
 
@@ -814,12 +830,16 @@ class MusicViewModel(application: Application) : AndroidViewModel(application) {
         if (currentIndex > 0) {
             controller.seekToDefaultPosition(currentIndex - 1)
             controller.play()
+            _isPlaying.value = true
+            startProgressTicker()
             return
         }
 
         if (controller.hasPreviousMediaItem()) {
             controller.seekToPreviousMediaItem()
             controller.play()
+            _isPlaying.value = true
+            startProgressTicker()
             return
         }
 
@@ -839,11 +859,15 @@ class MusicViewModel(application: Application) : AndroidViewModel(application) {
             lastKnownQueueIndex = 1
             controller.seekToDefaultPosition(0)
             controller.play()
+            _isPlaying.value = true
+            startProgressTicker()
             updateQueueFromController()
         } else {
             controller.seekTo(0L)
             _currentPositionMs.value = 0L
             controller.play()
+            _isPlaying.value = true
+            startProgressTicker()
         }
     }
 

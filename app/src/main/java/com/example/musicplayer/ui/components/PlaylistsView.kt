@@ -4,9 +4,15 @@ import android.net.Uri
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.PickVisualMediaRequest
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.scaleIn
+import androidx.compose.animation.scaleOut
+import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.basicMarquee
 import androidx.compose.foundation.clickable
@@ -40,6 +46,7 @@ import androidx.compose.material.icons.filled.FavoriteBorder
 import androidx.compose.material.icons.filled.Image
 import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.MusicNote
+import androidx.compose.material.icons.filled.Pause
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
@@ -378,8 +385,12 @@ fun PlaylistDetailView(
     onAddToFavoritesClick: ((AudioTrack) -> Unit)? = null,
     favoriteTrackIds: Set<Long> = emptySet(),
     onChangeCoverClick: ((Playlist) -> Unit)? = null,
-    onRemoveCoverClick: ((Playlist) -> Unit)? = null
+    onRemoveCoverClick: ((Playlist) -> Unit)? = null,
+    onPlayPauseClick: (() -> Unit)? = null
 ) {
+    val isCurrentPlaylistActive = currentTrack != null && playlistTracks.any { it.id == currentTrack.id }
+    val isPlaylistPlaying = isPlaying && isCurrentPlaylistActive
+
     val listState = rememberLazyListState()
     var isScrolledDown by remember { mutableStateOf(false) }
 
@@ -511,9 +522,15 @@ fun PlaylistDetailView(
                 )
             }
 
-            // 4. Pulsante circolare Play pieno identico a quello degli album e del mini-player
+            // 4. Pulsante circolare Play pieno identico a quello degli album e del mini-player con animazione Play/Pausa
             FilledIconButton(
-                onClick = onPlayAllClick,
+                onClick = {
+                    if (isCurrentPlaylistActive) {
+                        onPlayPauseClick?.invoke() ?: onPlayAllClick()
+                    } else {
+                        onPlayAllClick()
+                    }
+                },
                 enabled = playlistTracks.isNotEmpty(),
                 modifier = Modifier.size(44.dp),
                 shape = CircleShape,
@@ -522,11 +539,24 @@ fun PlaylistDetailView(
                     contentColor = MaterialTheme.colorScheme.onPrimary
                 )
             ) {
-                Icon(
-                    imageVector = Icons.Default.PlayArrow,
-                    contentDescription = "Riproduci",
-                    modifier = Modifier.size(26.dp)
-                )
+                AnimatedContent(
+                    targetState = isPlaylistPlaying,
+                    transitionSpec = {
+                        (fadeIn(animationSpec = tween(180)) +
+                            scaleIn(initialScale = 0.72f, animationSpec = tween(180)))
+                            .togetherWith(
+                                fadeOut(animationSpec = tween(140)) +
+                                    scaleOut(targetScale = 0.72f, animationSpec = tween(140))
+                            )
+                    },
+                    label = "PlaylistPlayPauseIconAnimation"
+                ) { playing ->
+                    Icon(
+                        imageVector = if (playing) Icons.Default.Pause else Icons.Default.PlayArrow,
+                        contentDescription = if (playing) "Pausa" else "Riproduci",
+                        modifier = Modifier.size(26.dp)
+                    )
+                }
             }
 
             Spacer(modifier = Modifier.width(2.dp))

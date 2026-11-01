@@ -1,5 +1,6 @@
 package com.example.musicplayer.ui.components
 
+import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.FastOutSlowInEasing
@@ -7,6 +8,11 @@ import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.scaleIn
+import androidx.compose.animation.scaleOut
+import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.background
 import androidx.compose.foundation.basicMarquee
 import androidx.compose.foundation.gestures.awaitEachGesture
@@ -32,6 +38,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Album
 import androidx.compose.material.icons.filled.MoreVert
+import androidx.compose.material.icons.filled.Pause
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
@@ -89,8 +96,13 @@ fun AlbumDetailView(
     onAddAlbumToQueueClick: (Album) -> Unit,
     onAddToFavoritesClick: ((AudioTrack) -> Unit)? = null,
     favoriteTrackIds: Set<Long> = emptySet(),
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    onPlayPauseClick: (() -> Unit)? = null
 ) {
+    val isCurrentAlbumActive = currentTrack != null &&
+        (currentTrack.albumId == album.id || album.tracks.any { it.id == currentTrack.id })
+    val isAlbumPlaying = isPlaying && isCurrentAlbumActive
+
     val albumSongs = remember(album.tracks) {
         album.tracks.sortedWith(
             compareBy<AudioTrack> { it.discNumber }
@@ -244,9 +256,15 @@ fun AlbumDetailView(
                 )
             }
 
-            // 4. Pulsante circolare Play pieno identico a quello del mini-player
+            // 4. Pulsante circolare Play pieno identico a quello del mini-player con animazione Play/Pausa
             FilledIconButton(
-                onClick = onPlayAllClick,
+                onClick = {
+                    if (isCurrentAlbumActive) {
+                        onPlayPauseClick?.invoke() ?: onPlayAllClick()
+                    } else {
+                        onPlayAllClick()
+                    }
+                },
                 enabled = albumSongs.isNotEmpty(),
                 modifier = Modifier.size(44.dp),
                 shape = CircleShape,
@@ -255,11 +273,24 @@ fun AlbumDetailView(
                     contentColor = MaterialTheme.colorScheme.onPrimary
                 )
             ) {
-                Icon(
-                    imageVector = Icons.Default.PlayArrow,
-                    contentDescription = "Riproduci",
-                    modifier = Modifier.size(26.dp)
-                )
+                AnimatedContent(
+                    targetState = isAlbumPlaying,
+                    transitionSpec = {
+                        (fadeIn(animationSpec = tween(180)) +
+                            scaleIn(initialScale = 0.72f, animationSpec = tween(180)))
+                            .togetherWith(
+                                fadeOut(animationSpec = tween(140)) +
+                                    scaleOut(targetScale = 0.72f, animationSpec = tween(140))
+                            )
+                    },
+                    label = "AlbumPlayPauseIconAnimation"
+                ) { playing ->
+                    Icon(
+                        imageVector = if (playing) Icons.Default.Pause else Icons.Default.PlayArrow,
+                        contentDescription = if (playing) "Pausa" else "Riproduci",
+                        modifier = Modifier.size(26.dp)
+                    )
+                }
             }
 
             Spacer(modifier = Modifier.width(2.dp))

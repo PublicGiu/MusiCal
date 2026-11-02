@@ -31,8 +31,13 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.ui.res.painterResource
 import com.example.musicplayer.R
+import androidx.compose.material.icons.automirrored.filled.QueueMusic
+import androidx.compose.material.icons.filled.AutoFixHigh
+import androidx.compose.material.icons.filled.Favorite
+import androidx.compose.material.icons.filled.FavoriteBorder
 import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.material.icons.filled.Lyrics
+import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.MusicNote
 import androidx.compose.material.icons.filled.Pause
 import androidx.compose.material.icons.filled.PlayArrow
@@ -41,6 +46,8 @@ import androidx.compose.material.icons.filled.RepeatOne
 import androidx.compose.material.icons.filled.Shuffle
 import androidx.compose.material.icons.filled.SkipNext
 import androidx.compose.material.icons.filled.SkipPrevious
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilledIconButton
 import androidx.compose.material3.FilledTonalIconButton
@@ -116,11 +123,17 @@ fun FullScreenPlayerSheet(
     onSkipToQueueItem: (Int) -> Unit = {},
     onAlbumClick: (() -> Unit)? = null,
     currentLyrics: LyricsData? = null,
-    onAdjustLyricsOffset: (Long) -> Unit = {}
+    onAdjustLyricsOffset: (Long) -> Unit = {},
+    onAddToQueueClick: ((AudioTrack) -> Unit)? = null,
+    onAddToPlaylistClick: ((AudioTrack) -> Unit)? = null,
+    onAddToFavoritesClick: ((AudioTrack) -> Unit)? = null,
+    isFavorite: Boolean = false,
+    onAutoTagClick: ((AudioTrack) -> Unit)? = null
 ) {
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
     val context = LocalContext.current
     var isLyricsViewActive by remember { mutableStateOf(false) }
+    var menuExpanded by remember { mutableStateOf(false) }
 
     // Coda effettiva per il Pager: usa la coda completa o la traccia corrente come fallback
     val effectiveQueue = remember(queue, currentTrack) {
@@ -311,14 +324,94 @@ fun FullScreenPlayerSheet(
                     )
                 }
 
-                // Pulsante Testi Sincronizzati a destra
-                IconButton(onClick = { isLyricsViewActive = !isLyricsViewActive }) {
-                    Icon(
-                        imageVector = Icons.Default.Lyrics,
-                        contentDescription = "Testi sincronizzati",
-                        modifier = Modifier.size(26.dp),
-                        tint = if (isLyricsViewActive) MaterialTheme.colorScheme.primary else Color.White.copy(alpha = 0.8f)
-                    )
+                // Menu contestuale a tre puntini (Altre opzioni per il brano in riproduzione)
+                Box {
+                    IconButton(onClick = { menuExpanded = true }) {
+                        Icon(
+                            imageVector = Icons.Default.MoreVert,
+                            contentDescription = "Altre opzioni",
+                            modifier = Modifier.size(28.dp),
+                            tint = Color.White
+                        )
+                    }
+
+                    DropdownMenu(
+                        expanded = menuExpanded,
+                        onDismissRequest = { menuExpanded = false }
+                    ) {
+                        if (currentTrack != null) {
+                            if (onAddToQueueClick != null) {
+                                DropdownMenuItem(
+                                    text = { Text("Aggiungi alla coda") },
+                                    leadingIcon = {
+                                        Icon(
+                                            painter = painterResource(R.drawable.ic_queue_music_custom),
+                                            contentDescription = null
+                                        )
+                                    },
+                                    onClick = {
+                                        menuExpanded = false
+                                        onAddToQueueClick(currentTrack)
+                                    }
+                                )
+                            }
+                            if (onAddToFavoritesClick != null) {
+                                DropdownMenuItem(
+                                    text = {
+                                        Text(
+                                            text = if (isFavorite) "Aggiunto ai brani preferiti" else "Aggiungi ai brani preferiti"
+                                        )
+                                    },
+                                    leadingIcon = {
+                                        if (isFavorite) {
+                                            Icon(
+                                                imageVector = Icons.Default.Favorite,
+                                                contentDescription = null,
+                                                tint = MaterialTheme.colorScheme.primary
+                                            )
+                                        } else {
+                                            Icon(
+                                                imageVector = Icons.Default.FavoriteBorder,
+                                                contentDescription = null
+                                            )
+                                        }
+                                    },
+                                    onClick = {
+                                        menuExpanded = false
+                                        onAddToFavoritesClick(currentTrack)
+                                    }
+                                )
+                            }
+                            if (onAddToPlaylistClick != null) {
+                                DropdownMenuItem(
+                                    text = { Text("Aggiungi a playlist") },
+                                    leadingIcon = {
+                                        Icon(Icons.AutoMirrored.Filled.QueueMusic, contentDescription = null)
+                                    },
+                                    onClick = {
+                                        menuExpanded = false
+                                        onAddToPlaylistClick(currentTrack)
+                                    }
+                                )
+                            }
+                            if (onAutoTagClick != null) {
+                                DropdownMenuItem(
+                                    text = { Text("Auto-tagga & testi") },
+                                    leadingIcon = {
+                                        Icon(
+                                            imageVector = Icons.Default.AutoFixHigh,
+                                            contentDescription = null,
+                                            tint = MaterialTheme.colorScheme.primary
+                                        )
+                                    },
+                                    onClick = {
+                                        menuExpanded = false
+                                        onAutoTagClick(currentTrack)
+                                    }
+                                )
+                            }
+                        }
+                    }
                 }
             }
 
@@ -549,14 +642,25 @@ fun FullScreenPlayerSheet(
 
             Spacer(modifier = Modifier.height(18.dp))
 
-            // 6. Pulsanti ausiliari in basso: Coda di riproduzione
+            // 6. Pulsanti ausiliari in basso: Testi sincronizzati (sinistra) e Coda di riproduzione (destra)
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
                     .padding(horizontal = 8.dp),
                 verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.End
+                horizontalArrangement = Arrangement.SpaceBetween
             ) {
+                // Pulsante Testi Sincronizzati (in basso a sinistra)
+                IconButton(onClick = { isLyricsViewActive = !isLyricsViewActive }) {
+                    Icon(
+                        imageVector = Icons.Default.Lyrics,
+                        contentDescription = "Testi sincronizzati",
+                        modifier = Modifier.size(28.dp),
+                        tint = if (isLyricsViewActive) MaterialTheme.colorScheme.primary else Color.White.copy(alpha = 0.85f)
+                    )
+                }
+
+                // Pulsante Coda di riproduzione (in basso a destra)
                 IconButton(onClick = onQueueClick) {
                     Icon(
                         painter = painterResource(R.drawable.ic_queue_music_custom),

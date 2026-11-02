@@ -68,7 +68,7 @@ class LrclibApiClient(
 
         val request = Request.Builder()
             .url(urlBuilder.toString())
-            .header("User-Agent", "MusiCal/0.1.3 (Android; Mobile)")
+            .header("User-Agent", "MusiCal/0.1.4 (Android; Mobile)")
             .get()
             .build()
 
@@ -89,7 +89,7 @@ class LrclibApiClient(
 
         val request = Request.Builder()
             .url(url)
-            .header("User-Agent", "MusiCal/0.1.3 (Android; Mobile)")
+            .header("User-Agent", "MusiCal/0.1.4 (Android; Mobile)")
             .get()
             .build()
 

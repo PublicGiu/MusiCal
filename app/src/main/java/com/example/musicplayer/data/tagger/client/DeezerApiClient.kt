@@ -73,7 +73,7 @@ class DeezerApiClient(
             val url = "$baseUrl/search/album?q=$encoded&limit=5"
             val request = Request.Builder()
                 .url(url)
-                .header("User-Agent", "MusiCal/0.1.3 (Android; Mobile)")
+                .header("User-Agent", "MusiCal/0.1.4 (Android; Mobile)")
                 .get()
                 .build()
 
@@ -112,7 +112,7 @@ class DeezerApiClient(
 
         val request = Request.Builder()
             .url(url)
-            .header("User-Agent", "MusiCal/0.1.3 (Android; Mobile)")
+            .header("User-Agent", "MusiCal/0.1.4 (Android; Mobile)")
             .get()
             .build()
 
@@ -177,7 +177,7 @@ class DeezerApiClient(
             val url = "$baseUrl/album/$albumId"
             val request = Request.Builder()
                 .url(url)
-                .header("User-Agent", "MusiCal/0.1.3 (Android; Mobile)")
+                .header("User-Agent", "MusiCal/0.1.4 (Android; Mobile)")
                 .get()
                 .build()
 
@@ -278,7 +278,7 @@ class DeezerApiClient(
             val url = "$baseUrl/album/$albumId/tracks?limit=300"
             val request = Request.Builder()
                 .url(url)
-                .header("User-Agent", "MusiCal/0.1.3 (Android; Mobile)")
+                .header("User-Agent", "MusiCal/0.1.4 (Android; Mobile)")
                 .get()
                 .build()
 
@@ -319,7 +319,7 @@ class DeezerApiClient(
             val url = "$baseUrl/track/$trackId"
             val request = Request.Builder()
                 .url(url)
-                .header("User-Agent", "MusiCal/0.1.3 (Android; Mobile)")
+                .header("User-Agent", "MusiCal/0.1.4 (Android; Mobile)")
                 .get()
                 .build()
 
@@ -384,7 +384,7 @@ class DeezerApiClient(
         try {
             val request = Request.Builder()
                 .url(imageUrl)
-                .header("User-Agent", "MusiCal/0.1.3 (Android; Mobile)")
+                .header("User-Agent", "MusiCal/0.1.4 (Android; Mobile)")
                 .get()
                 .build()
 

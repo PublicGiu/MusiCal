@@ -149,7 +149,7 @@ private val VARIOUS_ARTISTS_NAMES = setOf(
     "ost"
 )
 
-private val FEAT_ARTIST_REGEX = Regex("""(?i)\s+(feat\.?|ft\.?|featuring|with|vs\.?|&|,)\s+.*""")
+private val FEAT_ARTIST_REGEX = Regex("""(?i)\s+(feat\.?|ft\.?|featuring|with|vs\.?|&|,|\+|x|/)\s+.*""")
 
 /**
  * Verifica se una stringa di album è generica o assente.
@@ -168,7 +168,7 @@ fun isVariousArtists(name: String?): Boolean {
 }
 
 /**
- * Estrae l'artista principale rimuovendo collaborazioni ("feat.", "ft.", "&", ecc.).
+ * Estrae l'artista principale rimuovendo collaborazioni ("feat.", "ft.", "&", "+", "x", ecc.).
  */
 fun extractMainArtist(artist: String?): String {
     if (artist.isNullOrBlank()) return ""
@@ -176,15 +176,21 @@ fun extractMainArtist(artist: String?): String {
 }
 
 /**
- * Verifica se un album raggruppa tracce eterogenee (album diversi, artisti diversi o titolo generico)
+ * Verifica se un album raggruppa tracce eterogenee (album diversi o titolo generico)
  * che necessitano di separazione/disaggregazione.
  */
 fun Album.isMixedOrGeneric(): Boolean {
-    if (isGenericAlbum(title)) return true
-    val distinctAlbums = tracks.map { it.album.trim().lowercase(java.util.Locale.ROOT) }.distinct()
+    // 1. Album con nome generico ("Sconosciuto", "Downloads", ecc.) o collezione di brani singoli
+    if (isGenericAlbum(title) || title.contains("(Brani singoli)")) return true
+
+    // 2. Tracce che presentano tag album differenti e non generici
+    val distinctAlbums = tracks.map { it.album.trim().lowercase(java.util.Locale.ROOT) }
+        .filter { it.isNotBlank() && !isGenericAlbum(it) }
+        .distinct()
     if (distinctAlbums.size > 1) return true
-    val distinctArtists = tracks.map { extractMainArtist(it.artist).lowercase(java.util.Locale.ROOT) }.distinct()
-    return distinctArtists.size > 1 && !isVariousArtists(artist)
+
+    // Se tutte le tracce condividono lo stesso titolo album non generico, l'album è unificato/ufficiale
+    return false
 }
 
 /**

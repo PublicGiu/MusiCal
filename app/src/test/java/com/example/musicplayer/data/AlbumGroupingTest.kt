@@ -196,5 +196,18 @@ class AlbumGroupingTest {
             )
         )
         org.junit.Assert.assertFalse("Album puro non deve essere mixed", pureAlbum.isMixedOrGeneric())
+
+        val albumWithFeatures = Album(
+            id = 3L,
+            title = "PENSIERI CATTIVI",
+            artist = "Macello",
+            albumArtUri = null,
+            tracks = listOf(
+                createTrack(1, "UCCIDERMI/DROGA", 3L, "PENSIERI CATTIVI", artist = "Macello"),
+                createTrack(2, "BENITO E CLARA + ALBANO E ROMINA", 3L, "PENSIERI CATTIVI", artist = "Macello + Albano e Romina"),
+                createTrack(3, "CRACK AL ROCKET", 3L, "PENSIERI CATTIVI", artist = "Macello feat. Paky")
+            )
+        )
+        org.junit.Assert.assertFalse("Album con tracce unificate e collaborazioni/feat non deve essere rilevato come mixed", albumWithFeatures.isMixedOrGeneric())
     }
 }

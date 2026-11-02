@@ -156,7 +156,7 @@ fun PlayerBottomBar(
         ) {
             Surface(
                 modifier = Modifier.fillMaxWidth(),
-                shape = RoundedCornerShape(18.dp),
+                shape = RoundedCornerShape(20.dp),
                 color = MaterialTheme.colorScheme.surfaceContainerHighest,
                 border = BorderStroke(1.dp, LocalMusicVioletNeon.copy(alpha = 0.22f)),
                 shadowElevation = 8.dp,
@@ -238,7 +238,7 @@ private fun PlayerTrackInfoRow(
     Row(
         modifier = modifier
             .fillMaxWidth()
-            .padding(top = 10.dp, bottom = 10.dp, start = 10.dp, end = 12.dp),
+            .padding(top = 12.dp, bottom = 12.dp, start = 12.dp, end = 12.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
         // Sezione interattiva per tap, swipe orizzontale e swipe-up
@@ -333,11 +333,11 @@ private fun PlayerTrackInfoRow(
                 },
             verticalAlignment = Alignment.CenterVertically
         ) {
-            // Miniatura copertina album (46dp x 46dp)
+            // Miniatura copertina album (50dp x 50dp)
             Box(
                 modifier = Modifier
-                    .size(46.dp)
-                    .clip(RoundedCornerShape(10.dp)),
+                    .size(50.dp)
+                    .clip(RoundedCornerShape(12.dp)),
                 contentAlignment = Alignment.Center
             ) {
                 var isImageError by remember(currentTrack?.id) { mutableStateOf(false) }
@@ -398,7 +398,7 @@ private fun PlayerTrackInfoRow(
         // Pulsante circolare viola (+) Aggiungi a playlist
         FilledIconButton(
             onClick = { currentTrack?.let { onAddToPlaylistClick?.invoke(it) } },
-            modifier = Modifier.size(40.dp),
+            modifier = Modifier.size(42.dp),
             shape = CircleShape,
             colors = IconButtonDefaults.filledIconButtonColors(
                 containerColor = MaterialTheme.colorScheme.primary,
@@ -417,7 +417,7 @@ private fun PlayerTrackInfoRow(
         // Pulsante circolare viola Play / Pause con micro-animazione fluida
         FilledIconButton(
             onClick = onPlayPauseClick,
-            modifier = Modifier.size(44.dp),
+            modifier = Modifier.size(46.dp),
             shape = CircleShape,
             colors = IconButtonDefaults.filledIconButtonColors(
                 containerColor = MaterialTheme.colorScheme.primary,
@@ -439,7 +439,7 @@ private fun PlayerTrackInfoRow(
                 Icon(
                     imageVector = if (playing) Icons.Default.Pause else Icons.Default.PlayArrow,
                     contentDescription = if (playing) "Pausa" else "Riproduci",
-                    modifier = Modifier.size(26.dp)
+                    modifier = Modifier.size(28.dp)
                 )
             }
         }
@@ -490,7 +490,7 @@ private fun TopEdgeProgressBar(
         modifier = modifier
             .fillMaxWidth()
             .padding(horizontal = 16.dp)
-            .height(28.dp)
+            .height(16.dp)
             .pointerInput(safeDuration) {
                 awaitEachGesture {
                     val down = awaitFirstDown(requireUnconsumed = false)
@@ -520,7 +520,7 @@ private fun TopEdgeProgressBar(
         Canvas(
             modifier = Modifier
                 .fillMaxWidth()
-                .height(28.dp)
+                .height(16.dp)
         ) {
             val width = size.width
             val h = trackHeight.toPx()

@@ -1222,6 +1222,11 @@ fun MainScreen(
             onSkipToQueueItem = { index -> viewModel.skipToQueueItem(index) },
             currentLyrics = currentLyrics,
             onAdjustLyricsOffset = { deltaMs -> viewModel.adjustLyricsOffset(deltaMs) },
+            onAddToQueueClick = handleAddTrackToQueue,
+            onAddToPlaylistClick = { trackToAddToPlaylist = it },
+            onAddToFavoritesClick = handleAddToFavorites,
+            isFavorite = currentTrack?.id in favoriteTrackIds,
+            onAutoTagClick = { viewModel.startTrackEnrichment(it) },
             onAlbumClick = {
                 val track = currentTrack
                 if (track != null) {

@@ -27,7 +27,9 @@ fun loadAudioFiles(context: Context): List<AudioTrack> {
         MediaStore.Audio.Media.IS_MUSIC,
         MediaStore.Audio.Media.GENRE,
         MediaStore.Audio.Media.TRACK,
-        MediaStore.Audio.Media.DISC_NUMBER
+        MediaStore.Audio.Media.DISC_NUMBER,
+        MediaStore.Audio.Media.DISPLAY_NAME,
+        MediaStore.Audio.Media.ALBUM_ARTIST
     )
 
     // Consideriamo esclusivamente i file musicali presenti nella cartella Music/ (e relative sottocartelle)
@@ -57,6 +59,10 @@ fun loadAudioFiles(context: Context): List<AudioTrack> {
         val discNumberColumn = cursor.getColumnIndex(MediaStore.Audio.Media.DISC_NUMBER).takeIf { it >= 0 }
             ?: cursor.getColumnIndex("disc_number").takeIf { it >= 0 }
             ?: cursor.getColumnIndex("cd_track_number")
+        val relativePathColumn = cursor.getColumnIndex(MediaStore.Audio.Media.RELATIVE_PATH)
+        val displayNameColumn = cursor.getColumnIndex(MediaStore.Audio.Media.DISPLAY_NAME)
+        val albumArtistColumn = cursor.getColumnIndex(MediaStore.Audio.Media.ALBUM_ARTIST).takeIf { it >= 0 }
+            ?: cursor.getColumnIndex("album_artist")
 
         while (cursor.moveToNext()) {
             val id = cursor.getLong(idColumn)
@@ -67,6 +73,9 @@ fun loadAudioFiles(context: Context): List<AudioTrack> {
             val album = cursor.getString(albumColumn)?.takeIf { it.isNotBlank() } ?: "Album sconosciuto"
             val dateAdded = cursor.getLong(dateAddedColumn)
             val genre = if (genreColumn >= 0) cursor.getString(genreColumn)?.trim().orEmpty() else ""
+            val relativePath = if (relativePathColumn >= 0) cursor.getString(relativePathColumn)?.trim().orEmpty() else ""
+            val displayName = if (displayNameColumn >= 0) cursor.getString(displayNameColumn)?.trim().orEmpty() else ""
+            val albumArtist = if (albumArtistColumn >= 0) cursor.getString(albumArtistColumn)?.trim().orEmpty() else ""
             val contentUri = ContentUris.withAppendedId(collectionUri, id)
             val albumArtUri = ContentUris.withAppendedId(albumArtBaseUri, albumId)
 
@@ -100,7 +109,10 @@ fun loadAudioFiles(context: Context): List<AudioTrack> {
                     dateAdded = dateAdded,
                     genre = genre,
                     trackNumber = trackNumber,
-                    discNumber = discNumber
+                    discNumber = discNumber,
+                    albumArtist = albumArtist,
+                    displayName = displayName,
+                    relativePath = relativePath
                 )
             )
         }
@@ -109,27 +121,163 @@ fun loadAudioFiles(context: Context): List<AudioTrack> {
     return audioList
 }
 
+private val GENERIC_ALBUM_NAMES = setOf(
+    "sconosciuto",
+    "album sconosciuto",
+    "unknown",
+    "unknown album",
+    "<unknown>",
+    "download",
+    "downloads",
+    "music",
+    "musica",
+    "audio",
+    "tracks",
+    "canzoni",
+    "soundtrack"
+)
+
+private val VARIOUS_ARTISTS_NAMES = setOf(
+    "various artists",
+    "various artist",
+    "artisti vari",
+    "various",
+    "va",
+    "v/a",
+    "compilation",
+    "soundtrack",
+    "ost"
+)
+
+private val FEAT_ARTIST_REGEX = Regex("""(?i)\s+(feat\.?|ft\.?|featuring|with|vs\.?|&|,)\s+.*""")
+
+/**
+ * Verifica se una stringa di album è generica o assente.
+ */
+fun isGenericAlbum(name: String?): Boolean {
+    if (name.isNullOrBlank()) return true
+    return name.trim().lowercase(java.util.Locale.ROOT) in GENERIC_ALBUM_NAMES
+}
+
+/**
+ * Verifica se un artista rappresenta una compilation / Artisti Vari.
+ */
+fun isVariousArtists(name: String?): Boolean {
+    if (name.isNullOrBlank()) return false
+    return name.trim().lowercase(java.util.Locale.ROOT) in VARIOUS_ARTISTS_NAMES
+}
+
+/**
+ * Estrae l'artista principale rimuovendo collaborazioni ("feat.", "ft.", "&", ecc.).
+ */
+fun extractMainArtist(artist: String?): String {
+    if (artist.isNullOrBlank()) return ""
+    return artist.replace(FEAT_ARTIST_REGEX, "").trim()
+}
+
+/**
+ * Verifica se un album raggruppa tracce eterogenee (album diversi, artisti diversi o titolo generico)
+ * che necessitano di separazione/disaggregazione.
+ */
+fun Album.isMixedOrGeneric(): Boolean {
+    if (isGenericAlbum(title)) return true
+    val distinctAlbums = tracks.map { it.album.trim().lowercase(java.util.Locale.ROOT) }.distinct()
+    if (distinctAlbums.size > 1) return true
+    val distinctArtists = tracks.map { extractMainArtist(it.artist).lowercase(java.util.Locale.ROOT) }.distinct()
+    return distinctArtists.size > 1 && !isVariousArtists(artist)
+}
+
 /**
  * Raggruppa i brani in una lista di modelli Album con tracce associate.
- * Le tracce di ciascun album vengono ordinate secondo la scaletta originale del disco:
- * prima per numero di disco (discNumber), poi per numero di traccia (trackNumber) e infine per titolo.
+ * 
+ * Risolve la frammentazione e l'errata incorporazione di brani di artisti e album diversi:
+ * 1. Non raggruppa alla cieca per MediaStore albumId: se i brani hanno titoli album diversi
+ *    o artisti diversi, vengono separati in album distinti anche in presenza di collisioni MediaStore.
+ * 2. I brani senza tag album ("Sconosciuto" o generico) vengono separati per artista anziché essere
+ *    ammassati in un unico album indefinito.
+ * 3. Supporta compilation "Various Artists" quando indicato nei metadati.
+ * 4. Assegna ID univoci e stabili a ciascun album.
  */
 fun groupTracksIntoAlbums(tracks: List<AudioTrack>): List<Album> {
-    return tracks.groupBy { it.albumId }
-        .map { (albumId, albumTracks) ->
-            val first = albumTracks.first()
-            val sortedAlbumTracks = albumTracks.sortedWith(
-                compareBy<AudioTrack> { it.discNumber }
-                    .thenBy { it.trackNumber }
-                    .thenBy { it.title }
-            )
-            Album(
-                id = albumId,
-                title = first.album,
-                artist = first.artist,
-                albumArtUri = first.albumArtUri,
-                tracks = sortedAlbumTracks
-            )
+    val usedAlbumIds = mutableSetOf<Long>()
+
+    return tracks.groupBy { track ->
+        val rawAlbum = track.album.trim()
+        val isGeneric = isGenericAlbum(rawAlbum)
+
+        if (isGeneric) {
+            val mainArtist = extractMainArtist(track.artist)
+            if (mainArtist.isNotBlank() && mainArtist.lowercase(java.util.Locale.ROOT) !in GENERIC_ALBUM_NAMES) {
+                "generic_artist:${mainArtist.lowercase(java.util.Locale.ROOT)}"
+            } else {
+                "generic_single:${track.id}"
+            }
+        } else {
+            val cleanAlbum = rawAlbum.lowercase(java.util.Locale.ROOT)
+            val rawAlbumArtist = track.albumArtist.trim().ifBlank { extractMainArtist(track.artist) }
+            val isVa = isVariousArtists(rawAlbumArtist) || isVariousArtists(track.artist)
+            if (isVa) {
+                "album:$cleanAlbum:va"
+            } else {
+                "album:$cleanAlbum:artist:${rawAlbumArtist.lowercase(java.util.Locale.ROOT)}"
+            }
         }
-        .sortedBy { it.title.lowercase() }
+    }.map { (groupKey, albumTracks) ->
+        val first = albumTracks.first()
+        val isGeneric = isGenericAlbum(first.album)
+
+        val albumTitle = if (isGeneric) {
+            val mainArtist = extractMainArtist(first.artist)
+            if (mainArtist.isNotBlank() && mainArtist.lowercase(java.util.Locale.ROOT) !in GENERIC_ALBUM_NAMES) {
+                "$mainArtist (Brani singoli)"
+            } else {
+                first.title
+            }
+        } else {
+            first.album
+        }
+
+        val albumArtist = if (isGeneric) {
+            extractMainArtist(first.artist).ifBlank { first.artist }
+        } else {
+            val rawAlbumArtist = first.albumArtist.trim().ifBlank { extractMainArtist(first.artist) }
+            if (isVariousArtists(rawAlbumArtist)) "Artisti Vari" else rawAlbumArtist.ifBlank { first.artist }
+        }
+
+        // Calcolo ID univoco e stabile
+        val albumIdCandidates = albumTracks.map { it.albumId }.distinct()
+        val primaryCandidate = if (albumIdCandidates.size == 1 && albumIdCandidates.first() > 0L) {
+            albumIdCandidates.first()
+        } else {
+            null
+        }
+
+        val albumId = if (primaryCandidate != null && primaryCandidate !in usedAlbumIds) {
+            usedAlbumIds.add(primaryCandidate)
+            primaryCandidate
+        } else {
+            var syntheticId = (groupKey.hashCode().toLong() and 0x7FFFFFFF_FFFFFFFFL)
+            while (syntheticId == 0L || syntheticId in usedAlbumIds) {
+                syntheticId++
+            }
+            usedAlbumIds.add(syntheticId)
+            syntheticId
+        }
+
+        val representativeArtUri = albumTracks.firstOrNull { it.albumArtUri != null }?.albumArtUri ?: first.albumArtUri
+
+        val sortedAlbumTracks = albumTracks.sortedWith(
+            compareBy<AudioTrack> { it.discNumber }
+                .thenBy { it.trackNumber }
+                .thenBy { it.title }
+        )
+
+        Album(
+            id = albumId,
+            title = albumTitle,
+            artist = albumArtist,
+            albumArtUri = representativeArtUri,
+            tracks = sortedAlbumTracks
+        )
+    }.sortedBy { it.title.lowercase(java.util.Locale.ROOT) }
 }

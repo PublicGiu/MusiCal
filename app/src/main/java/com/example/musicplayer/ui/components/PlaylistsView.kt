@@ -386,7 +386,8 @@ fun PlaylistDetailView(
     favoriteTrackIds: Set<Long> = emptySet(),
     onChangeCoverClick: ((Playlist) -> Unit)? = null,
     onRemoveCoverClick: ((Playlist) -> Unit)? = null,
-    onPlayPauseClick: (() -> Unit)? = null
+    onPlayPauseClick: (() -> Unit)? = null,
+    onAutoTagTrackClick: ((AudioTrack) -> Unit)? = null
 ) {
     val isCurrentPlaylistActive = currentTrack != null && playlistTracks.any { it.id == currentTrack.id }
     val isPlaylistPlaying = isPlaying && isCurrentPlaylistActive
@@ -707,7 +708,8 @@ fun PlaylistDetailView(
                                 onAddToFavoritesClick = if (!playlist.isFavorites) onAddToFavoritesClick?.let { cb -> { cb(track) } } else null,
                                 isFavorite = track.id in favoriteTrackIds,
                                 onRemoveClick = { onRemoveTrack(track.id) },
-                                removeLabel = if (playlist.isFavorites) "Rimuovi dai brani preferiti" else "Rimuovi da playlist"
+                                removeLabel = if (playlist.isFavorites) "Rimuovi dai brani preferiti" else "Rimuovi da playlist",
+                                onAutoTagClick = onAutoTagTrackClick
                             )
                         }
                     } else {
@@ -721,7 +723,8 @@ fun PlaylistDetailView(
                             onAddToFavoritesClick = if (!playlist.isFavorites) onAddToFavoritesClick?.let { cb -> { cb(track) } } else null,
                             isFavorite = track.id in favoriteTrackIds,
                             onRemoveClick = { onRemoveTrack(track.id) },
-                            removeLabel = if (playlist.isFavorites) "Rimuovi dai brani preferiti" else "Rimuovi da playlist"
+                            removeLabel = if (playlist.isFavorites) "Rimuovi dai brani preferiti" else "Rimuovi da playlist",
+                            onAutoTagClick = onAutoTagTrackClick
                         )
                     }
                 }

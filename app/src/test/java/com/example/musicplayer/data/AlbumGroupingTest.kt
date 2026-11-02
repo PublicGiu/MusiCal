@@ -15,6 +15,8 @@ class AlbumGroupingTest {
         title: String,
         albumId: Long,
         album: String,
+        artist: String = "Test Artist",
+        albumArtist: String = "",
         trackNumber: Int = 1,
         discNumber: Int = 1,
         duration: Long = 180000L
@@ -22,7 +24,8 @@ class AlbumGroupingTest {
         return AudioTrack(
             id = id,
             title = title,
-            artist = "Test Artist",
+            artist = artist,
+            albumArtist = albumArtist,
             duration = duration,
             uri = dummyUri,
             albumId = albumId,
@@ -96,5 +99,102 @@ class AlbumGroupingTest {
 
         val trackLong = createTrack(3, "Long", 1, "Album", duration = 3665000L)
         assertEquals("1:01:05", trackLong.formattedDuration())
+    }
+
+    @Test
+    fun testMediaStoreAlbumIdCollisionSeparatesDistinctAlbums() {
+        // Due brani con lo stesso albumId assegnato da MediaStore ma con titoli di album diversi
+        val tracks = listOf(
+            createTrack(id = 1, title = "Come Together", albumId = 99, album = "Abbey Road", artist = "The Beatles"),
+            createTrack(id = 2, title = "Billie Jean", albumId = 99, album = "Thriller", artist = "Michael Jackson")
+        )
+
+        val albums = groupTracksIntoAlbums(tracks)
+
+        assertEquals("I brani devono essere separati in 2 album distinti", 2, albums.size)
+        val abbeyRoad = albums.find { it.title.equals("Abbey Road", ignoreCase = true) }
+        val thriller = albums.find { it.title.equals("Thriller", ignoreCase = true) }
+
+        assertEquals(1, abbeyRoad?.trackCount)
+        assertEquals(1, thriller?.trackCount)
+    }
+
+    @Test
+    fun testGenericAlbumNamesSeparatedByArtist() {
+        // Brani con tag album generico ("Sconosciuto") ma di artisti diversi
+        val tracks = listOf(
+            createTrack(id = 1, title = "Bohemian Rhapsody", albumId = 1, album = "Sconosciuto", artist = "Queen"),
+            createTrack(id = 2, title = "Beat It", albumId = 1, album = "Sconosciuto", artist = "Michael Jackson"),
+            createTrack(id = 3, title = "Radio Ga Ga", albumId = 1, album = "Sconosciuto", artist = "Queen")
+        )
+
+        val albums = groupTracksIntoAlbums(tracks)
+
+        assertEquals("Non devono essere ammassati in un unico album sconosciuto: separati per artista", 2, albums.size)
+        val queenAlbum = albums.find { it.artist.contains("Queen", ignoreCase = true) }
+        val mjAlbum = albums.find { it.artist.contains("Michael Jackson", ignoreCase = true) }
+
+        assertEquals(2, queenAlbum?.trackCount)
+        assertEquals(1, mjAlbum?.trackCount)
+    }
+
+    @Test
+    fun testSameAlbumNameDifferentArtistsSeparated() {
+        // Stesso titolo album ("Greatest Hits") ma artisti diversi e non compilation
+        val tracks = listOf(
+            createTrack(id = 1, title = "Under Pressure", albumId = 50, album = "Greatest Hits", artist = "Queen"),
+            createTrack(id = 2, title = "All The Small Things", albumId = 51, album = "Greatest Hits", artist = "Blink-182")
+        )
+
+        val albums = groupTracksIntoAlbums(tracks)
+
+        assertEquals("Due Greatest Hits di artisti diversi devono essere 2 album separati", 2, albums.size)
+        val queenAlbum = albums.find { it.artist.contains("Queen", ignoreCase = true) }
+        val blinkAlbum = albums.find { it.artist.contains("Blink-182", ignoreCase = true) }
+
+        assertEquals(1, queenAlbum?.trackCount)
+        assertEquals(1, blinkAlbum?.trackCount)
+    }
+
+    @Test
+    fun testCompilationTracksRemainGrouped() {
+        // Tracce con album uguale e albumArtist "Various Artists" ma singoli artisti diversi
+        val tracks = listOf(
+            createTrack(id = 1, title = "You Never Can Tell", albumId = 70, album = "Pulp Fiction", artist = "Chuck Berry", albumArtist = "Various Artists"),
+            createTrack(id = 2, title = "Girl, You'll Be a Woman Soon", albumId = 70, album = "Pulp Fiction", artist = "Urge Overkill", albumArtist = "Various Artists")
+        )
+
+        val albums = groupTracksIntoAlbums(tracks)
+
+        assertEquals("La compilation Various Artists deve restare 1 unico album", 1, albums.size)
+        assertEquals("Pulp Fiction", albums[0].title)
+        assertEquals(2, albums[0].trackCount)
+    }
+
+    @Test
+    fun testAlbumIsMixedOrGenericDetection() {
+        val mixedAlbum = Album(
+            id = 1L,
+            title = "Sconosciuto",
+            artist = "Artisti Vari",
+            albumArtUri = null,
+            tracks = listOf(
+                createTrack(1, "Song 1", 1L, "Album A", artist = "Artist 1"),
+                createTrack(2, "Song 2", 1L, "Album B", artist = "Artist 2")
+            )
+        )
+        assertTrue("Album con tracce miste deve essere rilevato come mixed", mixedAlbum.isMixedOrGeneric())
+
+        val pureAlbum = Album(
+            id = 2L,
+            title = "A Night at the Opera",
+            artist = "Queen",
+            albumArtUri = null,
+            tracks = listOf(
+                createTrack(1, "Bohemian Rhapsody", 2L, "A Night at the Opera", artist = "Queen"),
+                createTrack(2, "Love of My Life", 2L, "A Night at the Opera", artist = "Queen")
+            )
+        )
+        org.junit.Assert.assertFalse("Album puro non deve essere mixed", pureAlbum.isMixedOrGeneric())
     }
 }

@@ -36,8 +36,8 @@ android {
         applicationId = "com.example.musicplayer"
         minSdk = 36
         targetSdk = 36
-        versionCode = 3
-        versionName = "0.1.2"
+        versionCode = 4
+        versionName = "0.1.3"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
 
@@ -102,6 +102,9 @@ dependencies {
 
     // OkHttp client for Last.fm API
     implementation(libs.okhttp)
+
+    // Audio Tagging (MP3, FLAC, M4A, OGG)
+    implementation(libs.jaudiotagger)
 
     // Room Database
     implementation(libs.androidx.room.runtime)

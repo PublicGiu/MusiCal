@@ -23,6 +23,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.ui.res.painterResource
 import com.example.musicplayer.R
 import androidx.compose.material.icons.filled.Album
+import androidx.compose.material.icons.filled.AutoFixHigh
 import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.MusicNote
 import androidx.compose.material3.Card
@@ -52,6 +53,7 @@ import coil.compose.AsyncImage
 import coil.request.ImageRequest
 import coil.size.Precision
 import com.example.musicplayer.data.Album
+import com.example.musicplayer.data.isMixedOrGeneric
 
 @Composable
 fun AlbumsGridView(
@@ -59,6 +61,8 @@ fun AlbumsGridView(
     onAlbumClick: (Album) -> Unit,
     modifier: Modifier = Modifier,
     onAddToQueueClick: ((Album) -> Unit)? = null,
+    onAutoTagAlbumClick: ((Album) -> Unit)? = null,
+    onAutoTagAlbumSeparationClick: ((Album) -> Unit)? = null,
     state: LazyGridState = rememberLazyGridState()
 ) {
     if (albums.isEmpty()) {
@@ -98,7 +102,9 @@ fun AlbumsGridView(
                     modifier = Modifier.animateItem(),
                     album = album,
                     onClick = { onAlbumClick(album) },
-                    onAddToQueueClick = onAddToQueueClick
+                    onAddToQueueClick = onAddToQueueClick,
+                    onAutoTagAlbumClick = onAutoTagAlbumClick,
+                    onAutoTagAlbumSeparationClick = onAutoTagAlbumSeparationClick
                 )
             }
         }
@@ -110,7 +116,9 @@ fun AlbumGridItem(
     album: Album,
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
-    onAddToQueueClick: ((Album) -> Unit)? = null
+    onAddToQueueClick: ((Album) -> Unit)? = null,
+    onAutoTagAlbumClick: ((Album) -> Unit)? = null,
+    onAutoTagAlbumSeparationClick: ((Album) -> Unit)? = null
 ) {
     Card(
         modifier = modifier
@@ -204,7 +212,7 @@ fun AlbumGridItem(
                     )
                 }
 
-                if (onAddToQueueClick != null) {
+                if (onAddToQueueClick != null || onAutoTagAlbumClick != null) {
                     var menuExpanded by remember { mutableStateOf(false) }
                     Box {
                         IconButton(
@@ -221,19 +229,66 @@ fun AlbumGridItem(
                             expanded = menuExpanded,
                             onDismissRequest = { menuExpanded = false }
                         ) {
-                            DropdownMenuItem(
-                                text = { Text("Aggiungi alla coda") },
-                                leadingIcon = {
-                                    Icon(
-                                        painter = painterResource(R.drawable.ic_queue_music_custom),
-                                        contentDescription = null
-                                    )
-                                },
-                                onClick = {
-                                    menuExpanded = false
-                                    onAddToQueueClick(album)
-                                }
-                            )
+                            if (onAddToQueueClick != null) {
+                                DropdownMenuItem(
+                                    text = { Text("Aggiungi alla coda") },
+                                    leadingIcon = {
+                                        Icon(
+                                            painter = painterResource(R.drawable.ic_queue_music_custom),
+                                            contentDescription = null
+                                        )
+                                    },
+                                    onClick = {
+                                        menuExpanded = false
+                                        onAddToQueueClick(album)
+                                    }
+                                )
+                            }
+                            if (album.isMixedOrGeneric()) {
+                                DropdownMenuItem(
+                                    text = { Text("Separa in album distinti") },
+                                    leadingIcon = {
+                                        Icon(
+                                            imageVector = Icons.Default.AutoFixHigh,
+                                            contentDescription = null,
+                                            tint = MaterialTheme.colorScheme.primary
+                                        )
+                                    },
+                                    onClick = {
+                                        menuExpanded = false
+                                        onAutoTagAlbumSeparationClick?.invoke(album) ?: onAutoTagAlbumClick?.invoke(album)
+                                    }
+                                )
+                                DropdownMenuItem(
+                                    text = { Text("Uniforma tutto in questo album") },
+                                    leadingIcon = {
+                                        Icon(
+                                            imageVector = Icons.Default.MusicNote,
+                                            contentDescription = null,
+                                            tint = MaterialTheme.colorScheme.onSurfaceVariant
+                                        )
+                                    },
+                                    onClick = {
+                                        menuExpanded = false
+                                        onAutoTagAlbumClick?.invoke(album)
+                                    }
+                                )
+                            } else if (onAutoTagAlbumClick != null) {
+                                DropdownMenuItem(
+                                    text = { Text("Uniforma & auto-tagga album") },
+                                    leadingIcon = {
+                                        Icon(
+                                            imageVector = Icons.Default.AutoFixHigh,
+                                            contentDescription = null,
+                                            tint = MaterialTheme.colorScheme.primary
+                                        )
+                                    },
+                                    onClick = {
+                                        menuExpanded = false
+                                        onAutoTagAlbumClick(album)
+                                    }
+                                )
+                            }
                         }
                     }
                 }

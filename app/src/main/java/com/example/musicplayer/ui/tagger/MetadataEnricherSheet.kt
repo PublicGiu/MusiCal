@@ -1,0 +1,1261 @@
+package com.example.musicplayer.ui.tagger
+
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.animateContentSize
+import androidx.compose.foundation.background
+import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.navigationBarsPadding
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.AutoFixHigh
+import androidx.compose.material.icons.filled.Check
+import androidx.compose.material.icons.filled.CheckCircle
+import androidx.compose.material.icons.filled.Done
+import androidx.compose.material.icons.filled.Edit
+import androidx.compose.material.icons.filled.ErrorOutline
+import androidx.compose.material.icons.filled.ExpandLess
+import androidx.compose.material.icons.filled.ExpandMore
+import androidx.compose.material.icons.filled.HighQuality
+import androidx.compose.material.icons.filled.MusicNote
+import androidx.compose.material.icons.filled.Search
+import androidx.compose.material.icons.filled.Sync
+import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.FilledTonalButton
+import androidx.compose.material3.HorizontalDivider
+import androidx.compose.material3.Icon
+import androidx.compose.material3.LinearProgressIndicator
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.ModalBottomSheet
+import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.OutlinedTextFieldDefaults
+import androidx.compose.material3.Surface
+import androidx.compose.material3.Switch
+import androidx.compose.material3.SwitchDefaults
+import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
+import androidx.compose.material3.rememberModalBottomSheetState
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
+import coil.compose.AsyncImage
+import com.example.musicplayer.data.Album
+import com.example.musicplayer.data.AudioTrack
+import com.example.musicplayer.data.formatDurationMs
+import com.example.musicplayer.data.tagger.model.DeezerSearchTrack
+import com.example.musicplayer.data.tagger.model.EnrichedMetadata
+import com.example.musicplayer.data.tagger.repository.EnricherOptions
+
+sealed class EnricherUiState {
+    object Idle : EnricherUiState()
+    data class Loading(val message: String) : EnricherUiState()
+    data class ReviewTrack(
+        val track: AudioTrack,
+        val enriched: EnrichedMetadata,
+        val candidates: List<DeezerSearchTrack> = emptyList(),
+        val options: EnricherOptions = EnricherOptions()
+    ) : EnricherUiState()
+    data class ReviewAlbum(
+        val album: Album,
+        val tracksEnriched: Map<Long, EnrichedMetadata>,
+        val individualTracksEnriched: Map<Long, EnrichedMetadata> = tracksEnriched,
+        val unifiedTracksEnriched: Map<Long, EnrichedMetadata> = tracksEnriched,
+        val options: EnricherOptions = EnricherOptions(),
+        val isSeparationMode: Boolean = false
+    ) : EnricherUiState()
+    data class Writing(val current: Int, val total: Int, val trackTitle: String) : EnricherUiState()
+    data class Success(val message: String) : EnricherUiState()
+    data class Error(val message: String) : EnricherUiState()
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun MetadataEnricherSheet(
+    state: EnricherUiState,
+    onDismissRequest: () -> Unit,
+    onApplyTrack: (AudioTrack, EnrichedMetadata, EnricherOptions) -> Unit,
+    onApplyAlbum: (Album, Map<Long, EnrichedMetadata>, EnricherOptions) -> Unit,
+    onSelectCandidate: (AudioTrack, DeezerSearchTrack, EnricherOptions) -> Unit = { _, _, _ -> },
+    onCustomSearch: (AudioTrack, String, String) -> Unit = { _, _, _ -> },
+    onToggleAlbumSeparationMode: ((Boolean) -> Unit)? = null,
+    onRetry: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    if (state is EnricherUiState.Idle) return
+
+    val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+
+    ModalBottomSheet(
+        onDismissRequest = onDismissRequest,
+        sheetState = sheetState,
+        containerColor = MaterialTheme.colorScheme.surface,
+        modifier = modifier
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 20.dp)
+                .navigationBarsPadding()
+                .padding(bottom = 24.dp)
+        ) {
+            // Header
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(bottom = 16.dp)
+            ) {
+                Surface(
+                    shape = CircleShape,
+                    color = MaterialTheme.colorScheme.primaryContainer,
+                    modifier = Modifier.size(40.dp)
+                ) {
+                    Box(contentAlignment = Alignment.Center) {
+                        Icon(
+                            imageVector = Icons.Default.AutoFixHigh,
+                            contentDescription = null,
+                            tint = MaterialTheme.colorScheme.onPrimaryContainer,
+                            modifier = Modifier.size(22.dp)
+                        )
+                    }
+                }
+                Spacer(modifier = Modifier.width(12.dp))
+                Column {
+                    Text(
+                        text = "Smart Auto-Tagger & Enricher",
+                        style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
+                        color = MaterialTheme.colorScheme.onSurface
+                    )
+                    Text(
+                        text = "Metadati Deezer HD + Testi Sincronizzati LRCLIB",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+            }
+
+            HorizontalDivider(
+                color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f),
+                modifier = Modifier.padding(bottom = 16.dp)
+            )
+
+            // Contenuto in base allo stato
+            when (state) {
+                is EnricherUiState.Loading -> {
+                    LoadingContent(message = state.message)
+                }
+                is EnricherUiState.ReviewTrack -> {
+                    ReviewTrackContent(
+                        track = state.track,
+                        enriched = state.enriched,
+                        candidates = state.candidates,
+                        initialOptions = state.options,
+                        onCancel = onDismissRequest,
+                        onApply = { editedEnriched, options ->
+                            onApplyTrack(state.track, editedEnriched, options)
+                        },
+                        onSelectCandidate = { candidate ->
+                            onSelectCandidate(state.track, candidate, state.options)
+                        },
+                        onCustomSearch = { title, artist ->
+                            onCustomSearch(state.track, title, artist)
+                        }
+                    )
+                }
+                is EnricherUiState.ReviewAlbum -> {
+                    ReviewAlbumContent(
+                        album = state.album,
+                        tracksEnriched = state.tracksEnriched,
+                        initialOptions = state.options,
+                        isSeparationMode = state.isSeparationMode,
+                        onToggleSeparationMode = onToggleAlbumSeparationMode,
+                        onCancel = onDismissRequest,
+                        onApply = { options ->
+                            onApplyAlbum(state.album, state.tracksEnriched, options)
+                        }
+                    )
+                }
+                is EnricherUiState.Writing -> {
+                    WritingContent(
+                        current = state.current,
+                        total = state.total,
+                        trackTitle = state.trackTitle
+                    )
+                }
+                is EnricherUiState.Success -> {
+                    SuccessContent(
+                        message = state.message,
+                        onDone = onDismissRequest
+                    )
+                }
+                is EnricherUiState.Error -> {
+                    ErrorContent(
+                        message = state.message,
+                        onDismiss = onDismissRequest,
+                        onRetry = onRetry
+                    )
+                }
+                EnricherUiState.Idle -> Unit
+            }
+        }
+    }
+}
+
+@Composable
+private fun LoadingContent(message: String) {
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(vertical = 40.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.Center
+    ) {
+        CircularProgressIndicator(
+            color = MaterialTheme.colorScheme.primary,
+            strokeWidth = 3.dp,
+            modifier = Modifier.size(48.dp)
+        )
+        Spacer(modifier = Modifier.height(20.dp))
+        Text(
+            text = message,
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onSurface,
+            fontWeight = FontWeight.Medium
+        )
+    }
+}
+
+@Composable
+private fun ReviewTrackContent(
+    track: AudioTrack,
+    enriched: EnrichedMetadata,
+    candidates: List<DeezerSearchTrack>,
+    initialOptions: EnricherOptions,
+    onCancel: () -> Unit,
+    onApply: (EnrichedMetadata, EnricherOptions) -> Unit,
+    onSelectCandidate: (DeezerSearchTrack) -> Unit,
+    onCustomSearch: (String, String) -> Unit
+) {
+    var options by remember { mutableStateOf(initialOptions) }
+    var showLyricsPreview by remember { mutableStateOf(false) }
+    var isEditingDetails by remember { mutableStateOf(false) }
+    val scrollState = rememberScrollState()
+
+    // Campi modificabili dall'utente (Quick-Edit)
+    var editedTitle by remember(enriched) { mutableStateOf(enriched.title) }
+    var editedArtist by remember(enriched) { mutableStateOf(enriched.artist) }
+    var editedAlbum by remember(enriched) { mutableStateOf(enriched.album) }
+    var editedAlbumArtist by remember(enriched) { mutableStateOf(enriched.albumArtist) }
+    var editedGenre by remember(enriched) { mutableStateOf(enriched.genre.orEmpty()) }
+    var editedYear by remember(enriched) { mutableStateOf(enriched.releaseYear?.toString().orEmpty()) }
+    var editedTrackNumber by remember(enriched) { mutableStateOf(enriched.trackNumber?.toString().orEmpty()) }
+    var editedDiscNumber by remember(enriched) { mutableStateOf(enriched.discNumber?.toString() ?: "1") }
+
+    // Ricerca manuale & candidati alternativi
+    var showAlternativeSearch by remember { mutableStateOf(false) }
+    var customSearchTitle by remember(track) { mutableStateOf(track.title) }
+    var customSearchArtist by remember(track) { mutableStateOf(track.artist) }
+
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .heightIn(max = 560.dp)
+            .verticalScroll(scrollState)
+            .animateContentSize()
+    ) {
+        // Anteprima Copertine (Attuale vs Nuova HD)
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(vertical = 8.dp),
+            horizontalArrangement = Arrangement.SpaceEvenly,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            // Copertina Attuale
+            Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                Text(
+                    text = "Attuale",
+                    style = MaterialTheme.typography.labelMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+                Spacer(modifier = Modifier.height(6.dp))
+                Box(
+                    modifier = Modifier
+                        .size(90.dp)
+                        .clip(RoundedCornerShape(12.dp))
+                        .background(MaterialTheme.colorScheme.surfaceVariant),
+                    contentAlignment = Alignment.Center
+                ) {
+                    if (track.albumArtUri != null) {
+                        AsyncImage(
+                            model = track.albumArtUri,
+                            contentDescription = null,
+                            contentScale = ContentScale.Crop,
+                            modifier = Modifier.matchParentSize()
+                        )
+                    } else {
+                        Icon(
+                            imageVector = Icons.Default.MusicNote,
+                            contentDescription = null,
+                            tint = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                }
+            }
+
+            Icon(
+                imageVector = Icons.Default.Sync,
+                contentDescription = null,
+                tint = MaterialTheme.colorScheme.primary,
+                modifier = Modifier.size(24.dp)
+            )
+
+            // Nuova Copertina HD
+            Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text(
+                        text = "Nuova HD",
+                        style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Bold),
+                        color = MaterialTheme.colorScheme.primary
+                    )
+                    Spacer(modifier = Modifier.width(4.dp))
+                    Icon(
+                        imageVector = Icons.Default.HighQuality,
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.primary,
+                        modifier = Modifier.size(16.dp)
+                    )
+                }
+                Spacer(modifier = Modifier.height(6.dp))
+                Box(
+                    modifier = Modifier
+                        .size(90.dp)
+                        .clip(RoundedCornerShape(12.dp))
+                        .border(2.dp, MaterialTheme.colorScheme.primary, RoundedCornerShape(12.dp))
+                        .background(MaterialTheme.colorScheme.surfaceVariant),
+                    contentAlignment = Alignment.Center
+                ) {
+                    if (!enriched.coverUrl.isNullOrBlank()) {
+                        AsyncImage(
+                            model = enriched.coverUrl,
+                            contentDescription = null,
+                            contentScale = ContentScale.Crop,
+                            modifier = Modifier.matchParentSize()
+                        )
+                    } else {
+                        Icon(
+                            imageVector = Icons.Default.MusicNote,
+                            contentDescription = null,
+                            tint = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                }
+            }
+        }
+
+        Spacer(modifier = Modifier.height(14.dp))
+
+        // Scheda Diff Metadati con Quick-Edit
+        Surface(
+            shape = RoundedCornerShape(12.dp),
+            color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
+            modifier = Modifier.fillMaxWidth()
+        ) {
+            Column(modifier = Modifier.padding(14.dp)) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(
+                        text = if (isEditingDetails) "Modifica Rapida Metadati" else "Metadati Proposti",
+                        style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold),
+                        color = MaterialTheme.colorScheme.primary
+                    )
+                    TextButton(onClick = { isEditingDetails = !isEditingDetails }) {
+                        Icon(
+                            imageVector = if (isEditingDetails) Icons.Default.Done else Icons.Default.Edit,
+                            contentDescription = null,
+                            modifier = Modifier.size(16.dp)
+                        )
+                        Spacer(modifier = Modifier.width(4.dp))
+                        Text(if (isEditingDetails) "Fine" else "Modifica")
+                    }
+                }
+
+                if (isEditingDetails) {
+                    OutlinedTextField(
+                        value = editedTitle,
+                        onValueChange = { editedTitle = it },
+                        label = { Text("Titolo") },
+                        modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
+                        singleLine = true
+                    )
+                    OutlinedTextField(
+                        value = editedArtist,
+                        onValueChange = { editedArtist = it },
+                        label = { Text("Artista") },
+                        modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
+                        singleLine = true
+                    )
+                    OutlinedTextField(
+                        value = editedAlbum,
+                        onValueChange = { editedAlbum = it },
+                        label = { Text("Album") },
+                        modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
+                        singleLine = true
+                    )
+                    OutlinedTextField(
+                        value = editedAlbumArtist,
+                        onValueChange = { editedAlbumArtist = it },
+                        label = { Text("Artista Album (per raggruppamento)") },
+                        modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
+                        singleLine = true
+                    )
+                    Row(modifier = Modifier.fillMaxWidth()) {
+                        OutlinedTextField(
+                            value = editedGenre,
+                            onValueChange = { editedGenre = it },
+                            label = { Text("Genere") },
+                            modifier = Modifier.weight(1f).padding(end = 4.dp, top = 4.dp, bottom = 4.dp),
+                            singleLine = true
+                        )
+                        OutlinedTextField(
+                            value = editedYear,
+                            onValueChange = { editedYear = it },
+                            label = { Text("Anno") },
+                            modifier = Modifier.weight(0.6f).padding(start = 4.dp, top = 4.dp, bottom = 4.dp),
+                            singleLine = true
+                        )
+                    }
+                    Row(modifier = Modifier.fillMaxWidth()) {
+                        OutlinedTextField(
+                            value = editedTrackNumber,
+                            onValueChange = { editedTrackNumber = it },
+                            label = { Text("N° Traccia") },
+                            modifier = Modifier.weight(1f).padding(end = 4.dp, top = 4.dp, bottom = 4.dp),
+                            singleLine = true
+                        )
+                        OutlinedTextField(
+                            value = editedDiscNumber,
+                            onValueChange = { editedDiscNumber = it },
+                            label = { Text("N° Disco") },
+                            modifier = Modifier.weight(1f).padding(start = 4.dp, top = 4.dp, bottom = 4.dp),
+                            singleLine = true
+                        )
+                    }
+                } else {
+                    DiffRow(label = "Titolo", oldValue = track.title, newValue = editedTitle)
+                    DiffRow(label = "Artista", oldValue = track.artist, newValue = editedArtist)
+                    DiffRow(label = "Album", oldValue = track.album, newValue = editedAlbum)
+                    DiffRow(
+                        label = "Album Artist",
+                        oldValue = track.albumArtist.ifBlank { "Non impostato" },
+                        newValue = editedAlbumArtist,
+                        highlightBadge = "Uniforma album"
+                    )
+                    if (editedYear.isNotBlank()) {
+                        DiffRow(label = "Anno", oldValue = "-", newValue = editedYear)
+                    }
+                    if (editedTrackNumber.isNotBlank()) {
+                        val oldPosStr = if (track.trackNumber > 0) "${track.trackNumber} (Disco ${track.discNumber})" else "Non impostata"
+                        val newPosStr = "$editedTrackNumber (Disco $editedDiscNumber)"
+                        DiffRow(
+                            label = "Traccia / Disco",
+                            oldValue = oldPosStr,
+                            newValue = newPosStr,
+                            highlightBadge = if (track.trackNumber <= 0 || track.trackNumber.toString() != editedTrackNumber) "Posizione corretta" else null
+                        )
+                    }
+                    if (editedGenre.isNotBlank()) {
+                        DiffRow(label = "Genere", oldValue = track.genre.ifBlank { "-" }, newValue = editedGenre)
+                    }
+                }
+            }
+        }
+
+        Spacer(modifier = Modifier.height(10.dp))
+
+        // Sezione Ricerca Manuale e Risultati Alternativi
+        Surface(
+            shape = RoundedCornerShape(12.dp),
+            color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.4f),
+            modifier = Modifier.fillMaxWidth()
+        ) {
+            Column(modifier = Modifier.padding(12.dp)) {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clickable { showAlternativeSearch = !showAlternativeSearch },
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.SpaceBetween
+                ) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Icon(
+                            imageVector = Icons.Default.Search,
+                            contentDescription = null,
+                            tint = MaterialTheme.colorScheme.primary,
+                            modifier = Modifier.size(18.dp)
+                        )
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text(
+                            text = "Non è il brano giusto? Cerca o scegli altri",
+                            style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Medium),
+                            color = MaterialTheme.colorScheme.onSurface
+                        )
+                    }
+                    Icon(
+                        imageVector = if (showAlternativeSearch) Icons.Default.ExpandLess else Icons.Default.ExpandMore,
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+
+                AnimatedVisibility(visible = showAlternativeSearch) {
+                    Column(modifier = Modifier.padding(top = 10.dp)) {
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            OutlinedTextField(
+                                value = customSearchTitle,
+                                onValueChange = { customSearchTitle = it },
+                                label = { Text("Titolo") },
+                                modifier = Modifier.weight(1f).padding(end = 4.dp),
+                                singleLine = true
+                            )
+                            OutlinedTextField(
+                                value = customSearchArtist,
+                                onValueChange = { customSearchArtist = it },
+                                label = { Text("Artista") },
+                                modifier = Modifier.weight(1f).padding(start = 4.dp),
+                                singleLine = true
+                            )
+                        }
+                        Spacer(modifier = Modifier.height(8.dp))
+                        Button(
+                            onClick = { onCustomSearch(customSearchTitle, customSearchArtist) },
+                            modifier = Modifier.align(Alignment.End)
+                        ) {
+                            Text("Cerca su Deezer")
+                        }
+
+                        if (candidates.isNotEmpty()) {
+                            Spacer(modifier = Modifier.height(10.dp))
+                            Text(
+                                text = "Altri risultati trovati:",
+                                style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Bold),
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                            Spacer(modifier = Modifier.height(6.dp))
+                            candidates.take(6).forEach { candidate ->
+                                Surface(
+                                    shape = RoundedCornerShape(8.dp),
+                                    color = MaterialTheme.colorScheme.surface,
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .padding(vertical = 3.dp)
+                                        .clickable { onSelectCandidate(candidate) }
+                                ) {
+                                    Row(
+                                        modifier = Modifier.padding(8.dp),
+                                        verticalAlignment = Alignment.CenterVertically
+                                    ) {
+                                        Box(
+                                            modifier = Modifier
+                                                .size(36.dp)
+                                                .clip(RoundedCornerShape(6.dp))
+                                                .background(MaterialTheme.colorScheme.surfaceVariant),
+                                            contentAlignment = Alignment.Center
+                                        ) {
+                                            if (!candidate.coverXl.isNullOrBlank()) {
+                                                AsyncImage(
+                                                    model = candidate.coverXl,
+                                                    contentDescription = null,
+                                                    contentScale = ContentScale.Crop,
+                                                    modifier = Modifier.matchParentSize()
+                                                )
+                                            } else {
+                                                Icon(
+                                                    imageVector = Icons.Default.MusicNote,
+                                                    contentDescription = null,
+                                                    modifier = Modifier.size(18.dp)
+                                                )
+                                            }
+                                        }
+                                        Spacer(modifier = Modifier.width(10.dp))
+                                        Column(modifier = Modifier.weight(1f)) {
+                                            Text(
+                                                text = candidate.titleShort.ifBlank { candidate.title },
+                                                style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.SemiBold),
+                                                maxLines = 1,
+                                                overflow = TextOverflow.Ellipsis
+                                            )
+                                            Text(
+                                                text = "${candidate.artistName} • ${candidate.albumTitle} (${formatDurationMs(candidate.duration * 1000L)})",
+                                                style = MaterialTheme.typography.bodySmall,
+                                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                                maxLines = 1,
+                                                overflow = TextOverflow.Ellipsis
+                                            )
+                                        }
+                                        FilledTonalButton(
+                                            onClick = { onSelectCandidate(candidate) },
+                                            modifier = Modifier.padding(start = 6.dp)
+                                        ) {
+                                            Text("Usa")
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        Spacer(modifier = Modifier.height(10.dp))
+
+        // Badge e stato Testi
+        Surface(
+            shape = RoundedCornerShape(12.dp),
+            color = when {
+                enriched.hasSyncedLyrics -> Color(0xFF1B5E20).copy(alpha = 0.15f)
+                enriched.hasPlainLyrics -> Color(0xFFE65100).copy(alpha = 0.15f)
+                else -> MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)
+            },
+            modifier = Modifier
+                .fillMaxWidth()
+                .clickable {
+                    if (enriched.hasPlainLyrics || enriched.hasSyncedLyrics) {
+                        showLyricsPreview = !showLyricsPreview
+                    }
+                }
+        ) {
+            Column(modifier = Modifier.padding(12.dp)) {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Box(
+                            modifier = Modifier
+                                .size(10.dp)
+                                .clip(CircleShape)
+                                .background(
+                                    when {
+                                        enriched.hasSyncedLyrics -> Color(0xFF4CAF50)
+                                        enriched.hasPlainLyrics -> Color(0xFFFF9800)
+                                        else -> Color.Gray
+                                    }
+                                )
+                        )
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text(
+                            text = when {
+                                enriched.hasSyncedLyrics -> "Testi sincronizzati (.lrc) pronti"
+                                enriched.hasPlainLyrics -> "Testo semplice disponibile"
+                                else -> "Nessun testo trovato su LRCLIB"
+                            },
+                            style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Medium),
+                            color = MaterialTheme.colorScheme.onSurface
+                        )
+                    }
+
+                    if (enriched.hasPlainLyrics || enriched.hasSyncedLyrics) {
+                        Icon(
+                            imageVector = if (showLyricsPreview) Icons.Default.ExpandLess else Icons.Default.ExpandMore,
+                            contentDescription = null,
+                            tint = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                }
+
+                // Anteprima versi espandibile
+                AnimatedVisibility(visible = showLyricsPreview) {
+                    val previewText = (enriched.syncedLyrics ?: enriched.plainLyrics).orEmpty()
+                        .lines()
+                        .take(6)
+                        .joinToString("\n")
+
+                    Column(modifier = Modifier.padding(top = 8.dp)) {
+                        Text(
+                            text = previewText,
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                        Text(
+                            text = "...",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                }
+            }
+        }
+
+        Spacer(modifier = Modifier.height(14.dp))
+
+        // Opzioni di salvataggio
+        OptionSwitch(
+            label = "Normalizza titolo album",
+            subtitle = "Rimuove suffissi come [Deluxe] o (Remastered)",
+            checked = options.normalizeAlbum,
+            onCheckedChange = { options = options.copy(normalizeAlbum = it) }
+        )
+
+        OptionSwitch(
+            label = "Incorpora copertina HD (1000x1000)",
+            subtitle = "Salva l'immagine nei frame del file audio",
+            checked = options.embedCover,
+            onCheckedChange = { options = options.copy(embedCover = it) }
+        )
+
+        OptionSwitch(
+            label = "Salva testi sincronizzati (.lrc)",
+            subtitle = "Abilita il karaoke nel player a schermo intero",
+            checked = options.includeLyrics,
+            onCheckedChange = { options = options.copy(includeLyrics = it) }
+        )
+
+        Spacer(modifier = Modifier.height(16.dp))
+
+        // Pulsanti Azione
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.End
+        ) {
+            TextButton(onClick = onCancel) {
+                Text("Annulla")
+            }
+            Spacer(modifier = Modifier.width(10.dp))
+            Button(
+                onClick = {
+                    val finalEnriched = enriched.copy(
+                        title = editedTitle.trim().ifBlank { enriched.title },
+                        artist = editedArtist.trim().ifBlank { enriched.artist },
+                        album = editedAlbum.trim().ifBlank { enriched.album },
+                        albumArtist = editedAlbumArtist.trim().ifBlank { enriched.albumArtist },
+                        genre = editedGenre.trim().takeIf { it.isNotBlank() },
+                        releaseYear = editedYear.trim().toIntOrNull(),
+                        trackNumber = editedTrackNumber.trim().toIntOrNull(),
+                        discNumber = editedDiscNumber.trim().toIntOrNull() ?: 1
+                    )
+                    onApply(finalEnriched, options)
+                },
+                colors = ButtonDefaults.buttonColors(
+                    containerColor = MaterialTheme.colorScheme.primary
+                )
+            ) {
+                Icon(imageVector = Icons.Default.Check, contentDescription = null, modifier = Modifier.size(18.dp))
+                Spacer(modifier = Modifier.width(8.dp))
+                Text("Applica e Salva")
+            }
+        }
+    }
+}
+
+@Composable
+private fun ReviewAlbumContent(
+    album: Album,
+    tracksEnriched: Map<Long, EnrichedMetadata>,
+    initialOptions: EnricherOptions,
+    isSeparationMode: Boolean = false,
+    onToggleSeparationMode: ((Boolean) -> Unit)? = null,
+    onCancel: () -> Unit,
+    onApply: (EnricherOptions) -> Unit
+) {
+    var options by remember { mutableStateOf(initialOptions) }
+    val scrollState = rememberScrollState()
+    val firstEnriched = tracksEnriched.values.firstOrNull()
+
+    val targetAlbumCount = remember(tracksEnriched) {
+        tracksEnriched.values.map {
+            "${it.album.trim().lowercase(java.util.Locale.ROOT)}___${it.albumArtist.trim().lowercase(java.util.Locale.ROOT)}"
+        }.distinct().size
+    }
+
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .heightIn(max = 520.dp)
+            .verticalScroll(scrollState)
+    ) {
+        Text(
+            text = if (isSeparationMode) "Separa Brani in Album Distinti (${album.tracks.size} tracce)"
+            else "Uniforma Metadati Album (${album.tracks.size} tracce)",
+            style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold),
+            color = MaterialTheme.colorScheme.primary
+        )
+        Spacer(modifier = Modifier.height(10.dp))
+
+        // Selettore rapido modalità: Separazione vs Unificazione
+        if (album.tracks.size > 1 && onToggleSeparationMode != null) {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clip(RoundedCornerShape(10.dp))
+                    .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f))
+                    .padding(4.dp),
+                horizontalArrangement = Arrangement.spacedBy(4.dp)
+            ) {
+                Surface(
+                    shape = RoundedCornerShape(8.dp),
+                    color = if (isSeparationMode) MaterialTheme.colorScheme.primary else Color.Transparent,
+                    modifier = Modifier
+                        .weight(1f)
+                        .clickable { onToggleSeparationMode(true) }
+                ) {
+                    Text(
+                        text = "Separa in album distinti",
+                        style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Bold),
+                        color = if (isSeparationMode) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.padding(vertical = 8.dp),
+                        textAlign = androidx.compose.ui.text.style.TextAlign.Center
+                    )
+                }
+                Surface(
+                    shape = RoundedCornerShape(8.dp),
+                    color = if (!isSeparationMode) MaterialTheme.colorScheme.primary else Color.Transparent,
+                    modifier = Modifier
+                        .weight(1f)
+                        .clickable { onToggleSeparationMode(false) }
+                ) {
+                    Text(
+                        text = "Uniforma in un unico album",
+                        style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Bold),
+                        color = if (!isSeparationMode) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.padding(vertical = 8.dp),
+                        textAlign = androidx.compose.ui.text.style.TextAlign.Center
+                    )
+                }
+            }
+            Spacer(modifier = Modifier.height(10.dp))
+        }
+
+        if (isSeparationMode) {
+            Surface(
+                shape = RoundedCornerShape(12.dp),
+                color = MaterialTheme.colorScheme.secondaryContainer.copy(alpha = 0.45f),
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Row(
+                    modifier = Modifier.padding(14.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.AutoFixHigh,
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.secondary,
+                        modifier = Modifier.size(26.dp)
+                    )
+                    Spacer(modifier = Modifier.width(12.dp))
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text(
+                            text = "Verranno creati $targetAlbumCount album distinti",
+                            style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold),
+                            color = MaterialTheme.colorScheme.onSecondaryContainer
+                        )
+                        Text(
+                            text = "Ciascun brano verrà associato al rispettivo disco e artista con copertina HD e tag ID3 dedicati.",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSecondaryContainer.copy(alpha = 0.85f)
+                        )
+                    }
+                }
+            }
+        } else {
+            Surface(
+                shape = RoundedCornerShape(12.dp),
+                color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Column(modifier = Modifier.padding(14.dp)) {
+                    DiffRow(label = "Album", oldValue = album.title, newValue = firstEnriched?.album ?: album.title)
+                    DiffRow(
+                        label = "Album Artist univoco",
+                        oldValue = album.artist,
+                        newValue = firstEnriched?.albumArtist ?: album.artist,
+                        highlightBadge = "Raggruppa tutte le tracce"
+                    )
+                    if (firstEnriched?.releaseYear != null) {
+                        DiffRow(label = "Anno", oldValue = "-", newValue = firstEnriched.releaseYear.toString())
+                    }
+                }
+            }
+        }
+
+        Spacer(modifier = Modifier.height(12.dp))
+
+        // Lista delle tracce con nuovo numero di traccia
+        Text(
+            text = if (isSeparationMode) "Destinazione brani:" else "Tracce che verranno aggiornate:",
+            style = MaterialTheme.typography.labelLarge,
+            color = MaterialTheme.colorScheme.onSurfaceVariant
+        )
+        Spacer(modifier = Modifier.height(6.dp))
+
+        val sortedDisplayTracks = remember(album.tracks, tracksEnriched) {
+            album.tracks.sortedWith(
+                compareBy<AudioTrack> { tracksEnriched[it.id]?.discNumber ?: it.discNumber }
+                    .thenBy { tracksEnriched[it.id]?.trackNumber ?: it.trackNumber }
+                    .thenBy { it.title }
+            )
+        }
+
+        sortedDisplayTracks.forEach { track ->
+            val enriched = tracksEnriched[track.id]
+            val disc = enriched?.discNumber ?: track.discNumber
+            val pos = enriched?.trackNumber ?: track.trackNumber
+            val posChanged = track.trackNumber <= 0 || track.trackNumber != enriched?.trackNumber
+            Surface(
+                shape = RoundedCornerShape(8.dp),
+                color = MaterialTheme.colorScheme.surface,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(vertical = 3.dp)
+            ) {
+                Row(
+                    modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    val positionText = if (disc > 1) "D$disc.$pos." else "$pos."
+                    Text(
+                        text = positionText,
+                        style = MaterialTheme.typography.bodySmall.copy(fontWeight = FontWeight.Bold),
+                        color = MaterialTheme.colorScheme.primary,
+                        modifier = Modifier.width(if (disc > 1) 46.dp else 28.dp)
+                    )
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text(
+                            text = enriched?.title ?: track.title,
+                            style = MaterialTheme.typography.bodyMedium,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
+                        )
+                        if (isSeparationMode) {
+                            Text(
+                                text = "Disco: ${enriched?.album ?: track.album} • ${enriched?.albumArtist ?: track.artist}",
+                                style = MaterialTheme.typography.bodySmall.copy(fontWeight = FontWeight.Medium),
+                                color = MaterialTheme.colorScheme.primary,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis
+                            )
+                        } else {
+                            Text(
+                                text = enriched?.artist ?: track.artist,
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis
+                            )
+                        }
+                    }
+                    if (posChanged && pos > 0) {
+                        Text(
+                            text = "Pos. $pos",
+                            style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold),
+                            color = MaterialTheme.colorScheme.primary,
+                            modifier = Modifier
+                                .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.12f), RoundedCornerShape(4.dp))
+                                .padding(horizontal = 6.dp, vertical = 2.dp)
+                        )
+                        Spacer(modifier = Modifier.width(6.dp))
+                    }
+                    if (enriched?.hasSyncedLyrics == true) {
+                        Text(
+                            text = "LRC",
+                            style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold),
+                            color = Color(0xFF4CAF50),
+                            modifier = Modifier
+                                .background(Color(0xFF4CAF50).copy(alpha = 0.15f), RoundedCornerShape(4.dp))
+                                .padding(horizontal = 6.dp, vertical = 2.dp)
+                        )
+                    }
+                }
+            }
+        }
+
+        Spacer(modifier = Modifier.height(12.dp))
+
+        if (!isSeparationMode) {
+            OptionSwitch(
+                label = "Normalizza titolo album",
+                subtitle = "Rimuove suffissi Deluxe o Remastered per tutte le tracce",
+                checked = options.normalizeAlbum,
+                onCheckedChange = { options = options.copy(normalizeAlbum = it) }
+            )
+        }
+
+        OptionSwitch(
+            label = if (isSeparationMode) "Incorpora copertina HD originale per ciascun album" else "Incorpora copertina HD in tutti i brani",
+            subtitle = if (isSeparationMode) "Scarica e scrive l'artwork 1000x1000px specifico del disco di ogni brano" else "Applica la medesima copertina 1000x1000px",
+            checked = options.embedCover,
+            onCheckedChange = { options = options.copy(embedCover = it) }
+        )
+
+        OptionSwitch(
+            label = "Includi testi sincronizzati (.lrc)",
+            subtitle = "Salva la sincronizzazione karaoke per ciascuna traccia",
+            checked = options.includeLyrics,
+            onCheckedChange = { options = options.copy(includeLyrics = it) }
+        )
+
+        Spacer(modifier = Modifier.height(16.dp))
+
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.End
+        ) {
+            TextButton(onClick = onCancel) {
+                Text("Annulla")
+            }
+            Spacer(modifier = Modifier.width(10.dp))
+            Button(
+                onClick = { onApply(options) },
+                colors = ButtonDefaults.buttonColors(
+                    containerColor = MaterialTheme.colorScheme.primary
+                )
+            ) {
+                Icon(imageVector = Icons.Default.Check, contentDescription = null, modifier = Modifier.size(18.dp))
+                Spacer(modifier = Modifier.width(8.dp))
+                Text(
+                    if (isSeparationMode) "Separa e Crea $targetAlbumCount Album"
+                    else "Uniforma ${album.tracks.size} Brani"
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun WritingContent(current: Int, total: Int, trackTitle: String) {
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(vertical = 36.dp),
+        horizontalAlignment = Alignment.CenterHorizontally
+    ) {
+        val progress = if (total > 0) current.toFloat() / total.toFloat() else 0f
+        LinearProgressIndicator(
+            progress = { progress },
+            modifier = Modifier
+                .fillMaxWidth(0.85f)
+                .height(8.dp)
+                .clip(CircleShape),
+            color = MaterialTheme.colorScheme.primary
+        )
+        Spacer(modifier = Modifier.height(20.dp))
+        Text(
+            text = "Scrittura tag e copertina su file...",
+            style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold),
+            color = MaterialTheme.colorScheme.onSurface
+        )
+        Spacer(modifier = Modifier.height(6.dp))
+        Text(
+            text = "$trackTitle ($current di $total)",
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant
+        )
+    }
+}
+
+@Composable
+private fun SuccessContent(message: String, onDone: () -> Unit) {
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(vertical = 28.dp),
+        horizontalAlignment = Alignment.CenterHorizontally
+    ) {
+        Icon(
+            imageVector = Icons.Default.CheckCircle,
+            contentDescription = null,
+            tint = Color(0xFF4CAF50),
+            modifier = Modifier.size(56.dp)
+        )
+        Spacer(modifier = Modifier.height(16.dp))
+        Text(
+            text = "Aggiornamento completato!",
+            style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
+            color = MaterialTheme.colorScheme.onSurface
+        )
+        Spacer(modifier = Modifier.height(6.dp))
+        Text(
+            text = message,
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant
+        )
+        Spacer(modifier = Modifier.height(24.dp))
+        Button(
+            onClick = onDone,
+            colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary)
+        ) {
+            Text("Chiudi")
+        }
+    }
+}
+
+@Composable
+private fun ErrorContent(message: String, onDismiss: () -> Unit, onRetry: () -> Unit) {
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(vertical = 24.dp),
+        horizontalAlignment = Alignment.CenterHorizontally
+    ) {
+        Icon(
+            imageVector = Icons.Default.ErrorOutline,
+            contentDescription = null,
+            tint = MaterialTheme.colorScheme.error,
+            modifier = Modifier.size(48.dp)
+        )
+        Spacer(modifier = Modifier.height(14.dp))
+        Text(
+            text = "Impossibile completare l'arricchimento",
+            style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold),
+            color = MaterialTheme.colorScheme.error
+        )
+        Spacer(modifier = Modifier.height(6.dp))
+        Text(
+            text = message,
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant
+        )
+        Spacer(modifier = Modifier.height(20.dp))
+        Row {
+            TextButton(onClick = onDismiss) {
+                Text("Chiudi")
+            }
+            Spacer(modifier = Modifier.width(10.dp))
+            FilledTonalButton(onClick = onRetry) {
+                Text("Riprova")
+            }
+        }
+    }
+}
+
+@Composable
+private fun DiffRow(
+    label: String,
+    oldValue: String,
+    newValue: String,
+    highlightBadge: String? = null
+) {
+    val isChanged = !oldValue.equals(newValue, ignoreCase = true)
+    Column(modifier = Modifier.padding(vertical = 4.dp)) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Text(
+                text = label,
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+            if (highlightBadge != null && isChanged) {
+                Spacer(modifier = Modifier.width(8.dp))
+                Text(
+                    text = highlightBadge,
+                    style = MaterialTheme.typography.labelSmall.copy(fontSize = 10.sp, fontWeight = FontWeight.Bold),
+                    color = Color(0xFF2E7D32),
+                    modifier = Modifier
+                        .background(Color(0xFF81C784).copy(alpha = 0.25f), RoundedCornerShape(4.dp))
+                        .padding(horizontal = 6.dp, vertical = 1.dp)
+                )
+            }
+        }
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            if (isChanged && oldValue.isNotBlank() && oldValue != "-") {
+                Text(
+                    text = oldValue,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f),
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.weight(1f, fill = false)
+                )
+                Text(
+                    text = " ➔ ",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.primary
+                )
+            }
+            Text(
+                text = newValue,
+                style = MaterialTheme.typography.bodyMedium.copy(
+                    fontWeight = if (isChanged) FontWeight.Bold else FontWeight.Normal
+                ),
+                color = if (isChanged) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
+            )
+        }
+    }
+}
+
+@Composable
+private fun OptionSwitch(
+    label: String,
+    subtitle: String,
+    checked: Boolean,
+    onCheckedChange: (Boolean) -> Unit
+) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(vertical = 6.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.SpaceBetween
+    ) {
+        Column(modifier = Modifier.weight(1f)) {
+            Text(
+                text = label,
+                style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Medium),
+                color = MaterialTheme.colorScheme.onSurface
+            )
+            Text(
+                text = subtitle,
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+        }
+        Switch(
+            checked = checked,
+            onCheckedChange = onCheckedChange,
+            colors = SwitchDefaults.colors(
+                checkedThumbColor = MaterialTheme.colorScheme.onPrimary,
+                checkedTrackColor = MaterialTheme.colorScheme.primary
+            )
+        )
+    }
+}

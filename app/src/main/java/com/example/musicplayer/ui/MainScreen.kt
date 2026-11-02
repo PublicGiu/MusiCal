@@ -5,10 +5,17 @@ import android.content.pm.PackageManager
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.PickVisualMediaRequest
+import androidx.activity.result.IntentSenderRequest
 import androidx.activity.result.contract.ActivityResultContracts
+import com.example.musicplayer.ui.tagger.MetadataEnricherSheet
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.animation.core.LinearEasing
+import androidx.compose.animation.core.RepeatMode
+import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.infiniteRepeatable
+import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.expandHorizontally
 import androidx.compose.animation.fadeIn
@@ -23,14 +30,16 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.calculateEndPadding
 import androidx.compose.foundation.layout.calculateStartPadding
-import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.grid.rememberLazyGridState
 import androidx.compose.foundation.lazy.items
@@ -178,6 +187,25 @@ fun MainScreen(
     }
     var selectedAlbum by remember { mutableStateOf<Album?>(null) }
     var selectedPlaylist by remember { mutableStateOf<Playlist?>(null) }
+
+    // Auto-Tagger & Testi Sincronizzati
+    val enricherState by viewModel.enricherState.collectAsStateWithLifecycle()
+    val currentLyrics by viewModel.currentLyrics.collectAsStateWithLifecycle()
+    val writeRequestIntentSender by viewModel.writeRequestIntentSender.collectAsStateWithLifecycle()
+
+    val writePermissionLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.StartIntentSenderForResult()
+    ) { result ->
+        viewModel.onWritePermissionResult(result.resultCode == android.app.Activity.RESULT_OK)
+    }
+
+    LaunchedEffect(writeRequestIntentSender) {
+        writeRequestIntentSender?.let { sender ->
+            writePermissionLauncher.launch(
+                IntentSenderRequest.Builder(sender).build()
+            )
+        }
+    }
     val isDetailOpen = selectedAlbum != null || selectedPlaylist != null
     var isSearchExpandedInDetail by remember { mutableStateOf(false) }
     var isHeaderCompact by remember { mutableStateOf(false) }
@@ -224,6 +252,16 @@ fun MainScreen(
     var showSettingsDialog by remember { mutableStateOf(false) }
     val snackbarHostState = remember { SnackbarHostState() }
     val coroutineScope = rememberCoroutineScope()
+
+    LaunchedEffect(enricherState) {
+        val s = enricherState
+        if (s is com.example.musicplayer.ui.tagger.EnricherUiState.Success) {
+            snackbarHostState.showSnackbar(
+                message = s.message,
+                duration = SnackbarDuration.Short
+            )
+        }
+    }
 
     val playlistCoverPickerLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.PickVisualMedia()
@@ -580,10 +618,53 @@ fun MainScreen(
                     TopAppBar(
                         title = {
                             Column {
-                                Text(
-                                    text = stringResource(R.string.app_name),
-                                    style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.Bold)
-                                )
+                                Row(
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Text(
+                                        text = stringResource(R.string.app_name),
+                                        style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.Bold)
+                                    )
+                                    if (hasPermissions) {
+                                        Spacer(modifier = Modifier.width(4.dp))
+                                        val spinTransition = rememberInfiniteTransition(label = "refresh_spin")
+                                        val spinAngle by spinTransition.animateFloat(
+                                            initialValue = 0f,
+                                            targetValue = 360f,
+                                            animationSpec = infiniteRepeatable(
+                                                animation = tween(800, easing = LinearEasing),
+                                                repeatMode = RepeatMode.Restart
+                                            ),
+                                            label = "spin_angle"
+                                        )
+                                        IconButton(
+                                            onClick = {
+                                                viewModel.loadTracks()
+                                                viewModel.loadPlaylists()
+                                                coroutineScope.launch {
+                                                    snackbarHostState.showSnackbar(
+                                                        message = "Aggiornamento libreria in corso...",
+                                                        duration = SnackbarDuration.Short
+                                                    )
+                                                }
+                                            },
+                                            modifier = Modifier.size(32.dp)
+                                        ) {
+                                            Icon(
+                                                imageVector = Icons.Default.Refresh,
+                                                contentDescription = "Aggiorna libreria",
+                                                tint = MaterialTheme.colorScheme.primary,
+                                                modifier = Modifier
+                                                    .size(20.dp)
+                                                    .graphicsLayer {
+                                                        if (isLoading) {
+                                                            rotationZ = spinAngle
+                                                        }
+                                                    }
+                                            )
+                                        }
+                                    }
+                                }
                                 if (hasPermissions && tracks.isNotEmpty()) {
                                     Text(
                                         text = "${tracks.size} brani in libreria",
@@ -937,39 +1018,47 @@ fun MainScreen(
                         onAddToFavoritesClick = handleAddToFavorites,
                         favoriteTrackIds = favoriteTrackIds,
                         onChangePlaylistCoverClick = handleChangePlaylistCover,
-                        onRemovePlaylistCoverClick = handleRemovePlaylistCover
+                        onRemovePlaylistCoverClick = handleRemovePlaylistCover,
+                        onAutoTagTrackClick = { viewModel.startTrackEnrichment(it) }
                     )
                 }
 
                 // Dettaglio Album
                 selectedAlbum != null -> {
-                    val currentAlbum = albums.find { it.id == selectedAlbum?.id } ?: selectedAlbum!!
-                    AlbumDetailView(
-                        album = currentAlbum,
-                        currentTrack = currentTrack,
-                        isPlaying = isPlaying,
-                        onBackClick = {
-                            selectedAlbum = null
-                            isSearchExpandedInDetail = false
-                            if (searchQuery.isNotBlank()) {
-                                viewModel.onSearchQueryChanged("")
-                            }
-                        },
-                        onPlayTrackIndex = { index ->
-                            viewModel.playAlbum(currentAlbum, index)
-                        },
-                        onPlayAllClick = {
-                            viewModel.playAlbum(currentAlbum, 0)
-                        },
-                        onPlayPauseClick = {
-                            viewModel.togglePlayPause()
-                        },
-                        onAddToPlaylistClick = { trackToAddToPlaylist = it },
-                        onAddToQueueClick = handleAddTrackToQueue,
-                        onAddAlbumToQueueClick = handleAddAlbumToQueue,
-                        onAddToFavoritesClick = handleAddToFavorites,
-                        favoriteTrackIds = favoriteTrackIds
-                    )
+                    val currentAlbum = albums.find { it.id == selectedAlbum?.id }
+                    if (currentAlbum == null) {
+                        selectedAlbum = null
+                    } else {
+                        AlbumDetailView(
+                            album = currentAlbum,
+                            currentTrack = currentTrack,
+                            isPlaying = isPlaying,
+                            onBackClick = {
+                                selectedAlbum = null
+                                isSearchExpandedInDetail = false
+                                if (searchQuery.isNotBlank()) {
+                                    viewModel.onSearchQueryChanged("")
+                                }
+                            },
+                            onPlayTrackIndex = { index ->
+                                viewModel.playAlbum(currentAlbum, index)
+                            },
+                            onPlayAllClick = {
+                                viewModel.playAlbum(currentAlbum, 0)
+                            },
+                            onPlayPauseClick = {
+                                viewModel.togglePlayPause()
+                            },
+                            onAddToPlaylistClick = { trackToAddToPlaylist = it },
+                            onAddToQueueClick = handleAddTrackToQueue,
+                            onAddAlbumToQueueClick = handleAddAlbumToQueue,
+                            onAddToFavoritesClick = handleAddToFavorites,
+                            favoriteTrackIds = favoriteTrackIds,
+                            onAutoTagAlbumClick = { viewModel.startAlbumEnrichment(it, separateAlbums = false) },
+                            onAutoTagAlbumSeparationClick = { viewModel.startAlbumEnrichment(it, separateAlbums = true) },
+                            onAutoTagTrackClick = { viewModel.startTrackEnrichment(it) }
+                        )
+                    }
                 }
 
                 // Dettaglio Playlist
@@ -1012,7 +1101,8 @@ fun MainScreen(
                         onAddToFavoritesClick = handleAddToFavorites,
                         favoriteTrackIds = favoriteTrackIds,
                         onChangeCoverClick = if (!activePlaylist.isFavorites) handleChangePlaylistCover else null,
-                        onRemoveCoverClick = if (!activePlaylist.isFavorites) handleRemovePlaylistCover else null
+                        onRemoveCoverClick = if (!activePlaylist.isFavorites) handleRemovePlaylistCover else null,
+                        onAutoTagTrackClick = { viewModel.startTrackEnrichment(it) }
                     )
                 }
 
@@ -1047,7 +1137,8 @@ fun MainScreen(
                                             onAddToPlaylistClick = { trackToAddToPlaylist = it },
                                             onAddToFavoritesClick = { handleAddToFavorites(track) },
                                             isFavorite = track.id in favoriteTrackIds,
-                                            playCount = stats[track.id]?.playCount ?: 0
+                                            playCount = stats[track.id]?.playCount ?: 0,
+                                            onAutoTagClick = { viewModel.startTrackEnrichment(it) }
                                         )
                                     }
                                 }
@@ -1059,6 +1150,8 @@ fun MainScreen(
                                     albums = sortedAlbums,
                                     onAlbumClick = { album -> selectedAlbum = album },
                                     onAddToQueueClick = handleAddAlbumToQueue,
+                                    onAutoTagAlbumClick = { viewModel.startAlbumEnrichment(it, separateAlbums = false) },
+                                    onAutoTagAlbumSeparationClick = { viewModel.startAlbumEnrichment(it, separateAlbums = true) },
                                     state = albumsGridState
                                 )
                             }
@@ -1127,6 +1220,8 @@ fun MainScreen(
             onQueueClick = { showQueueSheet = true },
             onSeekTo = { seekMs -> viewModel.seekTo(seekMs) },
             onSkipToQueueItem = { index -> viewModel.skipToQueueItem(index) },
+            currentLyrics = currentLyrics,
+            onAdjustLyricsOffset = { deltaMs -> viewModel.adjustLyricsOffset(deltaMs) },
             onAlbumClick = {
                 val track = currentTrack
                 if (track != null) {
@@ -1222,6 +1317,32 @@ fun MainScreen(
             }
         )
     }
+
+    // Foglio modale Smart Auto-Tagger & Metadata Enricher
+    MetadataEnricherSheet(
+        state = enricherState,
+        onDismissRequest = { viewModel.closeEnricher() },
+        onApplyTrack = { track, metadata, options ->
+            viewModel.applyTrackEnrichment(track, metadata, options)
+        },
+        onApplyAlbum = { album, tracksMap, options ->
+            viewModel.applyAlbumEnrichment(album, tracksMap, options)
+        },
+        onSelectCandidate = { track, candidate, options ->
+            viewModel.selectAlternativeCandidate(track, candidate, options)
+        },
+        onCustomSearch = { track, title, artist ->
+            viewModel.searchCustomTrackEnrichment(track, title, artist)
+        },
+        onToggleAlbumSeparationMode = { viewModel.toggleAlbumEnrichmentMode(it) },
+        onRetry = {
+            when (val s = enricherState) {
+                is com.example.musicplayer.ui.tagger.EnricherUiState.ReviewTrack -> viewModel.startTrackEnrichment(s.track)
+                is com.example.musicplayer.ui.tagger.EnricherUiState.ReviewAlbum -> viewModel.startAlbumEnrichment(s.album)
+                else -> viewModel.closeEnricher()
+            }
+        }
+    )
 }
 
 /**

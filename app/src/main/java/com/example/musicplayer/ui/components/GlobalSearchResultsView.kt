@@ -45,7 +45,8 @@ fun GlobalSearchResultsView(
     onAddToFavoritesClick: ((AudioTrack) -> Unit)? = null,
     favoriteTrackIds: Set<Long> = emptySet(),
     onChangePlaylistCoverClick: ((Playlist) -> Unit)? = null,
-    onRemovePlaylistCoverClick: ((Playlist) -> Unit)? = null
+    onRemovePlaylistCoverClick: ((Playlist) -> Unit)? = null,
+    onAutoTagTrackClick: ((AudioTrack) -> Unit)? = null
 ) {
     val totalResults = matchingTracks.size + matchingAlbums.size + matchingPlaylists.size
 
@@ -93,7 +94,8 @@ fun GlobalSearchResultsView(
                         onAddToPlaylistClick = onAddToPlaylistClick,
                         onAddToFavoritesClick = onAddToFavoritesClick?.let { cb -> { cb(track) } },
                         isFavorite = track.id in favoriteTrackIds,
-                        playCount = stats[track.id]?.playCount ?: 0
+                        playCount = stats[track.id]?.playCount ?: 0,
+                        onAutoTagClick = onAutoTagTrackClick
                     )
                 }
             }

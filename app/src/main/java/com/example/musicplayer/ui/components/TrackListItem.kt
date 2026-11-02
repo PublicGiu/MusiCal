@@ -15,6 +15,7 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.QueueMusic
+import androidx.compose.material.icons.filled.AutoFixHigh
 import androidx.compose.material.icons.filled.DeleteOutline
 import androidx.compose.material.icons.filled.Favorite
 import androidx.compose.material.icons.filled.FavoriteBorder
@@ -62,10 +63,11 @@ fun TrackListItem(
     isFavorite: Boolean = false,
     onRemoveClick: (() -> Unit)? = null,
     removeLabel: String = "Rimuovi da playlist",
-    playCount: Int = 0
+    playCount: Int = 0,
+    onAutoTagClick: ((AudioTrack) -> Unit)? = null
 ) {
     var menuExpanded by remember { mutableStateOf(false) }
-    val hasOptionsMenu = onAddToQueueClick != null || onAddToFavoritesClick != null || onAddToPlaylistClick != null || onRemoveClick != null
+    val hasOptionsMenu = onAddToQueueClick != null || onAddToFavoritesClick != null || onAddToPlaylistClick != null || onRemoveClick != null || onAutoTagClick != null
 
     val backgroundColor = if (isSelected) {
         MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.6f)
@@ -273,6 +275,22 @@ fun TrackListItem(
                                 onClick = {
                                     menuExpanded = false
                                     onAddToPlaylistClick(track)
+                                }
+                            )
+                        }
+                        if (onAutoTagClick != null) {
+                            DropdownMenuItem(
+                                text = { Text("Auto-tagga & testi") },
+                                leadingIcon = {
+                                    Icon(
+                                        imageVector = Icons.Default.AutoFixHigh,
+                                        contentDescription = null,
+                                        tint = MaterialTheme.colorScheme.primary
+                                    )
+                                },
+                                onClick = {
+                                    menuExpanded = false
+                                    onAutoTagClick(track)
                                 }
                             )
                         }

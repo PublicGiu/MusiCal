@@ -32,6 +32,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.ui.res.painterResource
 import com.example.musicplayer.R
 import androidx.compose.material.icons.filled.KeyboardArrowDown
+import androidx.compose.material.icons.filled.Lyrics
 import androidx.compose.material.icons.filled.MusicNote
 import androidx.compose.material.icons.filled.Pause
 import androidx.compose.material.icons.filled.PlayArrow
@@ -84,6 +85,7 @@ import coil.request.ImageRequest
 import coil.request.SuccessResult
 import coil.size.Precision
 import com.example.musicplayer.data.AudioTrack
+import com.example.musicplayer.data.LyricsData
 import com.example.musicplayer.data.formatDurationMs
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -112,10 +114,13 @@ fun FullScreenPlayerSheet(
     queue: List<AudioTrack> = emptyList(),
     currentQueueIndex: Int = 0,
     onSkipToQueueItem: (Int) -> Unit = {},
-    onAlbumClick: (() -> Unit)? = null
+    onAlbumClick: (() -> Unit)? = null,
+    currentLyrics: LyricsData? = null,
+    onAdjustLyricsOffset: (Long) -> Unit = {}
 ) {
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
     val context = LocalContext.current
+    var isLyricsViewActive by remember { mutableStateOf(false) }
 
     // Coda effettiva per il Pager: usa la coda completa o la traccia corrente come fallback
     val effectiveQueue = remember(queue, currentTrack) {
@@ -306,61 +311,85 @@ fun FullScreenPlayerSheet(
                     )
                 }
 
-                // Spazio simmetrico a destra per bilanciare l'IconButton
-                Spacer(modifier = Modifier.size(48.dp))
+                // Pulsante Testi Sincronizzati a destra
+                IconButton(onClick = { isLyricsViewActive = !isLyricsViewActive }) {
+                    Icon(
+                        imageVector = Icons.Default.Lyrics,
+                        contentDescription = "Testi sincronizzati",
+                        modifier = Modifier.size(26.dp),
+                        tint = if (isLyricsViewActive) MaterialTheme.colorScheme.primary else Color.White.copy(alpha = 0.8f)
+                    )
+                }
             }
 
             Spacer(modifier = Modifier.weight(0.8f))
 
-            // 2. Copertina grande con HorizontalPager (finger-following fluido, animazione a molla e sincronizzazione reattiva)
-            HorizontalPager(
-                state = pagerState,
-                key = { page -> effectiveQueue.getOrNull(page)?.id ?: page },
-                beyondViewportPageCount = 1,
-                pageSpacing = 16.dp,
-                modifier = Modifier
-                    .fillMaxWidth(0.92f)
-                    .aspectRatio(1f)
-            ) { page ->
-                val trackForPage = effectiveQueue.getOrNull(page)
-                val coverImageRequest = remember(trackForPage?.albumArtUri) {
-                    trackForPage?.albumArtUri?.let { uri ->
-                        ImageRequest.Builder(context)
-                            .data(uri)
-                            .size(800)
-                            .precision(Precision.INEXACT)
-                            .allowHardware(true)
-                            .crossfade(true)
-                            .build()
-                    }
-                }
+            if (isLyricsViewActive) {
                 Box(
                     modifier = Modifier
-                        .fillMaxSize()
-                        .clip(RoundedCornerShape(24.dp)),
-                    contentAlignment = Alignment.Center
+                        .fillMaxWidth(0.92f)
+                        .aspectRatio(1f)
+                        .clip(RoundedCornerShape(24.dp))
+                        .background(Color.Black.copy(alpha = 0.35f))
                 ) {
-                    var isImageError by remember(trackForPage?.id) { mutableStateOf(false) }
+                    SyncedLyricsView(
+                        lyricsData = currentLyrics,
+                        currentPositionMs = currentPositionProvider(),
+                        onSeekTo = onSeekTo,
+                        onAdjustOffset = onAdjustLyricsOffset
+                    )
+                }
+            } else {
+                // 2. Copertina grande con HorizontalPager (finger-following fluido, animazione a molla e sincronizzazione reattiva)
+                HorizontalPager(
+                    state = pagerState,
+                    key = { page -> effectiveQueue.getOrNull(page)?.id ?: page },
+                    beyondViewportPageCount = 1,
+                    pageSpacing = 16.dp,
+                    modifier = Modifier
+                        .fillMaxWidth(0.92f)
+                        .aspectRatio(1f)
+                ) { page ->
+                    val trackForPage = effectiveQueue.getOrNull(page)
+                    val coverImageRequest = remember(trackForPage?.albumArtUri) {
+                        trackForPage?.albumArtUri?.let { uri ->
+                            ImageRequest.Builder(context)
+                                .data(uri)
+                                .size(800)
+                                .precision(Precision.INEXACT)
+                                .allowHardware(true)
+                                .crossfade(true)
+                                .build()
+                        }
+                    }
+                    Box(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .clip(RoundedCornerShape(24.dp)),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        var isImageError by remember(trackForPage?.id) { mutableStateOf(false) }
 
-                    if (coverImageRequest != null && !isImageError) {
-                        AsyncImage(
-                            model = coverImageRequest,
-                            contentDescription = "Copertina album ${trackForPage?.title ?: ""}",
-                            contentScale = ContentScale.Crop,
-                            modifier = Modifier.fillMaxSize(),
-                            onError = { isImageError = true }
-                        )
-                    } else {
-                        Surface(
-                            modifier = Modifier.fillMaxSize(),
-                            color = Color.White.copy(alpha = 0.1f)
-                        ) {
-                            Icon(
-                                imageVector = Icons.Default.MusicNote,
-                                contentDescription = null,
-                                tint = Color.White.copy(alpha = 0.5f),
-                                modifier = Modifier.padding(48.dp)
+                        if (coverImageRequest != null && !isImageError) {
+                            AsyncImage(
+                                model = coverImageRequest,
+                                contentDescription = "Copertina album ${trackForPage?.title ?: ""}",
+                                contentScale = ContentScale.Crop,
+                                modifier = Modifier.fillMaxSize(),
+                                onError = { isImageError = true }
                             )
+                        } else {
+                            Surface(
+                                modifier = Modifier.fillMaxSize(),
+                                color = Color.White.copy(alpha = 0.1f)
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.MusicNote,
+                                    contentDescription = null,
+                                    tint = Color.White.copy(alpha = 0.5f),
+                                    modifier = Modifier.padding(48.dp)
+                                )
+                            }
                         }
                     }
                 }

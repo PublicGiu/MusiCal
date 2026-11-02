@@ -18,7 +18,10 @@ data class AudioTrack(
     val dateAdded: Long = 0L,
     val genre: String = "",
     val trackNumber: Int = 0,
-    val discNumber: Int = 1
+    val discNumber: Int = 1,
+    val albumArtist: String = "",
+    val displayName: String = "",
+    val relativePath: String = ""
 ) {
     /**
      * Formatta la durata del brano in formato mm:ss o hh:mm:ss.

@@ -16,6 +16,7 @@ okhttp = "4.12.0"
 room = "2.6.1"
 ksp = "2.1.0-1.0.29"
 json = "20240303"
+jaudiotagger = "2.2.3"
 
 [libraries]
 junit = { group = "junit", name = "junit", version.ref = "junit" }
@@ -47,6 +48,9 @@ androidx-palette-ktx = { group = "androidx.palette", name = "palette-ktx", versi
 
 # OkHttp
 okhttp = { group = "com.squareup.okhttp3", name = "okhttp", version.ref = "okhttp" }
+
+# Audio Tagging
+jaudiotagger = { group = "com.github.AdrienPoupa", name = "jaudiotagger", version.ref = "jaudiotagger" }
 
 # Room Database
 androidx-room-runtime = { group = "androidx.room", name = "room-runtime", version.ref = "room" }

@@ -2,12 +2,8 @@ package com.example.musicplayer.ui.components
 
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.AnimatedVisibility
-import androidx.compose.animation.core.Animatable
-import androidx.compose.animation.core.AnimationVector1D
 import androidx.compose.animation.core.FastOutSlowInEasing
-import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.animateFloatAsState
-import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
@@ -23,6 +19,7 @@ import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
@@ -33,6 +30,8 @@ import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.pager.HorizontalPager
+import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -52,9 +51,9 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -63,7 +62,6 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.drawscope.Stroke
-import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
@@ -81,22 +79,27 @@ import coil.size.Precision
 import com.example.musicplayer.data.AudioTrack
 import com.example.musicplayer.data.formatDurationMs
 import com.example.musicplayer.ui.theme.LocalMusicVioletNeon
-import kotlinx.coroutines.launch
 import kotlin.math.abs
 
 /**
- * Mini-player compatto a pillola fluttuante con bordo luminescente (Material 3 Expressive).
+ * Mini-player compatto a pillola fluttuante con bordo luminescente e carosello interattivo (Material 3 Expressive).
  *
  * Caratteristiche principali:
- * - Design compatto a riga singola (~64dp), riducendo l'ingombro verticale rispetto al layout precedente.
+ * - Full Pill Carousel su HorizontalPager: trascinando orizzontalmente il miniplayer, l'intera card/pillola
+ *   (sfondo, barra di avanzamento, copertina, testi e pulsanti) segue fisicamente il dito rivelando la pillola
+ *   completa del brano successivo (swipe a sinistra) o precedente (swipe a destra) della coda di riproduzione.
+ * - Margini costanti di 12.dp a riposo e pageSpacing di 12.dp per mantenere il perfetto look da isola fluttuante.
+ * - Cambio traccia SOLO al rilascio/assestamento (settledPage): durante lo swipe la musica continua normalmente,
+ *   mentre il cambio traccia effettivo viene invocato solo al completamento dello snap sulla nuova pillola.
+ * - Snap-back fluido se il gesto viene interrotto prima della soglia o trascinato all'indietro.
  * - Barra di scorrimento bianca a filo bordo superiore con espansione dinamica sincronizzata (2.5dp -> 6dp)
  *   e pallino bianco con alone viola neon (4dp -> 8.5dp) durante tocco e trascinamento.
  * - Badge fluttuante del minutaggio (Floating Time Badge) elevato a -40dp sopra il dito dell'utente per
  *   garantire massima visibilità e non essere mai coperto durante lo scrubbing.
- * - Gesti avanzati sul corpo del mini-player: swipe orizzontale (precedente/successivo con micro-feedback a molla),
- *   swipe verso l'alto (apertura player a tutto schermo) e tocco rapido (apertura player).
+ * - Gesti avanzati sul corpo del mini-player: tap rapido o swipe verso l'alto per aprire il player a tutto schermo,
+ *   senza interferire con lo scorrimento orizzontale del carosello.
  * - Pulsante circolare viola (+) per aggiungere il brano a una playlist esistente o crearne una nuova.
- * - Pulsante circolare viola Play/Pausa.
+ * - Pulsante circolare viola Play/Pausa reattivo.
  * - Titolo e artista con scorrimento automatico continuo basicMarquee().
  */
 @Composable
@@ -119,72 +122,138 @@ fun PlayerBottomBar(
     isAutoplayEnabled: Boolean = true,
     onToggleAutoplay: () -> Unit = {},
     onOpenFullScreen: () -> Unit = {},
-    onAddToPlaylistClick: ((AudioTrack) -> Unit)? = null
+    onAddToPlaylistClick: ((AudioTrack) -> Unit)? = null,
+    queue: List<AudioTrack> = emptyList(),
+    currentQueueIndex: Int = 0,
+    onSkipToQueueItem: (Int) -> Unit = {}
 ) {
+    if (currentTrack == null) return
+
+    // Coda effettiva per il carosello del miniplayer
+    val effectiveQueue = remember(queue, currentTrack) {
+        if (queue.isNotEmpty()) {
+            queue
+        } else {
+            listOf(currentTrack)
+        }
+    }
+
+    val initialPage = remember {
+        if (effectiveQueue.isEmpty()) 0
+        else currentQueueIndex.coerceIn(0, effectiveQueue.size - 1)
+    }
+
+    val pagerState = rememberPagerState(
+        initialPage = initialPage,
+        pageCount = { effectiveQueue.size }
+    )
+
+    val currentOnSkipToQueueItem by rememberUpdatedState(onSkipToQueueItem)
+    val latestQueueIndex by rememberUpdatedState(currentQueueIndex)
+    val latestEffectiveQueue by rememberUpdatedState(effectiveQueue)
+    var isProgrammaticScroll by remember { mutableStateOf(false) }
+    val zeroPositionProvider = remember { { 0L } }
+
+    // Sincronizzazione PagerState -> ExoPlayer: cambio traccia SOLO al rilascio/assestamento (settledPage)
+    LaunchedEffect(pagerState) {
+        var userDragged = false
+        snapshotFlow { Triple(pagerState.isScrollInProgress, pagerState.settledPage, isProgrammaticScroll) }
+            .collect { (inProgress, settledPage, programmatic) ->
+                if (inProgress && !programmatic) {
+                    userDragged = true
+                }
+                if (!inProgress && !programmatic && userDragged) {
+                    userDragged = false
+                    val queueSnapshot = latestEffectiveQueue
+                    val targetQueueIdx = latestQueueIndex
+                    if (queueSnapshot.isNotEmpty() && settledPage in queueSnapshot.indices && settledPage != targetQueueIdx) {
+                        currentOnSkipToQueueItem(settledPage)
+                    }
+                }
+            }
+    }
+
+    // Sincronizzazione inversa ExoPlayer -> PagerState (fine brano, notifiche, pulsanti esterni)
+    LaunchedEffect(currentQueueIndex, effectiveQueue.size) {
+        if (effectiveQueue.isNotEmpty() && currentQueueIndex in 0 until pagerState.pageCount) {
+            if (pagerState.currentPage != currentQueueIndex) {
+                isProgrammaticScroll = true
+                try {
+                    if (abs(pagerState.currentPage - currentQueueIndex) <= 2) {
+                        pagerState.animateScrollToPage(currentQueueIndex)
+                    } else {
+                        pagerState.scrollToPage(currentQueueIndex)
+                    }
+                } finally {
+                    isProgrammaticScroll = false
+                }
+            }
+        }
+    }
+
     var isSeeking by remember { mutableStateOf(false) }
     var seekFraction by remember { mutableFloatStateOf(0f) }
     val barWidthPx = remember { mutableFloatStateOf(1f) }
-    val swipeOffsetX = remember { Animatable(0f) }
-
-    // Garanzia di riallineamento a 0f ad ogni cambio brano
-    LaunchedEffect(currentTrack?.id) {
-        if (swipeOffsetX.value != 0f) {
-            swipeOffsetX.animateTo(
-                targetValue = 0f,
-                animationSpec = spring(
-                    dampingRatio = Spring.DampingRatioMediumBouncy,
-                    stiffness = Spring.StiffnessMedium
-                )
-            )
-        }
-    }
+    val density = LocalDensity.current
 
     Box(
         modifier = modifier
             .fillMaxWidth()
             .navigationBarsPadding()
-            .padding(start = 12.dp, end = 12.dp, bottom = 8.dp)
-            .onSizeChanged { size -> barWidthPx.floatValue = size.width.toFloat() }
+            .padding(bottom = 8.dp)
+            .onSizeChanged { size ->
+                val horizontalPaddingPx = with(density) { 24.dp.toPx() }
+                barWidthPx.floatValue = (size.width - horizontalPaddingPx).coerceAtLeast(1f)
+            }
     ) {
-        // Pillola fluttuante con traslazione a molla durante lo swipe orizzontale
-        Box(
-            modifier = Modifier
-                .fillMaxWidth()
-                .graphicsLayer {
-                    translationX = swipeOffsetX.value
-                }
-        ) {
-            Surface(
-                modifier = Modifier.fillMaxWidth(),
-                shape = RoundedCornerShape(20.dp),
-                color = MaterialTheme.colorScheme.surfaceContainerHighest,
-                border = BorderStroke(1.dp, LocalMusicVioletNeon.copy(alpha = 0.22f)),
-                shadowElevation = 8.dp,
-                tonalElevation = 6.dp
+        // Carosello orizzontale a pillola intera (Full Pill Carousel)
+        HorizontalPager(
+            state = pagerState,
+            modifier = Modifier.fillMaxWidth(),
+            contentPadding = PaddingValues(horizontal = 12.dp),
+            pageSpacing = 12.dp,
+            beyondViewportPageCount = 1,
+            key = { page -> if (page in effectiveQueue.indices) "${effectiveQueue[page].id}_$page" else "$page" }
+        ) { page ->
+            val track = effectiveQueue.getOrNull(page)
+            val isCurrentTrackPage = (page == currentQueueIndex && track?.id == currentTrack.id)
+
+            Box(
+                modifier = Modifier.fillMaxWidth()
             ) {
-                PlayerTrackInfoRow(
-                    currentTrack = currentTrack,
-                    isPlaying = isPlaying,
-                    onPlayPauseClick = onPlayPauseClick,
-                    onPreviousClick = onPreviousClick,
-                    onNextClick = onNextClick,
-                    onOpenFullScreen = onOpenFullScreen,
-                    onAddToPlaylistClick = onAddToPlaylistClick,
-                    swipeOffsetX = swipeOffsetX
+                Surface(
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(20.dp),
+                    color = MaterialTheme.colorScheme.surfaceContainerHighest,
+                    border = BorderStroke(1.dp, LocalMusicVioletNeon.copy(alpha = 0.22f)),
+                    shadowElevation = 8.dp,
+                    tonalElevation = 6.dp
+                ) {
+                    PlayerTrackInfoRow(
+                        track = track,
+                        isCurrentTrack = isCurrentTrackPage,
+                        isPlaying = isPlaying,
+                        onPlayPauseClick = onPlayPauseClick,
+                        onOpenFullScreen = onOpenFullScreen,
+                        onAddToPlaylistClick = onAddToPlaylistClick,
+                        onPlayTrack = { onSkipToQueueItem(page) }
+                    )
+                }
+
+                // Barra di avanzamento a filo del bordo superiore della pillola
+                TopEdgeProgressBar(
+                    currentPositionProvider = if (isCurrentTrackPage) currentPositionProvider else zeroPositionProvider,
+                    durationMs = if (isCurrentTrackPage) durationMs else (track?.duration ?: 0L),
+                    onSeekTo = onSeekTo,
+                    isSeeking = if (isCurrentTrackPage) isSeeking else false,
+                    onSeekingChange = { if (isCurrentTrackPage) isSeeking = it },
+                    seekFraction = seekFraction,
+                    onSeekFractionChange = { if (isCurrentTrackPage) seekFraction = it },
+                    enabled = isCurrentTrackPage,
+                    showThumb = isCurrentTrackPage,
+                    modifier = Modifier.align(Alignment.TopCenter)
                 )
             }
-
-            // Barra di avanzamento a filo del bordo superiore (zero ritardo, 120Hz GPU draw)
-            TopEdgeProgressBar(
-                currentPositionProvider = currentPositionProvider,
-                durationMs = durationMs,
-                onSeekTo = onSeekTo,
-                isSeeking = isSeeking,
-                onSeekingChange = { isSeeking = it },
-                seekFraction = seekFraction,
-                onSeekFractionChange = { seekFraction = it },
-                modifier = Modifier.align(Alignment.TopCenter)
-            )
         }
 
         // Badge fluttuante del minutaggio: elevato a -40dp sopra il dito dell'utente per evitare ostruzioni visive
@@ -193,38 +262,35 @@ fun PlayerBottomBar(
             seekFraction = seekFraction,
             durationMs = durationMs,
             barWidthPx = barWidthPx.floatValue,
-            modifier = Modifier.align(Alignment.TopStart)
+            modifier = Modifier
+                .align(Alignment.TopStart)
+                .padding(start = 12.dp)
         )
     }
 }
 
 /**
  * Riga informativa del brano con copertina, testi a scorrimento (basicMarquee), pulsante (+) playlist e Play/Pausa.
- * Gestisce swipe orizzontale, swipe-up e tocco rapido.
+ * Gestisce tap rapido e swipe-up verso il player a tutto schermo, lasciando lo swipe orizzontale a HorizontalPager.
  */
 @Composable
 private fun PlayerTrackInfoRow(
-    currentTrack: AudioTrack?,
+    track: AudioTrack?,
+    isCurrentTrack: Boolean,
     isPlaying: Boolean,
     onPlayPauseClick: () -> Unit,
-    onPreviousClick: () -> Unit,
-    onNextClick: () -> Unit,
     onOpenFullScreen: () -> Unit,
     onAddToPlaylistClick: ((AudioTrack) -> Unit)?,
-    swipeOffsetX: Animatable<Float, AnimationVector1D>,
+    onPlayTrack: (() -> Unit)?,
     modifier: Modifier = Modifier
 ) {
     val context = LocalContext.current
-    val coroutineScope = rememberCoroutineScope()
     val density = LocalDensity.current
-    val swipeThresholdPx = with(density) { 48.dp.toPx() }
     val verticalThresholdPx = with(density) { 24.dp.toPx() }
-    val currentOnPreviousClick by rememberUpdatedState(onPreviousClick)
-    val currentOnNextClick by rememberUpdatedState(onNextClick)
     val currentOnOpenFullScreen by rememberUpdatedState(onOpenFullScreen)
 
-    val imageRequest = remember(currentTrack?.albumArtUri) {
-        currentTrack?.albumArtUri?.let { uri ->
+    val imageRequest = remember(track?.albumArtUri) {
+        track?.albumArtUri?.let { uri ->
             ImageRequest.Builder(context)
                 .data(uri)
                 .size(160)
@@ -241,7 +307,7 @@ private fun PlayerTrackInfoRow(
             .padding(top = 12.dp, bottom = 12.dp, start = 12.dp, end = 12.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
-        // Sezione interattiva per tap, swipe orizzontale e swipe-up
+        // Sezione interattiva per tap rapido, swipe-up e swipe orizzontale (lasciato ad HorizontalPager)
         Row(
             modifier = Modifier
                 .weight(1f)
@@ -249,84 +315,41 @@ private fun PlayerTrackInfoRow(
                 .pointerInput(Unit) {
                     awaitEachGesture {
                         val down = awaitFirstDown(requireUnconsumed = false)
+                        var isUpwardDrag = false
+                        var isHorizontalDrag = false
                         var totalDragX = 0f
                         var totalDragY = 0f
-                        var isHorizontalDrag = false
-                        var isVerticalDrag = false
-                        var actionTriggered = false
 
-                        try {
-                            while (true) {
-                                val event = awaitPointerEvent()
-                                val change = event.changes.firstOrNull { it.id == down.id } ?: break
-                                if (!change.pressed) break
-
-                                val deltaX = change.position.x - down.position.x
-                                val deltaY = change.position.y - down.position.y
-                                totalDragX = deltaX
-                                totalDragY = deltaY
-
-                                if (!isHorizontalDrag && !isVerticalDrag) {
-                                    if (abs(deltaY) > abs(deltaX) && deltaY < -verticalThresholdPx) {
-                                        isVerticalDrag = true
-                                        change.consume()
-                                        actionTriggered = true
-                                        currentOnOpenFullScreen()
-                                        break
-                                    } else if (abs(deltaX) > 18f && abs(deltaX) > abs(deltaY)) {
-                                        isHorizontalDrag = true
-                                    }
+                        while (true) {
+                            val event = awaitPointerEvent()
+                            val change = event.changes.firstOrNull { it.id == down.id } ?: break
+                            if (!change.pressed) {
+                                // Tap rapido su rilascio senza trascinamento significativo
+                                if (!isUpwardDrag && !isHorizontalDrag && abs(totalDragX) < 14f && abs(totalDragY) < 14f) {
+                                    currentOnOpenFullScreen()
                                 }
+                                break
+                            }
 
-                                if (isHorizontalDrag && !actionTriggered) {
+                            val deltaX = change.position.x - down.position.x
+                            val deltaY = change.position.y - down.position.y
+                            totalDragX = deltaX
+                            totalDragY = deltaY
+
+                            if (!isUpwardDrag && !isHorizontalDrag) {
+                                if (abs(deltaY) > abs(deltaX) && deltaY < -verticalThresholdPx) {
+                                    isUpwardDrag = true
                                     change.consume()
-                                    val dampedOffset = totalDragX * 0.4f
-                                    coroutineScope.launch {
-                                        swipeOffsetX.snapTo(dampedOffset.coerceIn(-120f, 120f))
-                                    }
-
-                                    if (totalDragX > swipeThresholdPx) {
-                                        actionTriggered = true
-                                        coroutineScope.launch {
-                                            swipeOffsetX.animateTo(
-                                                targetValue = 0f,
-                                                animationSpec = spring(
-                                                    dampingRatio = Spring.DampingRatioMediumBouncy,
-                                                    stiffness = Spring.StiffnessMedium
-                                                )
-                                            )
-                                        }
-                                        currentOnPreviousClick()
-                                    } else if (totalDragX < -swipeThresholdPx) {
-                                        actionTriggered = true
-                                        coroutineScope.launch {
-                                            swipeOffsetX.animateTo(
-                                                targetValue = 0f,
-                                                animationSpec = spring(
-                                                    dampingRatio = Spring.DampingRatioMediumBouncy,
-                                                    stiffness = Spring.StiffnessMedium
-                                                )
-                                            )
-                                        }
-                                        currentOnNextClick()
-                                    }
+                                    currentOnOpenFullScreen()
+                                    break
+                                } else if (abs(deltaX) > 16f && abs(deltaX) > abs(deltaY)) {
+                                    isHorizontalDrag = true
+                                    // Non consuma l'evento: lascia che HorizontalPager gestisca lo scorrimento continuo
                                 }
                             }
 
-                            // Tap rapido se non c'è stato trascinamento significativo
-                            if (!isHorizontalDrag && !isVerticalDrag && !actionTriggered && abs(totalDragX) < 12f && abs(totalDragY) < 12f) {
-                                currentOnOpenFullScreen()
-                            }
-                        } finally {
-                            // Garantisce SEMPRE il ritorno fluido a 0f
-                            coroutineScope.launch {
-                                swipeOffsetX.animateTo(
-                                    targetValue = 0f,
-                                    animationSpec = spring(
-                                        dampingRatio = Spring.DampingRatioMediumBouncy,
-                                        stiffness = Spring.StiffnessLow
-                                    )
-                                )
+                            if (isUpwardDrag) {
+                                change.consume()
                             }
                         }
                     }
@@ -340,12 +363,12 @@ private fun PlayerTrackInfoRow(
                     .clip(RoundedCornerShape(12.dp)),
                 contentAlignment = Alignment.Center
             ) {
-                var isImageError by remember(currentTrack?.id) { mutableStateOf(false) }
+                var isImageError by remember(track?.id) { mutableStateOf(false) }
 
                 if (imageRequest != null && !isImageError) {
                     AsyncImage(
                         model = imageRequest,
-                        contentDescription = "Copertina ${currentTrack?.title ?: ""}",
+                        contentDescription = "Copertina ${track?.title ?: ""}",
                         contentScale = ContentScale.Crop,
                         modifier = Modifier.fillMaxSize(),
                         onError = { isImageError = true }
@@ -374,7 +397,7 @@ private fun PlayerTrackInfoRow(
                     .padding(end = 4.dp)
             ) {
                 Text(
-                    text = currentTrack?.title ?: "Nessun brano in riproduzione",
+                    text = track?.title ?: "Nessun brano in riproduzione",
                     style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
                     color = MaterialTheme.colorScheme.onSurface,
                     maxLines = 1,
@@ -383,7 +406,7 @@ private fun PlayerTrackInfoRow(
                 )
                 Spacer(modifier = Modifier.height(2.dp))
                 Text(
-                    text = currentTrack?.artist ?: "Seleziona una traccia dalla libreria",
+                    text = track?.artist ?: "Seleziona una traccia dalla libreria",
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     maxLines = 1,
@@ -397,7 +420,7 @@ private fun PlayerTrackInfoRow(
 
         // Pulsante circolare viola (+) Aggiungi a playlist
         FilledIconButton(
-            onClick = { currentTrack?.let { onAddToPlaylistClick?.invoke(it) } },
+            onClick = { track?.let { onAddToPlaylistClick?.invoke(it) } },
             modifier = Modifier.size(42.dp),
             shape = CircleShape,
             colors = IconButtonDefaults.filledIconButtonColors(
@@ -416,7 +439,13 @@ private fun PlayerTrackInfoRow(
 
         // Pulsante circolare viola Play / Pause con micro-animazione fluida
         FilledIconButton(
-            onClick = onPlayPauseClick,
+            onClick = {
+                if (isCurrentTrack) {
+                    onPlayPauseClick()
+                } else {
+                    onPlayTrack?.invoke()
+                }
+            },
             modifier = Modifier.size(46.dp),
             shape = CircleShape,
             colors = IconButtonDefaults.filledIconButtonColors(
@@ -425,7 +454,7 @@ private fun PlayerTrackInfoRow(
             )
         ) {
             AnimatedContent(
-                targetState = isPlaying,
+                targetState = isCurrentTrack && isPlaying,
                 transitionSpec = {
                     (fadeIn(animationSpec = tween(180)) +
                         scaleIn(initialScale = 0.72f, animationSpec = tween(180)))
@@ -451,7 +480,7 @@ private fun PlayerTrackInfoRow(
  *
  * Durante il riposo:
  * - Linea bianca sottile di 2.5dp.
- * - Pallino bianco discreto di raggio 4dp.
+ * - Pallino bianco discreto di raggio 4dp (se showThumb = true).
  *
  * Durante il tocco/trascinamento:
  * - Espansione dinamica a 6dp di spessore.
@@ -467,7 +496,9 @@ private fun TopEdgeProgressBar(
     onSeekingChange: (Boolean) -> Unit,
     seekFraction: Float,
     onSeekFractionChange: (Float) -> Unit,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    enabled: Boolean = true,
+    showThumb: Boolean = true
 ) {
     val safeDuration = durationMs.coerceAtLeast(1L).toFloat()
     val progressFraction = if (isSeeking) {
@@ -486,8 +517,8 @@ private fun TopEdgeProgressBar(
     val thumbRadius = lerp(4.dp, 8.5.dp, interactionFraction)
     val haloRadius = lerp(8.dp, 18.dp, interactionFraction)
 
-    Box(
-        modifier = modifier
+    val trackModifier = if (enabled) {
+        modifier
             .fillMaxWidth()
             .padding(horizontal = 16.dp)
             .height(16.dp)
@@ -516,7 +547,14 @@ private fun TopEdgeProgressBar(
                     onSeekingChange(false)
                 }
             }
-    ) {
+    } else {
+        modifier
+            .fillMaxWidth()
+            .padding(horizontal = 16.dp)
+            .height(16.dp)
+    }
+
+    Box(modifier = trackModifier) {
         Canvas(
             modifier = Modifier
                 .fillMaxWidth()
@@ -545,31 +583,33 @@ private fun TopEdgeProgressBar(
                 )
             }
 
-            // 3. Pallino (thumb) bianco con alone luminescente viola neon
-            val thumbCenter = Offset(activeWidth.coerceIn(0f, width), h / 2f)
+            // 3. Pallino (thumb) bianco con alone luminescente viola neon (solo se showThumb è true)
+            if (showThumb) {
+                val thumbCenter = Offset(activeWidth.coerceIn(0f, width), h / 2f)
 
-            if (interactionFraction > 0.01f) {
+                if (interactionFraction > 0.01f) {
+                    drawCircle(
+                        color = LocalMusicVioletNeon.copy(alpha = 0.45f * interactionFraction),
+                        radius = haloRadius.toPx(),
+                        center = thumbCenter
+                    )
+                }
+
+                val r = thumbRadius.toPx()
                 drawCircle(
-                    color = LocalMusicVioletNeon.copy(alpha = 0.45f * interactionFraction),
-                    radius = haloRadius.toPx(),
+                    color = Color.White,
+                    radius = r,
                     center = thumbCenter
                 )
+
+                val strokeW = lerp(1.dp.toPx(), 1.5.dp.toPx(), interactionFraction)
+                drawCircle(
+                    color = lerp(Color.White.copy(alpha = 0.7f), LocalMusicVioletNeon, interactionFraction),
+                    radius = (r - strokeW * 0.5f).coerceAtLeast(0.5f),
+                    center = thumbCenter,
+                    style = Stroke(width = strokeW)
+                )
             }
-
-            val r = thumbRadius.toPx()
-            drawCircle(
-                color = Color.White,
-                radius = r,
-                center = thumbCenter
-            )
-
-            val strokeW = lerp(1.dp.toPx(), 1.5.dp.toPx(), interactionFraction)
-            drawCircle(
-                color = lerp(Color.White.copy(alpha = 0.7f), LocalMusicVioletNeon, interactionFraction),
-                radius = (r - strokeW * 0.5f).coerceAtLeast(0.5f),
-                center = thumbCenter,
-                style = Stroke(width = strokeW)
-            )
         }
     }
 }

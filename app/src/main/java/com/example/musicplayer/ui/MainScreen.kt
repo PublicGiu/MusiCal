@@ -963,7 +963,10 @@ fun MainScreen(
                     onQueueClick = { showQueueSheet = true },
                     onSeekTo = { seekMs -> viewModel.seekTo(seekMs) },
                     onOpenFullScreen = { showFullScreenPlayer = true },
-                    onAddToPlaylistClick = { track -> trackToAddToPlaylist = track }
+                    onAddToPlaylistClick = { track -> trackToAddToPlaylist = track },
+                    queue = queue,
+                    currentQueueIndex = currentQueueIndex,
+                    onSkipToQueueItem = { index -> viewModel.skipToQueueItem(index) }
                 )
             }
         }

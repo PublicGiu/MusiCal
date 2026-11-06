@@ -461,27 +461,28 @@ class MusicViewModel(application: Application) : AndroidViewModel(application) {
         }, ContextCompat.getMainExecutor(context))
     }
 
-    fun loadTracks() {
-        viewModelScope.launch(Dispatchers.Main) {
-            // Se la libreria non è ancora popolata (es. primo avvio o cambio sorgente), attiva l'indicatore di caricamento
-            if (_tracks.value.isEmpty()) {
+    private suspend fun reloadLibraryInternal(force: Boolean = false) {
+        withContext(Dispatchers.Main) {
+            // Se la libreria non è ancora popolata o se è un refresh forzato, attiva l'indicatore di caricamento
+            if (_tracks.value.isEmpty() || force) {
                 _isLoading.value = true
             }
-            val currentMode = _audioSourceMode.value
-            val currentCustomFolders = _customFolders.value
-            val (loadedTracks, groupedAlbums) = withContext(Dispatchers.IO) {
-                val tracks = loadAudioFiles(getApplication(), currentMode, currentCustomFolders)
-                val albums = groupTracksIntoAlbums(tracks)
-                tracks to albums
-            }
+        }
+        val currentMode = _audioSourceMode.value
+        val currentCustomFolders = _customFolders.value
+        val (loadedTracks, groupedAlbums) = withContext(Dispatchers.IO) {
+            val tracks = loadAudioFiles(getApplication(), currentMode, currentCustomFolders)
+            val albums = groupTracksIntoAlbums(tracks)
+            tracks to albums
+        }
 
-            // Confronto leggero: evita riemissione e ricomposizioni se la scansione su storage restituisce gli stessi brani
+        withContext(Dispatchers.Main) {
+            // Confronto reattivo profondo: se force == false ed i brani sono identici, evita riemissione superflua
             val currentTracks = _tracks.value
-            val isUnchanged = currentTracks.size == loadedTracks.size &&
+            val isUnchanged = !force &&
+                    currentTracks.size == loadedTracks.size &&
                     currentTracks.isNotEmpty() &&
-                    currentTracks.firstOrNull()?.id == loadedTracks.firstOrNull()?.id &&
-                    currentTracks.lastOrNull()?.id == loadedTracks.lastOrNull()?.id &&
-                    currentTracks.firstOrNull()?.dateAdded == loadedTracks.firstOrNull()?.dateAdded
+                    currentTracks == loadedTracks
 
             if (!isUnchanged || currentTracks.isEmpty()) {
                 _tracks.value = loadedTracks
@@ -501,6 +502,12 @@ class MusicViewModel(application: Application) : AndroidViewModel(application) {
             }
             updateQueueFromController()
             _isLoading.value = false
+        }
+    }
+
+    fun loadTracks(force: Boolean = false) {
+        viewModelScope.launch {
+            reloadLibraryInternal(force)
         }
     }
 
@@ -1339,7 +1346,7 @@ class MusicViewModel(application: Application) : AndroidViewModel(application) {
         if (_audioSourceMode.value != mode) {
             _audioSourceMode.value = mode
             appPreferences.setAudioSourceMode(mode)
-            loadTracks()
+            loadTracks(force = true)
         }
     }
 
@@ -1351,7 +1358,7 @@ class MusicViewModel(application: Application) : AndroidViewModel(application) {
             _customFolders.value = updated
             appPreferences.setCustomFolders(updated)
             if (_audioSourceMode.value == AudioSourceMode.CUSTOM_FOLDERS) {
-                loadTracks()
+                loadTracks(force = true)
             }
         }
     }
@@ -1362,7 +1369,7 @@ class MusicViewModel(application: Application) : AndroidViewModel(application) {
             _customFolders.value = updated
             appPreferences.setCustomFolders(updated)
             if (_audioSourceMode.value == AudioSourceMode.CUSTOM_FOLDERS) {
-                loadTracks()
+                loadTracks(force = true)
             }
         }
     }
@@ -1688,6 +1695,7 @@ class MusicViewModel(application: Application) : AndroidViewModel(application) {
         val total = pendingWrites.size
         var current = 0
         var successCount = 0
+        val appliedMetadataMap = pendingWrites.map { (track, pair) -> track.id to pair.second }.toMap()
 
         pendingWrites.forEach { (track, pair) ->
             val (file, metadata) = pair
@@ -1699,10 +1707,38 @@ class MusicViewModel(application: Application) : AndroidViewModel(application) {
 
         pendingWrites.clear()
 
-        // Ricarica la libreria locale
-        loadTracks()
+        // 1. Aggiornamento ottimistico immediato in memoria (zero latenza) per riflettere all'istante le modifiche nella UI
+        if (appliedMetadataMap.isNotEmpty()) {
+            val currentTracks = _tracks.value
+            val patchedTracks = currentTracks.map { track ->
+                val meta = appliedMetadataMap[track.id]
+                if (meta != null) {
+                    track.copy(
+                        title = meta.title,
+                        artist = meta.artist,
+                        album = meta.album,
+                        albumArtist = meta.albumArtist.ifBlank { meta.artist },
+                        trackNumber = meta.trackNumber ?: track.trackNumber,
+                        discNumber = meta.discNumber ?: track.discNumber,
+                        genre = meta.genre ?: track.genre
+                    )
+                } else {
+                    track
+                }
+            }
+            val patchedAlbums = groupTracksIntoAlbums(patchedTracks)
+            withContext(Dispatchers.Main) {
+                _tracks.value = patchedTracks
+                _albums.value = patchedAlbums
+                _currentTrack.value?.let { curr ->
+                    if (appliedMetadataMap.containsKey(curr.id)) {
+                        patchedTracks.find { it.id == curr.id }?.let { _currentTrack.value = it }
+                    }
+                }
+            }
+        }
 
-        // Invalida la cache di memoria e disco di Coil per forzare il refresh immediato delle copertine HD
+        // 2. Invalida la cache di memoria e disco di Coil per forzare il refresh immediato delle copertine HD
         withContext(Dispatchers.Main) {
             try {
                 val imageLoader = coil.Coil.imageLoader(getApplication<Application>())
@@ -1710,6 +1746,13 @@ class MusicViewModel(application: Application) : AndroidViewModel(application) {
                 imageLoader.diskCache?.clear()
             } catch (_: Exception) {
             }
+        }
+
+        // 3. Ricarica forzatamente la libreria locale da MediaStore (ora sincronizzato da MediaScanner) e aggiorna playlist/cache
+        reloadLibraryInternal(force = true)
+        val updatedPlaylists = playlistRepository.loadPlaylists()
+        withContext(Dispatchers.Main) {
+            _playlists.value = updatedPlaylists
         }
 
         _currentTrack.value?.let { current ->

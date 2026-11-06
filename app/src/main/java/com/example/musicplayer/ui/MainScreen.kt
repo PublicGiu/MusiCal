@@ -660,7 +660,7 @@ fun MainScreen(
                                         )
                                         IconButton(
                                             onClick = {
-                                                viewModel.loadTracks()
+                                                viewModel.loadTracks(force = true)
                                                 viewModel.loadPlaylists()
                                                 coroutineScope.launch {
                                                     snackbarHostState.showSnackbar(
@@ -999,7 +999,7 @@ fun MainScreen(
                 tracks.isEmpty() -> {
                     EmptyTracksView(
                         onRefreshClicked = {
-                            viewModel.loadTracks()
+                            viewModel.loadTracks(force = true)
                             viewModel.loadPlaylists()
                         },
                         modifier = Modifier.align(Alignment.Center)
@@ -1047,9 +1047,15 @@ fun MainScreen(
                 // Dettaglio Album
                 selectedAlbum != null -> {
                     val currentAlbum = albums.find { it.id == selectedAlbum?.id }
+                        ?: selectedAlbum?.tracks?.firstOrNull()?.let { firstTrack ->
+                            albums.find { alb -> alb.tracks.any { it.id == firstTrack.id } }
+                        }
                     if (currentAlbum == null) {
                         selectedAlbum = null
                     } else {
+                        if (selectedAlbum?.id != currentAlbum.id) {
+                            selectedAlbum = currentAlbum
+                        }
                         AlbumDetailView(
                             album = currentAlbum,
                             currentTrack = currentTrack,

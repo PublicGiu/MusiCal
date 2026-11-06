@@ -4,6 +4,8 @@ import android.app.Activity
 import android.content.ContentValues
 import android.content.Context
 import android.content.IntentSender
+import android.graphics.Bitmap
+import android.graphics.BitmapFactory
 import android.media.MediaScannerConnection
 import android.net.Uri
 import android.os.Build
@@ -12,7 +14,11 @@ import com.example.musicplayer.data.AudioTrack
 import com.example.musicplayer.data.tagger.model.EnrichedMetadata
 import com.example.musicplayer.data.tagger.repository.EnricherOptions
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.suspendCancellableCoroutine
 import kotlinx.coroutines.withContext
+import kotlinx.coroutines.withTimeoutOrNull
+import kotlin.coroutines.resume
+import java.io.ByteArrayOutputStream
 import java.io.File
 import java.io.FileInputStream
 import java.io.FileOutputStream
@@ -110,7 +116,7 @@ class StorageWriteManager(private val context: Context) {
                 // Se l'aggiornamento diretto dei campi DB non è supportato da qualche colonna, si affida al MediaScanner
             }
 
-            // 4. Notifica al MediaScannerConnection sul file effettivo nello storage
+            // 4. Notifica e attesa completamento scansione MediaScannerConnection sul file effettivo nello storage
             try {
                 val externalDir = android.os.Environment.getExternalStorageDirectory()
                 val physicalFile = if (track.relativePath.isNotBlank() && track.displayName.isNotBlank()) {
@@ -119,12 +125,19 @@ class StorageWriteManager(private val context: Context) {
 
                 val targetPath = physicalFile?.takeIf { it.exists() }?.absolutePath
                 if (targetPath != null) {
-                    MediaScannerConnection.scanFile(
-                        context,
-                        arrayOf(targetPath),
-                        null,
-                        null
-                    )
+                    withTimeoutOrNull(3000L) {
+                        suspendCancellableCoroutine<Unit> { continuation ->
+                            MediaScannerConnection.scanFile(
+                                context,
+                                arrayOf(targetPath),
+                                null
+                            ) { _, _ ->
+                                if (continuation.isActive) {
+                                    continuation.resume(Unit)
+                                }
+                            }
+                        }
+                    }
                 }
             } catch (_: Exception) {}
 
@@ -164,5 +177,74 @@ class StorageWriteManager(private val context: Context) {
         } catch (e: Exception) {
             null
         }
+    }
+}
+
+/**
+ * Converte e ridimensiona un'immagine selezionata da URI a un array di byte JPEG di alta qualità (max 1200x1200).
+ * Ottimizzato per l'incorporamento pulito nei tag ID3/Vorbis senza eccedere i limiti di memoria.
+ */
+fun loadResizedJpegBytesFromUri(context: Context, uri: Uri, maxDimension: Int = 1200): ByteArray? {
+    return try {
+        val orientation = try {
+            context.contentResolver.openInputStream(uri)?.use { s ->
+                val exif = android.media.ExifInterface(s)
+                exif.getAttributeInt(
+                    android.media.ExifInterface.TAG_ORIENTATION,
+                    android.media.ExifInterface.ORIENTATION_NORMAL
+                )
+            } ?: android.media.ExifInterface.ORIENTATION_NORMAL
+        } catch (_: Exception) {
+            android.media.ExifInterface.ORIENTATION_NORMAL
+        }
+
+        context.contentResolver.openInputStream(uri)?.use { stream ->
+            val original = BitmapFactory.decodeStream(stream) ?: return null
+            val rotated = when (orientation) {
+                android.media.ExifInterface.ORIENTATION_ROTATE_90 -> {
+                    val m = android.graphics.Matrix().apply { postRotate(90f) }
+                    Bitmap.createBitmap(original, 0, 0, original.width, original.height, m, true).also {
+                        if (it != original) original.recycle()
+                    }
+                }
+                android.media.ExifInterface.ORIENTATION_ROTATE_180 -> {
+                    val m = android.graphics.Matrix().apply { postRotate(180f) }
+                    Bitmap.createBitmap(original, 0, 0, original.width, original.height, m, true).also {
+                        if (it != original) original.recycle()
+                    }
+                }
+                android.media.ExifInterface.ORIENTATION_ROTATE_270 -> {
+                    val m = android.graphics.Matrix().apply { postRotate(270f) }
+                    Bitmap.createBitmap(original, 0, 0, original.width, original.height, m, true).also {
+                        if (it != original) original.recycle()
+                    }
+                }
+                else -> original
+            }
+
+            val width = rotated.width
+            val height = rotated.height
+            val scaled = if (width > maxDimension || height > maxDimension) {
+                val ratio = width.toFloat() / height.toFloat()
+                val (newW, newH) = if (ratio > 1f) {
+                    maxDimension to (maxDimension / ratio).toInt()
+                } else {
+                    (maxDimension * ratio).toInt() to maxDimension
+                }
+                Bitmap.createScaledBitmap(rotated, newW.coerceAtLeast(1), newH.coerceAtLeast(1), true).also {
+                    if (it != rotated) rotated.recycle()
+                }
+            } else {
+                rotated
+            }
+
+            val baos = ByteArrayOutputStream()
+            scaled.compress(Bitmap.CompressFormat.JPEG, 92, baos)
+            scaled.recycle()
+            baos.toByteArray()
+        }
+    } catch (e: Exception) {
+        e.printStackTrace()
+        null
     }
 }

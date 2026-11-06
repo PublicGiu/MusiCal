@@ -1,5 +1,7 @@
 package com.example.musicplayer.ui.components
 
+import android.content.Intent
+import android.net.Uri
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -21,15 +23,22 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.automirrored.filled.OpenInNew
+import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.CheckCircle
+import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.ColorLens
+import androidx.compose.material.icons.filled.Download
 import androidx.compose.material.icons.filled.Folder
+import androidx.compose.material.icons.filled.FolderOpen
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.MusicNote
 import androidx.compose.material.icons.filled.Radio
 import androidx.compose.material.icons.filled.Refresh
-import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.HorizontalDivider
@@ -37,6 +46,7 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.RadioButton
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Switch
@@ -51,6 +61,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
@@ -58,22 +69,25 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 import com.example.musicplayer.R
+import com.example.musicplayer.data.AudioSourceMode
 import com.example.musicplayer.data.ThemeMode
+import com.example.musicplayer.data.update.GithubUpdateChecker
 import com.example.musicplayer.ui.MusicViewModel
 
 /**
  * Finestra di dialogo a schermo intero per la gestione delle impostazioni dell'app:
- * tema, colori dinamici, autoplay continuo, scansione libreria e integrazione Last.fm.
+ * tema, colori dinamici, autoplay continuo, scansione libreria (con scelta sorgenti) e integrazione Last.fm.
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun SettingsDialog(
     viewModel: MusicViewModel,
     onDismiss: () -> Unit,
-    onOpenLastFmDialog: () -> Unit
+    onOpenLastFmDialog: () -> Unit,
+    onPickCustomFolder: () -> Unit
 ) {
+    val context = LocalContext.current
     val themeMode by viewModel.themeMode.collectAsState()
-    val isDynamicColorEnabled by viewModel.isDynamicColorEnabled.collectAsState()
     val isAutoplayEnabled by viewModel.isAutoplayEnabled.collectAsState()
     val tracks by viewModel.tracks.collectAsState()
     val albums by viewModel.albums.collectAsState()
@@ -81,6 +95,11 @@ fun SettingsDialog(
     val isLastFmLoggedIn by viewModel.isLastFmLoggedIn.collectAsState()
     val lastFmUsername by viewModel.lastFmUsername.collectAsState()
     val pendingScrobblesCount by viewModel.pendingScrobblesCount.collectAsState()
+    val audioSourceMode by viewModel.audioSourceMode.collectAsState()
+    val customFolders by viewModel.customFolders.collectAsState()
+    val updateInfo by viewModel.updateInfo.collectAsState()
+    val isCheckingUpdate by viewModel.isCheckingUpdate.collectAsState()
+    val updateCheckError by viewModel.updateCheckError.collectAsState()
 
     Dialog(
         onDismissRequest = onDismiss,
@@ -158,30 +177,6 @@ fun SettingsDialog(
                                 )
                             }
                         }
-
-                        HorizontalDivider(modifier = Modifier.padding(vertical = 12.dp))
-
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.SpaceBetween
-                        ) {
-                            Column(modifier = Modifier.weight(1f).padding(end = 16.dp)) {
-                                Text(
-                                    text = "Colori dinamici Material You",
-                                    style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.SemiBold)
-                                )
-                                Text(
-                                    text = "Sincronizza le sfumature con lo sfondo mantenendo la tonalità viola di MusiCal",
-                                    style = MaterialTheme.typography.bodySmall,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                                )
-                            }
-                            Switch(
-                                checked = isDynamicColorEnabled,
-                                onCheckedChange = { viewModel.setDynamicColorEnabled(it) }
-                            )
-                        }
                     }
                 }
 
@@ -219,7 +214,7 @@ fun SettingsDialog(
                     }
                 }
 
-                // 3. Libreria Musicale
+                // 3. Libreria Musicale & Fonti
                 SettingsSectionHeader(
                     icon = Icons.Default.Folder,
                     title = "Libreria Musicale"
@@ -229,6 +224,147 @@ fun SettingsDialog(
                     colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f))
                 ) {
                     Column(modifier = Modifier.padding(16.dp)) {
+                        Text(
+                            text = "Origine delle tracce",
+                            style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.SemiBold)
+                        )
+                        Text(
+                            text = "Scegli come scansionare la musica presente nella memoria del dispositivo",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+
+                        Spacer(modifier = Modifier.height(12.dp))
+
+                        Column(
+                            modifier = Modifier.fillMaxWidth(),
+                            verticalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            AudioSourceMode.entries.forEach { mode ->
+                                val isSelected = audioSourceMode == mode
+                                Surface(
+                                    shape = RoundedCornerShape(12.dp),
+                                    color = if (isSelected) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surface,
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .clickable { viewModel.setAudioSourceMode(mode) }
+                                ) {
+                                    Row(
+                                        modifier = Modifier.padding(12.dp),
+                                        verticalAlignment = Alignment.CenterVertically
+                                    ) {
+                                        RadioButton(
+                                            selected = isSelected,
+                                            onClick = { viewModel.setAudioSourceMode(mode) }
+                                        )
+                                        Spacer(modifier = Modifier.width(8.dp))
+                                        Column(modifier = Modifier.weight(1f)) {
+                                            val labelText = if (mode == AudioSourceMode.INTELLIGENT) {
+                                                "${mode.label} (Consigliata)"
+                                            } else {
+                                                mode.label
+                                            }
+                                            Text(
+                                                text = labelText,
+                                                style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Bold),
+                                                color = if (isSelected) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onSurface
+                                            )
+                                            Text(
+                                                text = mode.description,
+                                                style = MaterialTheme.typography.bodySmall,
+                                                color = if (isSelected) MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.8f) else MaterialTheme.colorScheme.onSurfaceVariant
+                                            )
+                                        }
+                                    }
+                                }
+                            }
+                        }
+
+                        // Sottosezione Cartelle a Scelta
+                        if (audioSourceMode == AudioSourceMode.CUSTOM_FOLDERS) {
+                            Spacer(modifier = Modifier.height(14.dp))
+                            HorizontalDivider()
+                            Spacer(modifier = Modifier.height(12.dp))
+
+                            Text(
+                                text = "Cartelle selezionate (${customFolders.size})",
+                                style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold)
+                            )
+                            Spacer(modifier = Modifier.height(8.dp))
+
+                            if (customFolders.isEmpty()) {
+                                Text(
+                                    text = "Nessuna cartella aggiunta. Tocca '+ Aggiungi cartella' per selezionare una o più cartelle di musica.",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.error
+                                )
+                            } else {
+                                Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                                    customFolders.forEach { folder ->
+                                        Surface(
+                                            shape = RoundedCornerShape(8.dp),
+                                            color = MaterialTheme.colorScheme.surface,
+                                            modifier = Modifier.fillMaxWidth()
+                                        ) {
+                                            Row(
+                                                modifier = Modifier
+                                                    .fillMaxWidth()
+                                                    .padding(horizontal = 12.dp, vertical = 8.dp),
+                                                verticalAlignment = Alignment.CenterVertically,
+                                                horizontalArrangement = Arrangement.SpaceBetween
+                                            ) {
+                                                Row(
+                                                    modifier = Modifier.weight(1f),
+                                                    verticalAlignment = Alignment.CenterVertically
+                                                ) {
+                                                    Icon(
+                                                        imageVector = Icons.Default.FolderOpen,
+                                                        contentDescription = null,
+                                                        tint = MaterialTheme.colorScheme.primary,
+                                                        modifier = Modifier.size(18.dp)
+                                                    )
+                                                    Spacer(modifier = Modifier.width(8.dp))
+                                                    Text(
+                                                        text = folder,
+                                                        style = MaterialTheme.typography.bodyMedium
+                                                    )
+                                                }
+                                                IconButton(
+                                                    onClick = { viewModel.removeCustomFolder(folder) },
+                                                    modifier = Modifier.size(24.dp)
+                                                ) {
+                                                    Icon(
+                                                        imageVector = Icons.Default.Close,
+                                                        contentDescription = "Rimuovi cartella",
+                                                        tint = MaterialTheme.colorScheme.error,
+                                                        modifier = Modifier.size(18.dp)
+                                                    )
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+
+                            Spacer(modifier = Modifier.height(10.dp))
+                            OutlinedButton(
+                                onClick = onPickCustomFolder,
+                                modifier = Modifier.fillMaxWidth()
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.Add,
+                                    contentDescription = null,
+                                    modifier = Modifier.size(18.dp)
+                                )
+                                Spacer(modifier = Modifier.width(6.dp))
+                                Text("Aggiungi cartella")
+                            }
+                        }
+
+                        Spacer(modifier = Modifier.height(14.dp))
+                        HorizontalDivider()
+                        Spacer(modifier = Modifier.height(12.dp))
+
                         Row(
                             modifier = Modifier.fillMaxWidth(),
                             verticalAlignment = Alignment.CenterVertically
@@ -237,23 +373,17 @@ fun SettingsDialog(
                                 imageVector = Icons.Default.MusicNote,
                                 contentDescription = null,
                                 tint = MaterialTheme.colorScheme.primary,
-                                modifier = Modifier.size(24.dp)
+                                modifier = Modifier.size(20.dp)
                             )
-                            Spacer(modifier = Modifier.width(12.dp))
-                            Column {
-                                Text(
-                                    text = "Cartella di origine: Music/",
-                                    style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Medium)
-                                )
-                                Text(
-                                    text = "${tracks.size} brani • ${albums.size} album • ${stats.values.sumOf { it.playCount }} ascolti totali",
-                                    style = MaterialTheme.typography.bodySmall,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                                )
-                            }
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Text(
+                                text = "${tracks.size} brani • ${albums.size} album • ${stats.values.sumOf { it.playCount }} ascolti totali",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
                         }
 
-                        Spacer(modifier = Modifier.height(16.dp))
+                        Spacer(modifier = Modifier.height(12.dp))
 
                         OutlinedButton(
                             onClick = {
@@ -313,7 +443,7 @@ fun SettingsDialog(
                                     "Connesso come: ${lastFmUsername ?: "Utente"}"
                                 } else {
                                     "Non connesso a Last.fm"
-                                },
+                                } ,
                                 style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.SemiBold)
                             )
                         }
@@ -338,7 +468,7 @@ fun SettingsDialog(
                     }
                 }
 
-                // 5. Informazioni sull'applicazione
+                // 5. Informazioni sull'applicazione & Aggiornamenti GitHub
                 SettingsSectionHeader(
                     icon = Icons.Default.Info,
                     title = "Informazioni"
@@ -363,6 +493,144 @@ fun SettingsDialog(
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
+
+                        Spacer(modifier = Modifier.height(16.dp))
+                        HorizontalDivider()
+                        Spacer(modifier = Modifier.height(12.dp))
+
+                        // Sezione Aggiornamenti GitHub
+                        Text(
+                            text = "Aggiornamenti & GitHub",
+                            style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold)
+                        )
+                        Spacer(modifier = Modifier.height(8.dp))
+
+                        when {
+                            isCheckingUpdate -> {
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    CircularProgressIndicator(
+                                        modifier = Modifier.size(18.dp),
+                                        strokeWidth = 2.dp
+                                    )
+                                    Spacer(modifier = Modifier.width(10.dp))
+                                    Text(
+                                        text = "Verifica versione su GitHub in corso...",
+                                        style = MaterialTheme.typography.bodySmall
+                                    )
+                                }
+                            }
+                            updateInfo != null -> {
+                                if (updateInfo?.isUpdateAvailable == true) {
+                                    Surface(
+                                        shape = RoundedCornerShape(10.dp),
+                                        color = MaterialTheme.colorScheme.primaryContainer,
+                                        modifier = Modifier.fillMaxWidth()
+                                    ) {
+                                        Column(modifier = Modifier.padding(12.dp)) {
+                                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                                Icon(
+                                                    imageVector = Icons.Default.Download,
+                                                    contentDescription = null,
+                                                    tint = MaterialTheme.colorScheme.onPrimaryContainer,
+                                                    modifier = Modifier.size(20.dp)
+                                                )
+                                                Spacer(modifier = Modifier.width(8.dp))
+                                                Text(
+                                                    text = "Nuova versione disponibile: v${updateInfo?.latestVersion}!",
+                                                    style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Bold),
+                                                    color = MaterialTheme.colorScheme.onPrimaryContainer
+                                                )
+                                            }
+                                            Spacer(modifier = Modifier.height(8.dp))
+                                            Button(
+                                                onClick = {
+                                                    val url = updateInfo?.apkDownloadUrl ?: updateInfo?.htmlUrl ?: GithubUpdateChecker.GITHUB_REPO_URL
+                                                    try {
+                                                        val intent = Intent(Intent.ACTION_VIEW, Uri.parse(url)).apply {
+                                                            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                                                        }
+                                                        context.startActivity(intent)
+                                                    } catch (e: Exception) {
+                                                        e.printStackTrace()
+                                                    }
+                                                },
+                                                modifier = Modifier.fillMaxWidth()
+                                            ) {
+                                                Text("Scarica aggiornamento")
+                                            }
+                                        }
+                                    }
+                                } else {
+                                    Row(
+                                        modifier = Modifier.fillMaxWidth(),
+                                        verticalAlignment = Alignment.CenterVertically
+                                    ) {
+                                        Icon(
+                                            imageVector = Icons.Default.CheckCircle,
+                                            contentDescription = null,
+                                            tint = Color(0xFF4CAF50),
+                                            modifier = Modifier.size(20.dp)
+                                        )
+                                        Spacer(modifier = Modifier.width(8.dp))
+                                        Text(
+                                            text = "Stai usando la versione più recente (v${com.example.musicplayer.BuildConfig.VERSION_NAME})",
+                                            style = MaterialTheme.typography.bodySmall.copy(fontWeight = FontWeight.Medium),
+                                            color = Color(0xFF4CAF50)
+                                        )
+                                    }
+                                }
+                            }
+                            updateCheckError != null -> {
+                                Text(
+                                    text = "Errore durante la verifica: $updateCheckError",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.error
+                                )
+                            }
+                        }
+
+                        Spacer(modifier = Modifier.height(10.dp))
+
+                        OutlinedButton(
+                            onClick = { viewModel.checkForUpdates(isManual = true) },
+                            enabled = !isCheckingUpdate,
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.Refresh,
+                                contentDescription = null,
+                                modifier = Modifier.size(18.dp)
+                            )
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Text("Controlla aggiornamenti su GitHub")
+                        }
+
+                        Spacer(modifier = Modifier.height(8.dp))
+
+                        OutlinedButton(
+                            onClick = {
+                                try {
+                                    val intent = Intent(Intent.ACTION_VIEW, Uri.parse(GithubUpdateChecker.GITHUB_REPO_URL)).apply {
+                                        addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                                    }
+                                    context.startActivity(intent)
+                                } catch (e: Exception) {
+                                    e.printStackTrace()
+                                }
+                            },
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Icon(
+                                imageVector = Icons.AutoMirrored.Filled.OpenInNew,
+                                contentDescription = null,
+                                modifier = Modifier.size(18.dp)
+                            )
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Text("Visita repository su GitHub")
+                        }
                     }
                 }
 

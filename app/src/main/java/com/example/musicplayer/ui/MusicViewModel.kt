@@ -37,6 +37,9 @@ import com.example.musicplayer.data.tagger.repository.EnricherOptions
 import com.example.musicplayer.data.tagger.repository.MetadataEnricherRepository
 import com.example.musicplayer.data.tagger.sanitizer.QuerySanitizer
 import com.example.musicplayer.data.tagger.writer.StorageWriteManager
+import com.example.musicplayer.data.AudioSourceMode
+import com.example.musicplayer.data.update.AppUpdateInfo
+import com.example.musicplayer.data.update.GithubUpdateChecker
 import com.example.musicplayer.ui.tagger.EnricherUiState
 import com.example.musicplayer.playback.PlaybackService
 import android.content.IntentSender
@@ -174,6 +177,27 @@ class MusicViewModel(application: Application) : AndroidViewModel(application) {
 
     private val _isAutoplayEnabled = MutableStateFlow(appPreferences.isAutoplayEnabled())
     val isAutoplayEnabled: StateFlow<Boolean> = _isAutoplayEnabled.asStateFlow()
+
+    // --- 5. Fonti di Scansione & Aggiornamenti GitHub ---
+    private val updateChecker = GithubUpdateChecker()
+
+    private val _audioSourceMode = MutableStateFlow(appPreferences.getAudioSourceMode())
+    val audioSourceMode: StateFlow<AudioSourceMode> = _audioSourceMode.asStateFlow()
+
+    private val _customFolders = MutableStateFlow(appPreferences.getCustomFolders())
+    val customFolders: StateFlow<Set<String>> = _customFolders.asStateFlow()
+
+    private val _updateInfo = MutableStateFlow<AppUpdateInfo?>(null)
+    val updateInfo: StateFlow<AppUpdateInfo?> = _updateInfo.asStateFlow()
+
+    private val _isCheckingUpdate = MutableStateFlow(false)
+    val isCheckingUpdate: StateFlow<Boolean> = _isCheckingUpdate.asStateFlow()
+
+    private val _updateCheckError = MutableStateFlow<String?>(null)
+    val updateCheckError: StateFlow<String?> = _updateCheckError.asStateFlow()
+
+    private val _isUpdateDialogVisible = MutableStateFlow(false)
+    val isUpdateDialogVisible: StateFlow<Boolean> = _isUpdateDialogVisible.asStateFlow()
 
     private val recentPlayedTrackIds = ArrayDeque<Long>()
 
@@ -366,8 +390,10 @@ class MusicViewModel(application: Application) : AndroidViewModel(application) {
     fun loadTracks() {
         viewModelScope.launch(Dispatchers.Main) {
             _isLoading.value = true
+            val currentMode = _audioSourceMode.value
+            val currentCustomFolders = _customFolders.value
             val (loadedTracks, groupedAlbums) = withContext(Dispatchers.IO) {
-                val tracks = loadAudioFiles(getApplication())
+                val tracks = loadAudioFiles(getApplication(), currentMode, currentCustomFolders)
                 val albums = groupTracksIntoAlbums(tracks)
                 tracks to albums
             }
@@ -1216,6 +1242,70 @@ class MusicViewModel(application: Application) : AndroidViewModel(application) {
     fun setDynamicColorEnabled(enabled: Boolean) {
         _isDynamicColorEnabled.value = enabled
         appPreferences.setDynamicColorEnabled(enabled)
+    }
+
+    fun setAudioSourceMode(mode: AudioSourceMode) {
+        if (_audioSourceMode.value != mode) {
+            _audioSourceMode.value = mode
+            appPreferences.setAudioSourceMode(mode)
+            loadTracks()
+        }
+    }
+
+    fun addCustomFolder(folderPath: String) {
+        val clean = folderPath.trim().trimStart('/')
+        val normalized = if (clean.endsWith('/')) clean else "$clean/"
+        val updated = _customFolders.value.toMutableSet()
+        if (updated.add(normalized)) {
+            _customFolders.value = updated
+            appPreferences.setCustomFolders(updated)
+            if (_audioSourceMode.value == AudioSourceMode.CUSTOM_FOLDERS) {
+                loadTracks()
+            }
+        }
+    }
+
+    fun removeCustomFolder(folderPath: String) {
+        val updated = _customFolders.value.toMutableSet()
+        if (updated.remove(folderPath)) {
+            _customFolders.value = updated
+            appPreferences.setCustomFolders(updated)
+            if (_audioSourceMode.value == AudioSourceMode.CUSTOM_FOLDERS) {
+                loadTracks()
+            }
+        }
+    }
+
+    fun checkForUpdates(isManual: Boolean = false) {
+        viewModelScope.launch {
+            _isCheckingUpdate.value = true
+            _updateCheckError.value = null
+            val currentVersion = com.example.musicplayer.BuildConfig.VERSION_NAME
+            val result = updateChecker.checkForUpdates(currentVersion)
+            _isCheckingUpdate.value = false
+
+            result.onSuccess { info ->
+                _updateInfo.value = info
+                appPreferences.setLastUpdateCheckTimestamp(System.currentTimeMillis())
+                if (info.isUpdateAvailable) {
+                    val dismissed = appPreferences.getDismissedUpdateVersion()
+                    if (isManual || dismissed != info.latestVersion) {
+                        _isUpdateDialogVisible.value = true
+                    }
+                }
+            }.onFailure { error ->
+                _updateCheckError.value = error.message ?: "Impossibile verificare gli aggiornamenti"
+            }
+        }
+    }
+
+    fun dismissUpdateDialog(neverShowAgainForThisVersion: Boolean = false) {
+        _isUpdateDialogVisible.value = false
+        if (neverShowAgainForThisVersion) {
+            _updateInfo.value?.let { info ->
+                appPreferences.setDismissedUpdateVersion(info.latestVersion)
+            }
+        }
     }
 
     // --- Funzionalità Smart Auto-Tagger & Metadata Enricher ---

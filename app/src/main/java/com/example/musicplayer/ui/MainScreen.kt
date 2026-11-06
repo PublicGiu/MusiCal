@@ -135,9 +135,11 @@ import com.example.musicplayer.ui.components.PlayerBottomBar
 import com.example.musicplayer.ui.components.PlaylistDetailView
 import com.example.musicplayer.ui.components.PlaylistsView
 import com.example.musicplayer.ui.components.QueueBottomSheet
+import android.content.Intent
 import com.example.musicplayer.ui.components.SettingsDialog
 import com.example.musicplayer.ui.components.SortSelectorRow
 import com.example.musicplayer.ui.components.TrackListItem
+import com.example.musicplayer.ui.components.UpdateAvailableDialog
 import com.example.musicplayer.ui.components.rememberCollapsingScrollConnection
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -177,6 +179,10 @@ fun MainScreen(
 
     // Ricerca globale
     val searchQuery by viewModel.searchQuery.collectAsStateWithLifecycle()
+
+    // Aggiornamenti GitHub
+    val updateInfo by viewModel.updateInfo.collectAsStateWithLifecycle()
+    val isUpdateDialogVisible by viewModel.isUpdateDialogVisible.collectAsStateWithLifecycle()
 
     // Navigazione schede e viste di dettaglio
     var selectedTabIndex by remember { mutableIntStateOf(0) }
@@ -571,6 +577,29 @@ fun MainScreen(
         )
     }
 
+    val folderPickerLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.OpenDocumentTree()
+    ) { treeUri ->
+        treeUri?.let { uri ->
+            try {
+                context.contentResolver.takePersistableUriPermission(
+                    uri,
+                    Intent.FLAG_GRANT_READ_URI_PERMISSION
+                )
+            } catch (_: Exception) {}
+
+            val docId = android.provider.DocumentsContract.getTreeDocumentId(uri)
+            val relativePath = if (docId.startsWith("primary:")) {
+                docId.removePrefix("primary:").trimEnd('/') + "/"
+            } else {
+                docId.substringAfter(":", "").trimEnd('/') + "/"
+            }
+            if (relativePath.isNotBlank() && relativePath != "/") {
+                viewModel.addCustomFolder(relativePath)
+            }
+        }
+    }
+
     val permissionLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.RequestMultiplePermissions()
     ) { permissionsMap ->
@@ -580,6 +609,7 @@ fun MainScreen(
         if (audioGranted) {
             viewModel.loadTracks()
             viewModel.loadPlaylists()
+            viewModel.checkForUpdates(isManual = false)
         }
     }
 
@@ -590,6 +620,7 @@ fun MainScreen(
             viewModel.loadTracks()
             viewModel.loadPlaylists()
         }
+        viewModel.checkForUpdates(isManual = false)
     }
 
     Scaffold(
@@ -653,7 +684,7 @@ fun MainScreen(
                                             Icon(
                                                 imageVector = Icons.Default.Refresh,
                                                 contentDescription = "Aggiorna libreria",
-                                                tint = MaterialTheme.colorScheme.primary,
+                                                tint = MaterialTheme.colorScheme.onSurfaceVariant,
                                                 modifier = Modifier
                                                     .size(20.dp)
                                                     .graphicsLayer {
@@ -1319,8 +1350,22 @@ fun MainScreen(
             onDismiss = { showSettingsDialog = false },
             onOpenLastFmDialog = {
                 showLastFmDialog = true
+            },
+            onPickCustomFolder = {
+                folderPickerLauncher.launch(null)
             }
         )
+    }
+
+    // Dialog Notifica Aggiornamento GitHub all'avvio
+    if (isUpdateDialogVisible) {
+        updateInfo?.let { info ->
+            UpdateAvailableDialog(
+                updateInfo = info,
+                onDismiss = { viewModel.dismissUpdateDialog(neverShowAgainForThisVersion = false) },
+                onNeverShowAgain = { viewModel.dismissUpdateDialog(neverShowAgainForThisVersion = true) }
+            )
+        }
     }
 
     // Foglio modale Smart Auto-Tagger & Metadata Enricher

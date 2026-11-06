@@ -4,13 +4,115 @@ import android.content.ContentUris
 import android.content.Context
 import android.provider.MediaStore
 
+private val EXCLUDED_PATH_KEYWORDS = listOf(
+    "whatsapp",
+    "telegram",
+    "recorder",
+    "recordings",
+    "voice record",
+    "callrecording",
+    "call_rec",
+    "sound_recorder",
+    "ringtones",
+    "notifications",
+    "alarms",
+    "podcasts",
+    "audiobooks",
+    "/.trashed",
+    "/.cache",
+    "/cache/",
+    "/temp/",
+    "/tmp/"
+)
+
+private val VOICE_NOTE_PREFIXES = listOf(
+    "ptt-",
+    "aud-",
+    "rec_",
+    "rec-",
+    "voice_",
+    "voice-",
+    "call_",
+    "call-",
+    "audiorecord",
+    "soundrecord"
+)
+
+/**
+ * Valuta se un brano audio rientra nei criteri di musica autentica per la Scansione Intelligente,
+ * escludendo note vocali WhatsApp/Telegram, registrazioni audio, chiamate e suoni di sistema.
+ */
+fun isIntelligentMusicTrack(
+    relativePath: String,
+    displayName: String,
+    title: String,
+    artist: String,
+    album: String,
+    durationMs: Long
+): Boolean {
+    val lowerPath = relativePath.lowercase(java.util.Locale.ROOT)
+    val lowerName = displayName.lowercase(java.util.Locale.ROOT)
+
+    // 1. Esclusione percorsi indesiderati
+    if (EXCLUDED_PATH_KEYWORDS.any { lowerPath.contains(it) }) {
+        return false
+    }
+
+    // 2. Esclusione file o cartelle nascoste
+    if (lowerName.startsWith(".") || lowerPath.contains("/.")) {
+        return false
+    }
+
+    // 3. Esclusione formati esclusivi di memo/registrazioni
+    if (lowerName.endsWith(".amr") || lowerName.endsWith(".3gp")) {
+        return false
+    }
+
+    // 4. Esclusione prefissi tipici di note vocali e registrazioni
+    if (VOICE_NOTE_PREFIXES.any { lowerName.startsWith(it) }) {
+        if (!lowerPath.startsWith("music/")) {
+            return false
+        }
+    }
+
+    val hasAuthenticMetadata = hasAuthenticMusicMetadata(artist, album)
+
+    // 5. Soglia minima di durata: 15 secondi (15.000 ms)
+    if (durationMs in 1 until 15_000L) {
+        if (!hasAuthenticMetadata) return false
+    }
+
+    // 6. Soglia massima di durata: 20 minuti (1.200.000 ms)
+    if (durationMs > 1_200_000L) {
+        if (!hasAuthenticMetadata) return false
+    }
+
+    return true
+}
+
+private fun hasAuthenticMusicMetadata(artist: String, album: String): Boolean {
+    val cleanArtist = artist.trim()
+    val cleanAlbum = album.trim()
+
+    val validArtist = cleanArtist.isNotBlank() &&
+            cleanArtist.lowercase(java.util.Locale.ROOT) !in setOf("artista sconosciuto", "unknown artist", "unknown", "<unknown>")
+    val validAlbum = cleanAlbum.isNotBlank() &&
+            !isGenericAlbum(cleanAlbum)
+
+    return validArtist && validAlbum
+}
+
 /**
  * Interroga MediaStore.Audio.Media.EXTERNAL_CONTENT_URI per estrarre tutti i brani
- * audio presenti sul dispositivo con ID, titolo, artista, durata, URI, album e copertina.
+ * audio presenti sul dispositivo secondo la modalità [sourceMode] e le cartelle [customFolders].
  *
- * Implementazione moderna per Android 16 (API 36) senza controlli o fallback legacy.
+ * Implementazione moderna per Android 16 (API 36).
  */
-fun loadAudioFiles(context: Context): List<AudioTrack> {
+fun loadAudioFiles(
+    context: Context,
+    sourceMode: AudioSourceMode = AudioSourceMode.INTELLIGENT,
+    customFolders: Set<String> = emptySet()
+): List<AudioTrack> {
     val audioList = mutableListOf<AudioTrack>()
     val collectionUri = MediaStore.Audio.Media.EXTERNAL_CONTENT_URI
     val albumArtBaseUri = MediaStore.Audio.Albums.EXTERNAL_CONTENT_URI
@@ -32,12 +134,37 @@ fun loadAudioFiles(context: Context): List<AudioTrack> {
         MediaStore.Audio.Media.ALBUM_ARTIST
     )
 
-    // Consideriamo esclusivamente i file musicali presenti nella cartella Music/ (e relative sottocartelle)
-    val selection = "${MediaStore.Audio.Media.IS_MUSIC} != 0 AND (" +
-            "${MediaStore.Audio.Media.RELATIVE_PATH} LIKE ? OR " +
-            "${MediaStore.Audio.Media.RELATIVE_PATH} = ?" +
-            ")"
-    val selectionArgs = arrayOf("Music/%", "Music/")
+    val (selection, selectionArgs) = when (sourceMode) {
+        AudioSourceMode.MUSIC_ONLY -> {
+            val sel = "${MediaStore.Audio.Media.IS_MUSIC} != 0 AND (" +
+                    "${MediaStore.Audio.Media.RELATIVE_PATH} LIKE ? OR " +
+                    "${MediaStore.Audio.Media.RELATIVE_PATH} = ?" +
+                    ")"
+            sel to arrayOf("Music/%", "Music/")
+        }
+        AudioSourceMode.CUSTOM_FOLDERS -> {
+            if (customFolders.isEmpty()) {
+                return emptyList()
+            }
+            val clauses = mutableListOf<String>()
+            val args = mutableListOf<String>()
+            for (folder in customFolders) {
+                val cleanFolder = folder.trim().trimStart('/')
+                val normalized = if (cleanFolder.endsWith('/')) cleanFolder else "$cleanFolder/"
+                clauses.add("(${MediaStore.Audio.Media.RELATIVE_PATH} LIKE ? OR ${MediaStore.Audio.Media.RELATIVE_PATH} = ?)")
+                args.add("$normalized%")
+                args.add(normalized)
+            }
+            val sel = "${MediaStore.Audio.Media.IS_MUSIC} != 0 AND (${clauses.joinToString(" OR ")})"
+            sel to args.toTypedArray()
+        }
+        AudioSourceMode.ALL,
+        AudioSourceMode.INTELLIGENT -> {
+            val sel = "${MediaStore.Audio.Media.IS_MUSIC} != 0"
+            sel to null
+        }
+    }
+
     val sortOrder = "${MediaStore.Audio.Media.TITLE} COLLATE NOCASE ASC"
 
     context.contentResolver.query(
@@ -76,6 +203,13 @@ fun loadAudioFiles(context: Context): List<AudioTrack> {
             val relativePath = if (relativePathColumn >= 0) cursor.getString(relativePathColumn)?.trim().orEmpty() else ""
             val displayName = if (displayNameColumn >= 0) cursor.getString(displayNameColumn)?.trim().orEmpty() else ""
             val albumArtist = if (albumArtistColumn >= 0) cursor.getString(albumArtistColumn)?.trim().orEmpty() else ""
+
+            if (sourceMode == AudioSourceMode.INTELLIGENT &&
+                !isIntelligentMusicTrack(relativePath, displayName, title, artist, album, duration)
+            ) {
+                continue
+            }
+
             val contentUri = ContentUris.withAppendedId(collectionUri, id)
             val albumArtUri = ContentUris.withAppendedId(albumArtBaseUri, albumId)
 
@@ -195,14 +329,6 @@ fun Album.isMixedOrGeneric(): Boolean {
 
 /**
  * Raggruppa i brani in una lista di modelli Album con tracce associate.
- * 
- * Risolve la frammentazione e l'errata incorporazione di brani di artisti e album diversi:
- * 1. Non raggruppa alla cieca per MediaStore albumId: se i brani hanno titoli album diversi
- *    o artisti diversi, vengono separati in album distinti anche in presenza di collisioni MediaStore.
- * 2. I brani senza tag album ("Sconosciuto" o generico) vengono separati per artista anziché essere
- *    ammassati in un unico album indefinito.
- * 3. Supporta compilation "Various Artists" quando indicato nei metadati.
- * 4. Assegna ID univoci e stabili a ciascun album.
  */
 fun groupTracksIntoAlbums(tracks: List<AudioTrack>): List<Album> {
     val usedAlbumIds = mutableSetOf<Long>()

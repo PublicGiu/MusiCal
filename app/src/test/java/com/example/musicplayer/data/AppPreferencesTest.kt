@@ -44,12 +44,24 @@ class AppPreferencesTest {
         `when`(mockPrefs.getBoolean(eq("autoplay_enabled"), eq(true))).thenReturn(true)
         `when`(mockPrefs.getBoolean(eq("dynamic_color"), eq(false))).thenReturn(false)
         `when`(mockPrefs.getString(eq("theme_mode"), eq(ThemeMode.SYSTEM.name))).thenReturn(ThemeMode.SYSTEM.name)
+        `when`(mockPrefs.getString(eq("audio_source_mode"), eq(AudioSourceMode.INTELLIGENT.name))).thenReturn(AudioSourceMode.INTELLIGENT.name)
+        `when`(mockPrefs.getStringSet(eq("custom_folders"), eq(emptySet()))).thenReturn(emptySet())
 
         val appPrefs = AppPreferences(mockContext)
 
         assertTrue("L'autoplay deve essere abilitato di default", appPrefs.isAutoplayEnabled())
         assertFalse("Il colore dinamico deve essere disabilitato di default per preservare l'identità cromatica dell'icona", appPrefs.isDynamicColorEnabled())
         assertEquals("Il tema deve essere SYSTEM di default", ThemeMode.SYSTEM, appPrefs.getThemeMode())
+        assertEquals("La modalità sorgente deve essere INTELLIGENT di default", AudioSourceMode.INTELLIGENT, appPrefs.getAudioSourceMode())
+        assertTrue("Le cartelle personalizzate devono essere vuote di default", appPrefs.getCustomFolders().isEmpty())
+    }
+
+    @Test
+    fun testAudioSourceModeFallbackOnInvalidString() {
+        `when`(mockPrefs.getString(eq("audio_source_mode"), anyString())).thenReturn("INVALID_UNKNOWN_MODE")
+
+        val appPrefs = AppPreferences(mockContext)
+        assertEquals("Un valore sconosciuto deve ricadere su INTELLIGENT di default", AudioSourceMode.INTELLIGENT, appPrefs.getAudioSourceMode())
     }
 
     @Test
@@ -62,6 +74,7 @@ class AppPreferencesTest {
 
     @Test
     fun testSettersInvokeEditor() {
+        `when`(mockEditor.putStringSet(anyString(), Mockito.anySet())).thenReturn(mockEditor)
         val appPrefs = AppPreferences(mockContext)
 
         appPrefs.setAutoplayEnabled(false)
@@ -72,5 +85,11 @@ class AppPreferencesTest {
 
         appPrefs.setDynamicColorEnabled(false)
         Mockito.verify(mockEditor).putBoolean("dynamic_color", false)
+
+        appPrefs.setAudioSourceMode(AudioSourceMode.MUSIC_ONLY)
+        Mockito.verify(mockEditor).putString("audio_source_mode", AudioSourceMode.MUSIC_ONLY.name)
+
+        appPrefs.setCustomFolders(setOf("Download/"))
+        Mockito.verify(mockEditor).putStringSet("custom_folders", setOf("Download/"))
     }
 }

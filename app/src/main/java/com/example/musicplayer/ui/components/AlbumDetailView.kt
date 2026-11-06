@@ -72,6 +72,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Constraints
 import androidx.compose.ui.unit.dp
@@ -116,6 +117,11 @@ fun AlbumDetailView(
                 .thenBy { it.trackNumber }
                 .thenBy { it.title }
         )
+    }
+
+    val totalDurationMinutes = remember(albumSongs) {
+        val totalMs = albumSongs.sumOf { it.duration }
+        (totalMs / 60000).coerceAtLeast(0)
     }
 
     val listState = rememberLazyListState()
@@ -228,7 +234,7 @@ fun AlbumDetailView(
 
             Spacer(modifier = Modifier.width(12.dp))
 
-            // 3. Dettagli dell'album incastrati al centro (Titolo, Artista, Conteggio brani con basicMarquee)
+            // 3. Dettagli dell'album incastrati al centro (Titolo e Artista con basicMarquee)
             Column(
                 modifier = Modifier
                     .weight(1f)
@@ -254,12 +260,6 @@ fun AlbumDetailView(
                     modifier = Modifier
                         .fillMaxWidth()
                         .basicMarquee()
-                )
-                Text(
-                    text = "${album.trackCount} ${if (album.trackCount == 1) "brano" else "brani"}",
-                    style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.primary,
-                    maxLines = 1
                 )
             }
 
@@ -447,6 +447,25 @@ fun AlbumDetailView(
                         onAddToFavoritesClick = onAddToFavoritesClick?.let { cb -> { cb(track) } },
                         isFavorite = track.id in favoriteTrackIds,
                         onAutoTagClick = onAutoTagTrackClick
+                    )
+                }
+            }
+
+            // Riepilogo in fondo all'album: numero di brani e durata totale in minuti (es. "14 brani • 40 min")
+            item(key = "album_footer_summary") {
+                val trackCountText = "${albumSongs.size} ${if (albumSongs.size == 1) "brano" else "brani"}"
+                val durationText = "$totalDurationMinutes min"
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(start = 24.dp, end = 24.dp, top = 8.dp, bottom = 16.dp),
+                    contentAlignment = Alignment.CenterStart
+                ) {
+                    Text(
+                        text = "$trackCountText • $durationText",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        textAlign = TextAlign.Start
                     )
                 }
             }

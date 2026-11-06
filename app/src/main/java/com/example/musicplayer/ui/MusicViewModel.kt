@@ -21,9 +21,12 @@ import com.example.musicplayer.data.SortOption
 import com.example.musicplayer.data.ThemeMode
 import com.example.musicplayer.data.StatsRepository
 import com.example.musicplayer.data.TrackStats
+import com.example.musicplayer.data.LibraryCacheRepository
 import com.example.musicplayer.data.groupTracksIntoAlbums
 import com.example.musicplayer.data.isMixedOrGeneric
 import com.example.musicplayer.data.loadAudioFiles
+import com.example.musicplayer.data.sortAlbums
+import com.example.musicplayer.data.sortPlaylists
 import com.example.musicplayer.data.sortTracks
 import com.example.musicplayer.data.lastfm.LastFmClient
 import com.example.musicplayer.data.lastfm.LastFmConfig
@@ -54,6 +57,8 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
@@ -63,6 +68,7 @@ class MusicViewModel(application: Application) : AndroidViewModel(application) {
 
     private val playlistRepository = PlaylistRepository(application)
     private val statsRepository = StatsRepository(application)
+    private val libraryCacheRepository = LibraryCacheRepository(application)
     private val enricherRepository = MetadataEnricherRepository()
     private val storageWriteManager = StorageWriteManager(application)
     private val lyricsRepository = LyricsRepository(application)
@@ -136,6 +142,52 @@ class MusicViewModel(application: Application) : AndroidViewModel(application) {
     // --- 3. Ricerca globale ---
     private val _searchQuery = MutableStateFlow("")
     val searchQuery: StateFlow<String> = _searchQuery.asStateFlow()
+
+    // --- Flussi Reattivi Pre-Ordinati e Filtrati (Calcolati fuori dal Main Thread su Dispatchers.Default) ---
+    val sortedTracks: StateFlow<List<AudioTrack>> = combine(
+        _tracks, _sortOption, _stats, _isAscending
+    ) { tracks, sortOption, stats, isAscending ->
+        tracks.sortTracks(sortOption, stats, isAscending)
+    }.flowOn(Dispatchers.Default)
+     .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+
+    val sortedAlbums: StateFlow<List<Album>> = combine(
+        _albums, _sortOption, _stats, _isAscending
+    ) { albums, sortOption, stats, isAscending ->
+        albums.sortAlbums(sortOption, stats, isAscending)
+    }.flowOn(Dispatchers.Default)
+     .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+
+    val sortedPlaylists: StateFlow<List<Playlist>> = combine(
+        _playlists, _sortOption, _stats, _isAscending
+    ) { playlists, sortOption, stats, isAscending ->
+        playlists.sortPlaylists(sortOption, stats, isAscending)
+    }.flowOn(Dispatchers.Default)
+     .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+
+    val matchingTracks: StateFlow<List<AudioTrack>> = combine(
+        _tracks, _searchQuery
+    ) { tracks, query ->
+        if (query.isBlank()) emptyList()
+        else tracks.filter { it.title.contains(query, ignoreCase = true) || it.artist.contains(query, ignoreCase = true) }
+    }.flowOn(Dispatchers.Default)
+     .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+
+    val matchingAlbums: StateFlow<List<Album>> = combine(
+        _albums, _searchQuery
+    ) { albums, query ->
+        if (query.isBlank()) emptyList()
+        else albums.filter { it.title.contains(query, ignoreCase = true) || it.artist.contains(query, ignoreCase = true) }
+    }.flowOn(Dispatchers.Default)
+     .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+
+    val matchingPlaylists: StateFlow<List<Playlist>> = combine(
+        _playlists, _searchQuery
+    ) { playlists, query ->
+        if (query.isBlank()) emptyList()
+        else playlists.filter { it.name.contains(query, ignoreCase = true) }
+    }.flowOn(Dispatchers.Default)
+     .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
     // --- 4. Last.fm Scrobbling & Offline Cache ---
     private val lastFmSessionManager = LastFmSessionManager(application)
@@ -327,10 +379,31 @@ class MusicViewModel(application: Application) : AndroidViewModel(application) {
 
     init {
         initMediaController()
+        loadInitialCachedLibrary()
         loadPlaylists()
         loadStats()
         initOfflineScrobbleSync()
         initLyricsObserver()
+    }
+
+    private fun loadInitialCachedLibrary() {
+        viewModelScope.launch(Dispatchers.IO) {
+            val currentMode = _audioSourceMode.value
+            val currentCustomFolders = _customFolders.value
+            val cached = libraryCacheRepository.loadCache(currentMode, currentCustomFolders)
+            if (cached != null) {
+                val (cachedTracks, cachedAlbums) = cached
+                if (cachedTracks.isNotEmpty()) {
+                    withContext(Dispatchers.Main) {
+                        if (_tracks.value.isEmpty()) {
+                            _tracks.value = cachedTracks
+                            _albums.value = cachedAlbums
+                            _isLoading.value = false
+                        }
+                    }
+                }
+            }
+        }
     }
 
     private fun initLyricsObserver() {
@@ -347,6 +420,7 @@ class MusicViewModel(application: Application) : AndroidViewModel(application) {
             Log.d("LastFm", "Sincronizzati $syncedCount scrobble dalla cache offline")
         }
         viewModelScope.launch(Dispatchers.IO) {
+            delay(3000L) // Differito di 3 secondi dall'avvio per non intasare il cold start
             syncManager.syncPendingScrobbles()
         }
     }
@@ -389,7 +463,10 @@ class MusicViewModel(application: Application) : AndroidViewModel(application) {
 
     fun loadTracks() {
         viewModelScope.launch(Dispatchers.Main) {
-            _isLoading.value = true
+            // Se la libreria non è ancora popolata (es. primo avvio o cambio sorgente), attiva l'indicatore di caricamento
+            if (_tracks.value.isEmpty()) {
+                _isLoading.value = true
+            }
             val currentMode = _audioSourceMode.value
             val currentCustomFolders = _customFolders.value
             val (loadedTracks, groupedAlbums) = withContext(Dispatchers.IO) {
@@ -397,8 +474,22 @@ class MusicViewModel(application: Application) : AndroidViewModel(application) {
                 val albums = groupTracksIntoAlbums(tracks)
                 tracks to albums
             }
-            _tracks.value = loadedTracks
-            _albums.value = groupedAlbums
+
+            // Confronto leggero: evita riemissione e ricomposizioni se la scansione su storage restituisce gli stessi brani
+            val currentTracks = _tracks.value
+            val isUnchanged = currentTracks.size == loadedTracks.size &&
+                    currentTracks.isNotEmpty() &&
+                    currentTracks.firstOrNull()?.id == loadedTracks.firstOrNull()?.id &&
+                    currentTracks.lastOrNull()?.id == loadedTracks.lastOrNull()?.id &&
+                    currentTracks.firstOrNull()?.dateAdded == loadedTracks.firstOrNull()?.dateAdded
+
+            if (!isUnchanged || currentTracks.isEmpty()) {
+                _tracks.value = loadedTracks
+                _albums.value = groupedAlbums
+                withContext(Dispatchers.IO) {
+                    libraryCacheRepository.saveCache(currentMode, currentCustomFolders, loadedTracks, groupedAlbums)
+                }
+            }
 
             mediaController?.currentMediaItem?.let { item ->
                 val trackId = item.mediaId.toLongOrNull()
@@ -1278,6 +1369,9 @@ class MusicViewModel(application: Application) : AndroidViewModel(application) {
 
     fun checkForUpdates(isManual: Boolean = false) {
         viewModelScope.launch {
+            if (!isManual) {
+                delay(3000L) // Differito di 3 secondi all'avvio per non intasare le risorse durante il cold start
+            }
             _isCheckingUpdate.value = true
             _updateCheckError.value = null
             val currentVersion = com.example.musicplayer.BuildConfig.VERSION_NAME

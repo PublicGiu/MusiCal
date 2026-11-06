@@ -1,6 +1,6 @@
 # 🎵 MusiCal — Lettore Musicale Nativo per Android 16
 
-![Versione](https://img.shields.io/badge/versione-0.1.5-8B5CF6)
+![Versione](https://img.shields.io/badge/versione-0.1.6-8B5CF6)
 ![Android](https://img.shields.io/badge/Android-16%20(API%2036)-7C3AED)
 ![Kotlin](https://img.shields.io/badge/Kotlin-2.1.0-A855F7)
 ![Jetpack Compose](https://img.shields.io/badge/UI-Jetpack%20Compose%20%2B%20Material%203-C084FC)
@@ -8,7 +8,27 @@
 
 **MusiCal** è un lettore musicale locale moderno, veloce e privo di pubblicità o tracciamento, progettato nativamente ed esclusivamente per **Android 16 (API 36)**.
 
-Realizzato interamente in **Kotlin** e **Jetpack Compose** con un'identità visiva **Obsidian & Electric Violet**, combina un motore audio solido basato su **AndroidX Media3 (ExoPlayer)**, animazioni fluide a zero-jank (60/120fps), gestione intelligente della coda di riproduzione, playlist personalizzabili con copertine proprie e integrazione nativa con **Last.fm** (inclusa sincronizzazione automatica offline).
+Realizzato interamente in **Kotlin** e **Jetpack Compose** con un'identità visiva **Obsidian & Electric Violet**, combina un motore audio solido basato su **AndroidX Media3 (ExoPlayer)**, animazioni fluide a zero-jank (60/120fps), gestione intelligente della coda di riproduzione, playlist personalizzabili con copertine proprie, Smart Auto-Tagger con testi sincronizzati (Karaoke) e integrazione nativa con **Last.fm** (inclusa sincronizzazione automatica offline).
+
+---
+
+## 🆕 Novità della Versione 0.1.6
+
+- ⚡ **Avvio Istantaneo (Instant-On) & Risoluzione Lag Cold Start**:
+  - Implementata cache persistente ad alta velocità `library_cache.json` (`AtomicFile` con fallback atomico): la libreria e le viste sono caricate e interattive in **meno di 15ms**, azzerando qualsiasi attesa o blocco iniziale.
+  - Offload completo degli algoritmi di ordinamento e filtraggio su background thread (`Dispatchers.Default`), lasciando il thread UI a 120fps costanti.
+  - Scansione fisica di MediaStore asincrona con fast-path per la directory `Music/` e ottimizzazione con in-memory cache per l'estrazione degli artisti principali.
+- ⬆️ **Pulsante Fluttuante "Torna in alto"**:
+  - Pulsante circolare che compare automaticamente scorrendo nelle schede **Brani**, **Album** e **Playlist**.
+  - Posizionato in alto al centro direttamente sotto l'icona centrale dell'album nella barra di navigazione, con elegante discesa animata dall'alto.
+  - Risalita ultra-fluida con pre-salto intelligente e riapertura simultanea sincronizzata dell'header.
+  - Bordo circolare e freccia rifiniti nella tonalità viola primaria ufficiale dell'applicazione (`MaterialTheme.colorScheme.primary`).
+- 💿 **Riepilogo Dettaglio Album a Fine Pagina**:
+  - Rimossa la dicitura del conteggio brani dall'header superiore dell'album, lasciando massima visibilità a titolo e artista con scorrimento marquee.
+  - Aggiunto in fondo alla lista dei brani il riepilogo pulito ed elegante: **numero di brani e minutaggio complessivo** (es. `14 brani • 40 min`, calcolato sempre in minuti anche sopra l'ora), allineato a sinistra con margini di sicurezza calibrati per non sovrapporsi ai tasti di sistema.
+- 🎨 **Miglioramenti UI Impostazioni & Top Bar**:
+  - Icona di aggiornamento libreria a fianco di "MusiCal" uniformata al colore grigio delle impostazioni.
+  - Rimossa l'opzione ridondante Material You e ottimizzata la voce "Scansione intelligente (Consigliata)" con testo su una sola riga e stile armonizzato.
 
 ---
 

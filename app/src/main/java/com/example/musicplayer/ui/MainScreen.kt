@@ -20,9 +20,12 @@ import androidx.compose.animation.core.tween
 import androidx.compose.animation.expandHorizontally
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
+import androidx.compose.animation.scaleIn
+import androidx.compose.animation.scaleOut
 import androidx.compose.animation.shrinkHorizontally
 import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.slideOutVertically
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.pager.HorizontalPager
 import androidx.compose.foundation.pager.rememberPagerState
@@ -55,6 +58,7 @@ import androidx.compose.ui.unit.lerp
 import androidx.compose.ui.util.lerp
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Album
+import androidx.compose.material.icons.filled.ArrowUpward
 import androidx.compose.material.icons.filled.Clear
 import androidx.compose.material.icons.filled.MusicNote
 import androidx.compose.material.icons.filled.MusicOff
@@ -114,9 +118,6 @@ import com.example.musicplayer.data.Album
 import com.example.musicplayer.data.AudioTrack
 import com.example.musicplayer.data.Playlist
 import com.example.musicplayer.data.SortOption
-import com.example.musicplayer.data.sortAlbums
-import com.example.musicplayer.data.sortPlaylists
-import com.example.musicplayer.data.sortTracks
 import androidx.compose.foundation.background
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.filled.Radio
@@ -179,6 +180,14 @@ fun MainScreen(
 
     // Ricerca globale
     val searchQuery by viewModel.searchQuery.collectAsStateWithLifecycle()
+
+    // Risultati pre-ordinati e filtrati (calcolati in background su Dispatchers.Default)
+    val sortedTracks by viewModel.sortedTracks.collectAsStateWithLifecycle()
+    val sortedAlbums by viewModel.sortedAlbums.collectAsStateWithLifecycle()
+    val sortedPlaylists by viewModel.sortedPlaylists.collectAsStateWithLifecycle()
+    val matchingTracks by viewModel.matchingTracks.collectAsStateWithLifecycle()
+    val matchingAlbums by viewModel.matchingAlbums.collectAsStateWithLifecycle()
+    val matchingPlaylists by viewModel.matchingPlaylists.collectAsStateWithLifecycle()
 
     // Aggiornamenti GitHub
     val updateInfo by viewModel.updateInfo.collectAsStateWithLifecycle()
@@ -413,19 +422,6 @@ fun MainScreen(
         }
     }
 
-    // Risultati ordinati tramite funzioni di dominio dedicate
-    val sortedTracks = remember(tracks, sortOption, stats, isAscending) {
-        tracks.sortTracks(sortOption, stats, isAscending)
-    }
-
-    val sortedAlbums = remember(albums, sortOption, stats, isAscending) {
-        albums.sortAlbums(sortOption, stats, isAscending)
-    }
-
-    val sortedPlaylists = remember(playlists, sortOption, stats, isAscending) {
-        playlists.sortPlaylists(sortOption, stats, isAscending)
-    }
-
     // Stati di scorrimento delle liste con scroll automatico all'inizio al cambio ordinamento
     val tracksListState = rememberLazyListState()
     val albumsGridState = rememberLazyGridState()
@@ -445,6 +441,22 @@ fun MainScreen(
     val isPlaylistsAtTop by remember {
         derivedStateOf {
             playlistsListState.firstVisibleItemIndex == 0 && (!playlistsListState.canScrollBackward || playlistsListState.firstVisibleItemScrollOffset <= 8)
+        }
+    }
+
+    // Visibilità del pulsante "Torna in alto" (spunta quando si è scesi di qualche elemento nella vista principale corrente)
+    val showScrollToTop by remember {
+        derivedStateOf {
+            if (selectedAlbum != null || selectedPlaylist != null || searchQuery.isNotBlank()) {
+                false
+            } else {
+                when (pagerState.currentPage) {
+                    0 -> tracksListState.firstVisibleItemIndex >= 4
+                    1 -> albumsGridState.firstVisibleItemIndex >= 4
+                    2 -> playlistsListState.firstVisibleItemIndex >= 4
+                    else -> false
+                }
+            }
         }
     }
 
@@ -537,28 +549,6 @@ fun MainScreen(
         }
         isHeaderCompact = false
         isSearchExpandedInCompact = false
-    }
-
-    // Risultati ricerca globale
-    val matchingTracks = remember(tracks, searchQuery) {
-        if (searchQuery.isBlank()) emptyList()
-        else tracks.filter {
-            it.title.contains(searchQuery, ignoreCase = true) || it.artist.contains(searchQuery, ignoreCase = true)
-        }
-    }
-
-    val matchingAlbums = remember(albums, searchQuery) {
-        if (searchQuery.isBlank()) emptyList()
-        else albums.filter {
-            it.title.contains(searchQuery, ignoreCase = true) || it.artist.contains(searchQuery, ignoreCase = true)
-        }
-    }
-
-    val matchingPlaylists = remember(playlists, searchQuery) {
-        if (searchQuery.isBlank()) emptyList()
-        else playlists.filter {
-            it.name.contains(searchQuery, ignoreCase = true)
-        }
     }
 
     // Permessi Android 16 (API 36)
@@ -1203,6 +1193,66 @@ fun MainScreen(
                                 )
                             }
                         }
+                    }
+                }
+            }
+
+            // Pulsante circolare "Torna in alto" (in alto al centro sotto l'icona Album, con risalita fluida e viola primario)
+            AnimatedVisibility(
+                visible = showScrollToTop,
+                enter = fadeIn(animationSpec = tween(durationMillis = 220)) +
+                        scaleIn(animationSpec = tween(durationMillis = 220), initialScale = 0.7f) +
+                        slideInVertically(animationSpec = tween(durationMillis = 220), initialOffsetY = { -it }),
+                exit = fadeOut(animationSpec = tween(durationMillis = 180)) +
+                       scaleOut(animationSpec = tween(durationMillis = 180), targetScale = 0.7f) +
+                       slideOutVertically(animationSpec = tween(durationMillis = 180), targetOffsetY = { -it }),
+                modifier = Modifier
+                    .align(Alignment.TopCenter)
+                    .padding(top = 10.dp)
+            ) {
+                Surface(
+                    onClick = {
+                        isHeaderCompact = false
+                        coroutineScope.launch {
+                            when (pagerState.currentPage) {
+                                0 -> {
+                                    if (tracksListState.firstVisibleItemIndex > 10) {
+                                        tracksListState.scrollToItem(10)
+                                    }
+                                    tracksListState.animateScrollToItem(0)
+                                }
+                                1 -> {
+                                    if (albumsGridState.firstVisibleItemIndex > 10) {
+                                        albumsGridState.scrollToItem(10)
+                                    }
+                                    albumsGridState.animateScrollToItem(0)
+                                }
+                                2 -> {
+                                    if (playlistsListState.firstVisibleItemIndex > 10) {
+                                        playlistsListState.scrollToItem(10)
+                                    }
+                                    playlistsListState.animateScrollToItem(0)
+                                }
+                            }
+                        }
+                    },
+                    shape = CircleShape,
+                    color = MaterialTheme.colorScheme.surfaceContainerHighest.copy(alpha = 0.94f),
+                    border = BorderStroke(2.dp, MaterialTheme.colorScheme.primary),
+                    shadowElevation = 8.dp,
+                    tonalElevation = 4.dp,
+                    modifier = Modifier.size(48.dp)
+                ) {
+                    Box(
+                        contentAlignment = Alignment.Center,
+                        modifier = Modifier.fillMaxSize()
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.ArrowUpward,
+                            contentDescription = "Torna in alto",
+                            tint = MaterialTheme.colorScheme.primary,
+                            modifier = Modifier.size(24.dp)
+                        )
                     }
                 }
             }

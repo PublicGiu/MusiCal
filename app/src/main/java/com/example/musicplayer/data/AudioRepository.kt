@@ -53,29 +53,35 @@ fun isIntelligentMusicTrack(
     val lowerPath = relativePath.lowercase(java.util.Locale.ROOT)
     val lowerName = displayName.lowercase(java.util.Locale.ROOT)
 
-    // 1. Esclusione percorsi indesiderati
-    if (EXCLUDED_PATH_KEYWORDS.any { lowerPath.contains(it) }) {
-        return false
-    }
-
-    // 2. Esclusione file o cartelle nascoste
+    // 1. Esclusione file o cartelle nascoste
     if (lowerName.startsWith(".") || lowerPath.contains("/.")) {
         return false
     }
 
-    // 3. Esclusione formati esclusivi di memo/registrazioni
+    // 2. Esclusione formati esclusivi di memo/registrazioni
     if (lowerName.endsWith(".amr") || lowerName.endsWith(".3gp")) {
+        return false
+    }
+
+    val hasAuthenticMetadata = hasAuthenticMusicMetadata(artist, album)
+
+    // Fast-path: se il file è già archiviato nella cartella canonica "music/",
+    // è musica autentica e non occorre eseguire i 17 controlli blacklist su stringhe di percorso.
+    if (lowerPath.startsWith("music/")) {
+        if (durationMs in 1 until 15_000L && !hasAuthenticMetadata) return false
+        if (durationMs > 1_200_000L && !hasAuthenticMetadata) return false
+        return true
+    }
+
+    // 3. Esclusione percorsi indesiderati
+    if (EXCLUDED_PATH_KEYWORDS.any { lowerPath.contains(it) }) {
         return false
     }
 
     // 4. Esclusione prefissi tipici di note vocali e registrazioni
     if (VOICE_NOTE_PREFIXES.any { lowerName.startsWith(it) }) {
-        if (!lowerPath.startsWith("music/")) {
-            return false
-        }
+        return false
     }
-
-    val hasAuthenticMetadata = hasAuthenticMusicMetadata(artist, album)
 
     // 5. Soglia minima di durata: 15 secondi (15.000 ms)
     if (durationMs in 1 until 15_000L) {
@@ -332,13 +338,18 @@ fun Album.isMixedOrGeneric(): Boolean {
  */
 fun groupTracksIntoAlbums(tracks: List<AudioTrack>): List<Album> {
     val usedAlbumIds = mutableSetOf<Long>()
+    val mainArtistCache = HashMap<String, String>()
+    fun getMainArtist(artist: String?): String {
+        if (artist.isNullOrBlank()) return ""
+        return mainArtistCache.getOrPut(artist) { extractMainArtist(artist) }
+    }
 
     return tracks.groupBy { track ->
         val rawAlbum = track.album.trim()
         val isGeneric = isGenericAlbum(rawAlbum)
 
         if (isGeneric) {
-            val mainArtist = extractMainArtist(track.artist)
+            val mainArtist = getMainArtist(track.artist)
             if (mainArtist.isNotBlank() && mainArtist.lowercase(java.util.Locale.ROOT) !in GENERIC_ALBUM_NAMES) {
                 "generic_artist:${mainArtist.lowercase(java.util.Locale.ROOT)}"
             } else {
@@ -346,7 +357,7 @@ fun groupTracksIntoAlbums(tracks: List<AudioTrack>): List<Album> {
             }
         } else {
             val cleanAlbum = rawAlbum.lowercase(java.util.Locale.ROOT)
-            val rawAlbumArtist = track.albumArtist.trim().ifBlank { extractMainArtist(track.artist) }
+            val rawAlbumArtist = track.albumArtist.trim().ifBlank { getMainArtist(track.artist) }
             val isVa = isVariousArtists(rawAlbumArtist) || isVariousArtists(track.artist)
             if (isVa) {
                 "album:$cleanAlbum:va"
@@ -359,7 +370,7 @@ fun groupTracksIntoAlbums(tracks: List<AudioTrack>): List<Album> {
         val isGeneric = isGenericAlbum(first.album)
 
         val albumTitle = if (isGeneric) {
-            val mainArtist = extractMainArtist(first.artist)
+            val mainArtist = getMainArtist(first.artist)
             if (mainArtist.isNotBlank() && mainArtist.lowercase(java.util.Locale.ROOT) !in GENERIC_ALBUM_NAMES) {
                 "$mainArtist (Brani singoli)"
             } else {
@@ -370,9 +381,9 @@ fun groupTracksIntoAlbums(tracks: List<AudioTrack>): List<Album> {
         }
 
         val albumArtist = if (isGeneric) {
-            extractMainArtist(first.artist).ifBlank { first.artist }
+            getMainArtist(first.artist).ifBlank { first.artist }
         } else {
-            val rawAlbumArtist = first.albumArtist.trim().ifBlank { extractMainArtist(first.artist) }
+            val rawAlbumArtist = first.albumArtist.trim().ifBlank { getMainArtist(first.artist) }
             if (isVariousArtists(rawAlbumArtist)) "Artisti Vari" else rawAlbumArtist.ifBlank { first.artist }
         }
 

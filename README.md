@@ -12,26 +12,6 @@ Realizzato interamente in **Kotlin** e **Jetpack Compose** con un'identità visi
 
 ---
 
-## 🆕 Novità della Versione 0.1.6
-
-- ⚡ **Avvio Istantaneo (Instant-On) & Risoluzione Lag Cold Start**:
-  - Implementata cache persistente ad alta velocità `library_cache.json` (`AtomicFile` con fallback atomico): la libreria e le viste sono caricate e interattive in **meno di 15ms**, azzerando qualsiasi attesa o blocco iniziale.
-  - Offload completo degli algoritmi di ordinamento e filtraggio su background thread (`Dispatchers.Default`), lasciando il thread UI a 120fps costanti.
-  - Scansione fisica di MediaStore asincrona con fast-path per la directory `Music/` e ottimizzazione con in-memory cache per l'estrazione degli artisti principali.
-- ⬆️ **Pulsante Fluttuante "Torna in alto"**:
-  - Pulsante circolare che compare automaticamente scorrendo nelle schede **Brani**, **Album** e **Playlist**.
-  - Posizionato in alto al centro direttamente sotto l'icona centrale dell'album nella barra di navigazione, con elegante discesa animata dall'alto.
-  - Risalita ultra-fluida con pre-salto intelligente e riapertura simultanea sincronizzata dell'header.
-  - Bordo circolare e freccia rifiniti nella tonalità viola primaria ufficiale dell'applicazione (`MaterialTheme.colorScheme.primary`).
-- 💿 **Riepilogo Dettaglio Album a Fine Pagina**:
-  - Rimossa la dicitura del conteggio brani dall'header superiore dell'album, lasciando massima visibilità a titolo e artista con scorrimento marquee.
-  - Aggiunto in fondo alla lista dei brani il riepilogo pulito ed elegante: **numero di brani e minutaggio complessivo** (es. `14 brani • 40 min`, calcolato sempre in minuti anche sopra l'ora), allineato a sinistra con margini di sicurezza calibrati per non sovrapporsi ai tasti di sistema.
-- 🎨 **Miglioramenti UI Impostazioni & Top Bar**:
-  - Icona di aggiornamento libreria a fianco di "MusiCal" uniformata al colore grigio delle impostazioni.
-  - Rimossa l'opzione ridondante Material You e ottimizzata la voce "Scansione intelligente (Consigliata)" con testo su una sola riga e stile armonizzato.
-
----
-
 ## ✨ Cosa fa l'App — Funzionalità Principali
 
 ### 🎧 1. Esperienza di Ascolto e Player Doppio Livello

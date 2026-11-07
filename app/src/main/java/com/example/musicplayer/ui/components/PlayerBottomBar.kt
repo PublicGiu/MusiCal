@@ -63,6 +63,7 @@ import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.lerp
+import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.layout.onSizeChanged
@@ -517,6 +518,12 @@ private fun TopEdgeProgressBar(
     val thumbRadius = lerp(4.dp, 8.5.dp, interactionFraction)
     val haloRadius = lerp(8.dp, 18.dp, interactionFraction)
 
+    val isDark = MaterialTheme.colorScheme.surface.luminance() < 0.5f
+    val inactiveTrackColor = if (isDark) Color.White.copy(alpha = 0.22f) else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.14f)
+    val activeTrackColor = if (isDark) Color.White else MaterialTheme.colorScheme.primary
+    val thumbColor = if (isDark) Color.White else MaterialTheme.colorScheme.primary
+    val thumbStrokeBase = if (isDark) Color.White.copy(alpha = 0.7f) else MaterialTheme.colorScheme.onPrimary.copy(alpha = 0.7f)
+
     val trackModifier = if (enabled) {
         modifier
             .fillMaxWidth()
@@ -564,26 +571,26 @@ private fun TopEdgeProgressBar(
             val h = trackHeight.toPx()
             val radius = CornerRadius(h / 2f, h / 2f)
 
-            // 1. Traccia inattiva di sfondo (bianco semitrasparente con estremità arrotondate)
+            // 1. Traccia inattiva di sfondo (con estremità arrotondate)
             drawRoundRect(
-                color = Color.White.copy(alpha = 0.22f),
+                color = inactiveTrackColor,
                 topLeft = Offset(0f, 0f),
                 size = Size(width, h),
                 cornerRadius = radius
             )
 
-            // 2. Traccia attiva (bianco puro con estremità arrotondate)
+            // 2. Traccia attiva (con estremità arrotondate)
             val activeWidth = width * progressFraction
             if (activeWidth > 0f) {
                 drawRoundRect(
-                    color = Color.White,
+                    color = activeTrackColor,
                     topLeft = Offset(0f, 0f),
                     size = Size(activeWidth, h),
                     cornerRadius = radius
                 )
             }
 
-            // 3. Pallino (thumb) bianco con alone luminescente viola neon (solo se showThumb è true)
+            // 3. Pallino (thumb) con alone luminescente viola neon (solo se showThumb è true)
             if (showThumb) {
                 val thumbCenter = Offset(activeWidth.coerceIn(0f, width), h / 2f)
 
@@ -597,14 +604,14 @@ private fun TopEdgeProgressBar(
 
                 val r = thumbRadius.toPx()
                 drawCircle(
-                    color = Color.White,
+                    color = thumbColor,
                     radius = r,
                     center = thumbCenter
                 )
 
                 val strokeW = lerp(1.dp.toPx(), 1.5.dp.toPx(), interactionFraction)
                 drawCircle(
-                    color = lerp(Color.White.copy(alpha = 0.7f), LocalMusicVioletNeon, interactionFraction),
+                    color = lerp(thumbStrokeBase, LocalMusicVioletNeon, interactionFraction),
                     radius = (r - strokeW * 0.5f).coerceAtLeast(0.5f),
                     center = thumbCenter,
                     style = Stroke(width = strokeW)
@@ -653,20 +660,25 @@ private fun FloatingTimeBadge(
             (rawX - badgeWidthPx / 2f).coerceIn(minX, maxX).toDp()
         }
 
+        val isDark = MaterialTheme.colorScheme.surface.luminance() < 0.5f
+        val badgeBg = if (isDark) Color(0xFF221E32) else MaterialTheme.colorScheme.surfaceContainerHighest
+        val badgeBorder = if (isDark) LocalMusicVioletNeon.copy(alpha = 0.85f) else MaterialTheme.colorScheme.primary
+        val badgeText = if (isDark) Color.White else MaterialTheme.colorScheme.onSurface
+
         Box(
             modifier = Modifier
                 .offset(x = badgeXOffset, y = (-40).dp)
                 .width(badgeWidth)
                 .clip(RoundedCornerShape(8.dp))
-                .background(Color(0xFF221E32))
-                .border(1.dp, LocalMusicVioletNeon.copy(alpha = 0.85f), RoundedCornerShape(8.dp))
+                .background(badgeBg)
+                .border(1.dp, badgeBorder, RoundedCornerShape(8.dp))
                 .padding(vertical = 4.dp),
             contentAlignment = Alignment.Center
         ) {
             Text(
                 text = formattedTime,
                 style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold),
-                color = Color.White
+                color = badgeText
             )
         }
     }

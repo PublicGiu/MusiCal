@@ -2,6 +2,7 @@ package com.example.musicplayer.ui.components
 
 import android.content.Intent
 import android.net.Uri
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -41,6 +42,7 @@ import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilterChip
+import androidx.compose.material3.FilterChipDefaults
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -170,9 +172,22 @@ fun SettingsDialog(
                                         Text(
                                             text = mode.label,
                                             modifier = Modifier.fillMaxWidth(),
-                                            textAlign = TextAlign.Center
+                                            textAlign = TextAlign.Center,
+                                            fontWeight = if (selected) FontWeight.Bold else FontWeight.Medium
                                         )
                                     },
+                                    colors = FilterChipDefaults.filterChipColors(
+                                        selectedContainerColor = MaterialTheme.colorScheme.primaryContainer,
+                                        selectedLabelColor = MaterialTheme.colorScheme.onPrimaryContainer
+                                    ),
+                                    border = FilterChipDefaults.filterChipBorder(
+                                        enabled = true,
+                                        selected = selected,
+                                        borderColor = MaterialTheme.colorScheme.outline,
+                                        selectedBorderColor = MaterialTheme.colorScheme.primary,
+                                        borderWidth = 1.dp,
+                                        selectedBorderWidth = 1.5.dp
+                                    ),
                                     modifier = Modifier.fillMaxWidth()
                                 )
                             }
@@ -245,6 +260,10 @@ fun SettingsDialog(
                                 Surface(
                                     shape = RoundedCornerShape(12.dp),
                                     color = if (isSelected) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surface,
+                                    border = BorderStroke(
+                                        width = if (isSelected) 1.5.dp else 1.dp,
+                                        color = if (isSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outlineVariant
+                                    ),
                                     modifier = Modifier
                                         .fillMaxWidth()
                                         .clickable { viewModel.setAudioSourceMode(mode) }

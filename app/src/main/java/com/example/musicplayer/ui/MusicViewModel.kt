@@ -797,6 +797,30 @@ class MusicViewModel(application: Application) : AndroidViewModel(application) {
         moveAutoplayItem(fromIndex, 0)
     }
 
+    /**
+     * Promuove un brano dalla lista di Riproduzione Automatica alla fine della Coda Utente (prioritaria),
+     * riallineando la timeline di ExoPlayer e rifornendo la finestra di 15 brani.
+     */
+    fun moveAutoplayItemToUserQueue(index: Int) {
+        val controller = mediaController ?: return
+        val currentAutoplay = _autoplayQueue.value
+        if (index !in currentAutoplay.indices) return
+        val track = currentAutoplay[index]
+        val currentIndex = controller.currentMediaItemIndex
+        val userQueueSize = _userQueue.value.size
+        val fromExo = currentIndex + 1 + userQueueSize + index
+        val toExo = currentIndex + 1 + userQueueSize
+
+        if (fromExo != toExo && fromExo in 0 until controller.mediaItemCount && toExo in 0 until controller.mediaItemCount) {
+            controller.moveMediaItem(fromExo, toExo)
+        }
+
+        _userQueue.value = _userQueue.value + track
+        _autoplayQueue.value = currentAutoplay.filterIndexed { i, _ -> i != index }
+        replenishAutoplayIfNeeded()
+        updateQueueFromController()
+    }
+
     fun skipToAutoplayItem(index: Int) {
         val controller = mediaController ?: return
         val currentIndex = controller.currentMediaItemIndex

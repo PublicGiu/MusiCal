@@ -205,7 +205,67 @@ fun MainScreen(
         selectedTabIndex = pagerState.currentPage
     }
     var selectedAlbum by remember { mutableStateOf<Album?>(null) }
+    var activeAlbumForPager by remember { mutableStateOf<Album?>(null) }
+    if (selectedAlbum != null && activeAlbumForPager != selectedAlbum) {
+        activeAlbumForPager = selectedAlbum
+    }
+    var isAlbumProgrammaticScroll by remember { mutableStateOf(false) }
+    val albumPagerState = rememberPagerState(
+        initialPage = 0,
+        pageCount = { if (activeAlbumForPager != null) 2 else 1 }
+    )
     var selectedPlaylist by remember { mutableStateOf<Playlist?>(null) }
+    val isDetailOpen = selectedAlbum != null || selectedPlaylist != null
+    var isSearchExpandedInDetail by remember { mutableStateOf(false) }
+
+    // Sincronizzazione albumPagerState -> chiusura album SOLO al rilascio/assestamento su pagina 0 (settledPage)
+    LaunchedEffect(albumPagerState) {
+        var userDragged = false
+        snapshotFlow {
+            Triple(albumPagerState.isScrollInProgress, albumPagerState.settledPage, isAlbumProgrammaticScroll)
+        }.collect { (inProgress, settledPage, programmatic) ->
+            if (inProgress && !programmatic) {
+                userDragged = true
+            }
+            if (!inProgress && !programmatic && userDragged) {
+                userDragged = false
+                if (settledPage == 0 && selectedAlbum != null) {
+                    selectedAlbum = null
+                    activeAlbumForPager = null
+                    isSearchExpandedInDetail = false
+                    if (searchQuery.isNotBlank()) {
+                        viewModel.onSearchQueryChanged("")
+                    }
+                }
+            }
+        }
+    }
+
+    // Sincronizzazione inversa selectedAlbum -> albumPagerState (apertura album o pressione pulsante Indietro)
+    LaunchedEffect(selectedAlbum) {
+        if (selectedAlbum != null) {
+            isSearchExpandedInDetail = false
+            if (albumPagerState.currentPage != 1) {
+                isAlbumProgrammaticScroll = true
+                try {
+                    albumPagerState.animateScrollToPage(1)
+                } finally {
+                    isAlbumProgrammaticScroll = false
+                }
+            }
+        } else if (activeAlbumForPager != null) {
+            isSearchExpandedInDetail = false
+            if (albumPagerState.currentPage != 0) {
+                isAlbumProgrammaticScroll = true
+                try {
+                    albumPagerState.animateScrollToPage(0)
+                } finally {
+                    isAlbumProgrammaticScroll = false
+                }
+            }
+            activeAlbumForPager = null
+        }
+    }
 
     // Auto-Tagger & Testi Sincronizzati
     val enricherState by viewModel.enricherState.collectAsStateWithLifecycle()
@@ -225,8 +285,6 @@ fun MainScreen(
             )
         }
     }
-    val isDetailOpen = selectedAlbum != null || selectedPlaylist != null
-    var isSearchExpandedInDetail by remember { mutableStateOf(false) }
     var isHeaderCompact by remember { mutableStateOf(false) }
     var isSearchExpandedInCompact by remember { mutableStateOf(false) }
     val searchFocusRequester = remember { FocusRequester() }
@@ -531,13 +589,13 @@ fun MainScreen(
 
     val nestedScrollConnection = rememberCollapsingScrollConnection(
         onCollapse = {
-            if (!pagerState.isScrollInProgress && !isHeaderCompact) {
+            if (!isDetailOpen && !albumPagerState.isScrollInProgress && !pagerState.isScrollInProgress && !isHeaderCompact) {
                 isHeaderCompact = true
             }
         },
         onExpand = {
             // Riespande la parte superiore solo se siamo già in cima alla lista della scheda attiva (e non durante uno swipe orizzontale)
-            if (!pagerState.isScrollInProgress && isCurrentTabAtTop) {
+            if (!isDetailOpen && !albumPagerState.isScrollInProgress && !pagerState.isScrollInProgress && isCurrentTabAtTop) {
                 if (isHeaderCompact) {
                     isHeaderCompact = false
                 }
@@ -641,18 +699,18 @@ fun MainScreen(
         viewModel.checkForUpdates(isManual = false)
     }
 
+    // Unico stato di animazione guida per l'header: letto esclusivamente nelle fasi di Layout e Draw (0 ricomposizioni)
+    val headerCollapseProgressState = animateFloatAsState(
+        targetValue = if (isHeaderCompact) 1f else 0f,
+        animationSpec = tween(durationMillis = 180, easing = FastOutSlowInEasing),
+        label = "HeaderCollapseProgress"
+    )
+
     Scaffold(
         modifier = modifier.fillMaxSize(),
         containerColor = MaterialTheme.colorScheme.surface,
         snackbarHost = { SnackbarHost(snackbarHostState) },
         topBar = {
-            // Unico stato di animazione guida per l'header: letto esclusivamente nelle fasi di Layout e Draw (0 ricomposizioni)
-            val headerCollapseProgressState = animateFloatAsState(
-                targetValue = if (isHeaderCompact) 1f else 0f,
-                animationSpec = tween(durationMillis = 180, easing = FastOutSlowInEasing),
-                label = "HeaderCollapseProgress"
-            )
-
             Surface(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -781,7 +839,16 @@ fun MainScreen(
                         Box(
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .collapsibleVerticalSection { searchBarProgressState.value }
+                                .collapsibleVerticalSection {
+                                    val baseProgress = searchBarProgressState.value
+                                    if (activeAlbumForPager != null && !isSearchExpandedInDetail && searchQuery.isBlank() && selectedPlaylist == null) {
+                                        val albumOpenFraction = (albumPagerState.currentPage + albumPagerState.currentPageOffsetFraction).coerceIn(0f, 1f)
+                                        val tabsSearchFraction = if (!isHeaderCompact || isSearchExpandedInCompact) 1f else 0f
+                                        tabsSearchFraction * (1f - albumOpenFraction)
+                                    } else {
+                                        baseProgress
+                                    }
+                                }
                         ) {
                             BasicTextField(
                                 value = searchQuery,
@@ -880,85 +947,6 @@ fun MainScreen(
                             )
                         }
                     }
-
-                    // Navigazione a Schede e Ordinamento (visibili quando non c'è una ricerca attiva e non siamo nei dettagli)
-                    if (hasPermissions && searchQuery.isBlank() && selectedAlbum == null && selectedPlaylist == null) {
-                        val tabItems = remember {
-                            listOf(
-                                Triple(0, "Brani", Icons.Default.MusicNote),
-                                Triple(1, "Album", Icons.Default.Album),
-                                Triple(2, "Playlist", Icons.AutoMirrored.Filled.QueueMusic)
-                            )
-                        }
-
-                        PrimaryTabRow(
-                            selectedTabIndex = selectedTabIndex,
-                            containerColor = MaterialTheme.colorScheme.surface
-                        ) {
-                            tabItems.forEach { (index, title, icon) ->
-                                Tab(
-                                    selected = selectedTabIndex == index,
-                                    onClick = {
-                                        coroutineScope.launch {
-                                            pagerState.animateScrollToPage(index)
-                                        }
-                                    },
-                                    modifier = Modifier.layout { measurable, constraints ->
-                                        val h = lerp(64.dp, 48.dp, headerCollapseProgressState.value).roundToPx()
-                                        val fixedConstraints = constraints.copy(minHeight = h, maxHeight = h)
-                                        val placeable = measurable.measure(fixedConstraints)
-                                        layout(placeable.width, h) {
-                                            placeable.placeRelative(0, 0)
-                                        }
-                                    }
-                                ) {
-                                    Column(
-                                        modifier = Modifier.fillMaxSize(),
-                                        horizontalAlignment = Alignment.CenterHorizontally,
-                                        verticalArrangement = Arrangement.Center
-                                    ) {
-                                        Icon(
-                                            imageVector = icon,
-                                            contentDescription = title,
-                                            modifier = Modifier
-                                                .size(24.dp)
-                                                .graphicsLayer {
-                                                    val s = lerp(1f, 20f / 24f, headerCollapseProgressState.value)
-                                                    scaleX = s
-                                                    scaleY = s
-                                                }
-                                        )
-                                        Column(
-                                            modifier = Modifier.collapsibleVerticalSection {
-                                                1f - headerCollapseProgressState.value
-                                            },
-                                            horizontalAlignment = Alignment.CenterHorizontally
-                                        ) {
-                                            Spacer(modifier = Modifier.height(2.dp))
-                                            Text(
-                                                text = title,
-                                                style = MaterialTheme.typography.labelMedium
-                                            )
-                                        }
-                                    }
-                                }
-                            }
-                        }
-
-                        // Selettore criteri di ordinamento: collassato via fase Layout con 0 ricomposizioni
-                        Box(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .collapsibleVerticalSection { 1f - headerCollapseProgressState.value }
-                        ) {
-                            SortSelectorRow(
-                                selectedOption = sortOption,
-                                onOptionSelected = { viewModel.setSortOption(it) },
-                                isAscending = isAscending,
-                                onToggleSortDirection = { viewModel.toggleSortDirection() }
-                            )
-                        }
-                    }
                 }
             }
         },
@@ -1037,11 +1025,10 @@ fun MainScreen(
                     )
                 }
 
-                // Contenuto principale con transizioni Shared-Axis animate fluide
+                // Contenuto principale con transizioni Shared-Axis animate fluide e pager interattivo per il dettaglio Album
                 else -> {
                     val currentContentScreen = when {
                         searchQuery.isNotBlank() -> MainContentScreen.Search(searchQuery)
-                        selectedAlbum != null -> MainContentScreen.AlbumDetail(selectedAlbum!!)
                         selectedPlaylist != null -> MainContentScreen.PlaylistDetail(selectedPlaylist!!)
                         else -> MainContentScreen.Tabs
                     }
@@ -1076,7 +1063,6 @@ fun MainScreen(
                             when (screen) {
                                 is MainContentScreen.Tabs -> "screen_tabs"
                                 is MainContentScreen.Search -> "screen_search_${screen.query}"
-                                is MainContentScreen.AlbumDetail -> "screen_album_${screen.album.id}"
                                 is MainContentScreen.PlaylistDetail -> "screen_playlist_${screen.playlist.id}"
                             }
                         },
@@ -1118,44 +1104,6 @@ fun MainScreen(
                                     onChangePlaylistCoverClick = handleChangePlaylistCover,
                                     onRemovePlaylistCoverClick = handleRemovePlaylistCover,
                                     onAutoTagTrackClick = { viewModel.startTrackEnrichment(it) }
-                                )
-                            }
-
-                            is MainContentScreen.AlbumDetail -> {
-                                val currentAlbum = albums.find { it.id == targetScreen.album.id }
-                                    ?: targetScreen.album.tracks.firstOrNull()?.let { firstTrack ->
-                                        albums.find { alb -> alb.tracks.any { it.id == firstTrack.id } }
-                                    } ?: targetScreen.album
-
-                                AlbumDetailView(
-                                    album = currentAlbum,
-                                    currentTrack = currentTrack,
-                                    isPlaying = isPlaying,
-                                    onBackClick = {
-                                        selectedAlbum = null
-                                        isSearchExpandedInDetail = false
-                                        if (searchQuery.isNotBlank()) {
-                                            viewModel.onSearchQueryChanged("")
-                                        }
-                                    },
-                                    onPlayTrackIndex = { index ->
-                                        viewModel.playAlbum(currentAlbum, index)
-                                    },
-                                    onPlayAllClick = {
-                                        viewModel.playAlbum(currentAlbum, 0)
-                                    },
-                                    onPlayPauseClick = {
-                                        viewModel.togglePlayPause()
-                                    },
-                                    onAddToPlaylistClick = { trackToAddToPlaylist = it },
-                                    onAddToQueueClick = handleAddTrackToQueue,
-                                    onAddAlbumToQueueClick = handleAddAlbumToQueue,
-                                    onAddToFavoritesClick = handleAddToFavorites,
-                                    favoriteTrackIds = favoriteTrackIds,
-                                    onAutoTagAlbumClick = { viewModel.startAlbumEnrichment(it, separateAlbums = false) },
-                                    onAutoTagAlbumSeparationClick = { viewModel.startAlbumEnrichment(it, separateAlbums = true) },
-                                    onAutoTagTrackClick = { viewModel.startTrackEnrichment(it) },
-                                    onDeleteTracks = { tracks -> viewModel.deleteTracks(tracks) }
                                 )
                             }
 
@@ -1204,133 +1152,272 @@ fun MainScreen(
                             }
 
                             is MainContentScreen.Tabs -> {
+                                // Carosello interattivo a schermata intera tra Schede Principali (pagina 0) e Dettaglio Album (pagina 1):
+                                // identico alla logica del mini-player (settledPage), trascinando a destra dentro l'album
+                                // l'intera schermata dell'album segue il dito e rivela progressivamente la schermata precedente.
                                 HorizontalPager(
-                                    state = pagerState,
+                                    state = albumPagerState,
                                     modifier = Modifier.fillMaxSize(),
-                                    beyondViewportPageCount = 0,
-                                    userScrollEnabled = true
-                                ) { page ->
-                                    when (page) {
-                                        // 1. Scheda 'Brani'
+                                    beyondViewportPageCount = 1,
+                                    userScrollEnabled = albumPagerState.currentPage == 1
+                                ) { navPage ->
+                                    when (navPage) {
                                         0 -> {
-                                            LazyColumn(
-                                                state = tracksListState,
-                                                modifier = Modifier.fillMaxSize(),
-                                                contentPadding = PaddingValues(bottom = 12.dp)
-                                            ) {
-                                                items(
-                                                    items = sortedTracks,
-                                                    key = { it.id },
-                                                    contentType = { "track_list_item" }
-                                                ) { track ->
-                                                    TrackListItem(
-                                                        modifier = Modifier.animateItem(),
-                                                        track = track,
-                                                        isSelected = currentTrack?.id == track.id,
-                                                        isPlaying = isPlaying && currentTrack?.id == track.id,
-                                                        onClick = { viewModel.playTrack(track) },
-                                                        onAddToQueueClick = handleAddTrackToQueue,
-                                                        onAddToPlaylistClick = { trackToAddToPlaylist = it },
-                                                        onAddToFavoritesClick = { handleAddToFavorites(track) },
-                                                        isFavorite = track.id in favoriteTrackIds,
-                                                        playCount = stats[track.id]?.playCount ?: 0,
-                                                        onAutoTagClick = { viewModel.startTrackEnrichment(it) }
+                                            Column(modifier = Modifier.fillMaxSize()) {
+                                                val tabItems = remember {
+                                                    listOf(
+                                                        Triple(0, "Brani", Icons.Default.MusicNote),
+                                                        Triple(1, "Album", Icons.Default.Album),
+                                                        Triple(2, "Playlist", Icons.AutoMirrored.Filled.QueueMusic)
                                                     )
+                                                }
+
+                                                PrimaryTabRow(
+                                                    selectedTabIndex = selectedTabIndex,
+                                                    containerColor = MaterialTheme.colorScheme.surface
+                                                ) {
+                                                    tabItems.forEach { (index, title, icon) ->
+                                                        Tab(
+                                                            selected = selectedTabIndex == index,
+                                                            onClick = {
+                                                                coroutineScope.launch {
+                                                                    pagerState.animateScrollToPage(index)
+                                                                }
+                                                            },
+                                                            modifier = Modifier.layout { measurable, constraints ->
+                                                                val h = lerp(64.dp, 48.dp, headerCollapseProgressState.value).roundToPx()
+                                                                val fixedConstraints = constraints.copy(minHeight = h, maxHeight = h)
+                                                                val placeable = measurable.measure(fixedConstraints)
+                                                                layout(placeable.width, h) {
+                                                                    placeable.placeRelative(0, 0)
+                                                                }
+                                                            }
+                                                        ) {
+                                                            Column(
+                                                                modifier = Modifier.fillMaxSize(),
+                                                                horizontalAlignment = Alignment.CenterHorizontally,
+                                                                verticalArrangement = Arrangement.Center
+                                                            ) {
+                                                                Icon(
+                                                                    imageVector = icon,
+                                                                    contentDescription = title,
+                                                                    modifier = Modifier
+                                                                        .size(24.dp)
+                                                                        .graphicsLayer {
+                                                                            val s = lerp(1f, 20f / 24f, headerCollapseProgressState.value)
+                                                                            scaleX = s
+                                                                            scaleY = s
+                                                                        }
+                                                                )
+                                                                Column(
+                                                                    modifier = Modifier.collapsibleVerticalSection {
+                                                                        1f - headerCollapseProgressState.value
+                                                                    },
+                                                                    horizontalAlignment = Alignment.CenterHorizontally
+                                                                ) {
+                                                                    Spacer(modifier = Modifier.height(2.dp))
+                                                                    Text(
+                                                                        text = title,
+                                                                        style = MaterialTheme.typography.labelMedium
+                                                                    )
+                                                                }
+                                                            }
+                                                        }
+                                                    }
+                                                }
+
+                                                // Selettore criteri di ordinamento: collassato via fase Layout con 0 ricomposizioni
+                                                Box(
+                                                    modifier = Modifier
+                                                        .fillMaxWidth()
+                                                        .collapsibleVerticalSection { 1f - headerCollapseProgressState.value }
+                                                ) {
+                                                    SortSelectorRow(
+                                                        selectedOption = sortOption,
+                                                        onOptionSelected = { viewModel.setSortOption(it) },
+                                                        isAscending = isAscending,
+                                                        onToggleSortDirection = { viewModel.toggleSortDirection() }
+                                                    )
+                                                }
+
+                                                Box(
+                                                    modifier = Modifier
+                                                        .weight(1f)
+                                                        .fillMaxWidth()
+                                                ) {
+                                                    HorizontalPager(
+                                                        state = pagerState,
+                                                        modifier = Modifier.fillMaxSize(),
+                                                        beyondViewportPageCount = 0,
+                                                        userScrollEnabled = true
+                                                    ) { page ->
+                                                        when (page) {
+                                                            // 1. Scheda 'Brani'
+                                                            0 -> {
+                                                                LazyColumn(
+                                                                    state = tracksListState,
+                                                                    modifier = Modifier.fillMaxSize(),
+                                                                    contentPadding = PaddingValues(bottom = 12.dp)
+                                                                ) {
+                                                                    items(
+                                                                        items = sortedTracks,
+                                                                        key = { it.id },
+                                                                        contentType = { "track_list_item" }
+                                                                    ) { track ->
+                                                                        TrackListItem(
+                                                                            modifier = Modifier.animateItem(),
+                                                                            track = track,
+                                                                            isSelected = currentTrack?.id == track.id,
+                                                                            isPlaying = isPlaying && currentTrack?.id == track.id,
+                                                                            onClick = { viewModel.playTrack(track) },
+                                                                            onAddToQueueClick = handleAddTrackToQueue,
+                                                                            onAddToPlaylistClick = { trackToAddToPlaylist = it },
+                                                                            onAddToFavoritesClick = { handleAddToFavorites(track) },
+                                                                            isFavorite = track.id in favoriteTrackIds,
+                                                                            playCount = stats[track.id]?.playCount ?: 0,
+                                                                            onAutoTagClick = { viewModel.startTrackEnrichment(it) }
+                                                                        )
+                                                                    }
+                                                                }
+                                                            }
+
+                                                            // 2. Scheda 'Album'
+                                                            1 -> {
+                                                                AlbumsGridView(
+                                                                    albums = sortedAlbums,
+                                                                    onAlbumClick = { album -> selectedAlbum = album },
+                                                                    onAddToQueueClick = handleAddAlbumToQueue,
+                                                                    onAutoTagAlbumClick = { viewModel.startAlbumEnrichment(it, separateAlbums = false) },
+                                                                    onAutoTagAlbumSeparationClick = { viewModel.startAlbumEnrichment(it, separateAlbums = true) },
+                                                                    state = albumsGridState
+                                                                )
+                                                            }
+
+                                                            // 3. Scheda 'Playlist'
+                                                            2 -> {
+                                                                PlaylistsView(
+                                                                    playlists = sortedPlaylists,
+                                                                    onPlaylistClick = { playlist -> selectedPlaylist = playlist },
+                                                                    onCreatePlaylistClick = { showCreatePlaylistDialog = true },
+                                                                    onDeletePlaylistClick = { playlist ->
+                                                                        viewModel.deletePlaylist(playlist.id)
+                                                                    },
+                                                                    onAddToQueueClick = handleAddPlaylistToQueue,
+                                                                    onChangeCoverClick = handleChangePlaylistCover,
+                                                                    onRemoveCoverClick = handleRemovePlaylistCover,
+                                                                    state = playlistsListState
+                                                                )
+                                                            }
+                                                        }
+                                                    }
+
+                                                    // Pulsante circolare "Torna in alto" (in alto al centro sotto l'icona Album, con risalita fluida e viola primario)
+                                                    androidx.compose.animation.AnimatedVisibility(
+                                                        visible = showScrollToTop,
+                                                        enter = fadeIn(animationSpec = tween(durationMillis = 220)) +
+                                                                scaleIn(animationSpec = tween(durationMillis = 220), initialScale = 0.7f) +
+                                                                slideInVertically(animationSpec = tween(durationMillis = 220), initialOffsetY = { -it }),
+                                                        exit = fadeOut(animationSpec = tween(durationMillis = 180)) +
+                                                               scaleOut(animationSpec = tween(durationMillis = 180), targetScale = 0.7f) +
+                                                               slideOutVertically(animationSpec = tween(durationMillis = 180), targetOffsetY = { -it }),
+                                                        modifier = Modifier
+                                                            .align(Alignment.TopCenter)
+                                                            .padding(top = 10.dp)
+                                                    ) {
+                                                        Surface(
+                                                            onClick = {
+                                                                isHeaderCompact = false
+                                                                coroutineScope.launch {
+                                                                    when (pagerState.currentPage) {
+                                                                        0 -> {
+                                                                            if (tracksListState.firstVisibleItemIndex > 10) {
+                                                                                tracksListState.scrollToItem(10)
+                                                                            }
+                                                                            tracksListState.animateScrollToItem(0)
+                                                                        }
+                                                                        1 -> {
+                                                                            if (albumsGridState.firstVisibleItemIndex > 10) {
+                                                                                albumsGridState.scrollToItem(10)
+                                                                            }
+                                                                            albumsGridState.animateScrollToItem(0)
+                                                                        }
+                                                                        2 -> {
+                                                                            if (playlistsListState.firstVisibleItemIndex > 10) {
+                                                                                playlistsListState.scrollToItem(10)
+                                                                            }
+                                                                            playlistsListState.animateScrollToItem(0)
+                                                                        }
+                                                                    }
+                                                                }
+                                                            },
+                                                            shape = CircleShape,
+                                                            color = MaterialTheme.colorScheme.surfaceContainerHighest.copy(alpha = 0.94f),
+                                                            border = BorderStroke(2.dp, MaterialTheme.colorScheme.primary),
+                                                            shadowElevation = 8.dp,
+                                                            tonalElevation = 4.dp,
+                                                            modifier = Modifier.size(48.dp)
+                                                        ) {
+                                                            Box(
+                                                                contentAlignment = Alignment.Center,
+                                                                modifier = Modifier.fillMaxSize()
+                                                            ) {
+                                                                Icon(
+                                                                    imageVector = Icons.Default.ArrowUpward,
+                                                                    contentDescription = "Torna in alto",
+                                                                    tint = MaterialTheme.colorScheme.primary,
+                                                                    modifier = Modifier.size(24.dp)
+                                                                )
+                                                            }
+                                                        }
+                                                    }
                                                 }
                                             }
                                         }
 
-                                        // 2. Scheda 'Album'
                                         1 -> {
-                                            AlbumsGridView(
-                                                albums = sortedAlbums,
-                                                onAlbumClick = { album -> selectedAlbum = album },
-                                                onAddToQueueClick = handleAddAlbumToQueue,
-                                                onAutoTagAlbumClick = { viewModel.startAlbumEnrichment(it, separateAlbums = false) },
-                                                onAutoTagAlbumSeparationClick = { viewModel.startAlbumEnrichment(it, separateAlbums = true) },
-                                                state = albumsGridState
-                                            )
-                                        }
+                                            val targetAlbum = selectedAlbum ?: activeAlbumForPager
+                                            if (targetAlbum != null) {
+                                                val currentAlbum = albums.find { it.id == targetAlbum.id }
+                                                    ?: targetAlbum.tracks.firstOrNull()?.let { firstTrack ->
+                                                        albums.find { alb -> alb.tracks.any { it.id == firstTrack.id } }
+                                                    } ?: targetAlbum
 
-                                        // 3. Scheda 'Playlist'
-                                        2 -> {
-                                            PlaylistsView(
-                                                playlists = sortedPlaylists,
-                                                onPlaylistClick = { playlist -> selectedPlaylist = playlist },
-                                                onCreatePlaylistClick = { showCreatePlaylistDialog = true },
-                                                onDeletePlaylistClick = { playlist ->
-                                                    viewModel.deletePlaylist(playlist.id)
-                                                },
-                                                onAddToQueueClick = handleAddPlaylistToQueue,
-                                                onChangeCoverClick = handleChangePlaylistCover,
-                                                onRemoveCoverClick = handleRemovePlaylistCover,
-                                                state = playlistsListState
-                                            )
+                                                AlbumDetailView(
+                                                    album = currentAlbum,
+                                                    currentTrack = currentTrack,
+                                                    isPlaying = isPlaying,
+                                                    onBackClick = {
+                                                        selectedAlbum = null
+                                                        isSearchExpandedInDetail = false
+                                                        if (searchQuery.isNotBlank()) {
+                                                            viewModel.onSearchQueryChanged("")
+                                                        }
+                                                    },
+                                                    onPlayTrackIndex = { index ->
+                                                        viewModel.playAlbum(currentAlbum, index)
+                                                    },
+                                                    onPlayAllClick = {
+                                                        viewModel.playAlbum(currentAlbum, 0)
+                                                    },
+                                                    onPlayPauseClick = {
+                                                        viewModel.togglePlayPause()
+                                                    },
+                                                    onAddToPlaylistClick = { trackToAddToPlaylist = it },
+                                                    onAddToQueueClick = handleAddTrackToQueue,
+                                                    onAddAlbumToQueueClick = handleAddAlbumToQueue,
+                                                    onAddToFavoritesClick = handleAddToFavorites,
+                                                    favoriteTrackIds = favoriteTrackIds,
+                                                    onAutoTagAlbumClick = { viewModel.startAlbumEnrichment(it, separateAlbums = false) },
+                                                    onAutoTagAlbumSeparationClick = { viewModel.startAlbumEnrichment(it, separateAlbums = true) },
+                                                    onAutoTagTrackClick = { viewModel.startTrackEnrichment(it) },
+                                                    onDeleteTracks = { tracks -> viewModel.deleteTracks(tracks) }
+                                                )
+                                            }
                                         }
                                     }
                                 }
                             }
                         }
-                    }
-                }
-            }
-
-            // Pulsante circolare "Torna in alto" (in alto al centro sotto l'icona Album, con risalita fluida e viola primario)
-            AnimatedVisibility(
-                visible = showScrollToTop,
-                enter = fadeIn(animationSpec = tween(durationMillis = 220)) +
-                        scaleIn(animationSpec = tween(durationMillis = 220), initialScale = 0.7f) +
-                        slideInVertically(animationSpec = tween(durationMillis = 220), initialOffsetY = { -it }),
-                exit = fadeOut(animationSpec = tween(durationMillis = 180)) +
-                       scaleOut(animationSpec = tween(durationMillis = 180), targetScale = 0.7f) +
-                       slideOutVertically(animationSpec = tween(durationMillis = 180), targetOffsetY = { -it }),
-                modifier = Modifier
-                    .align(Alignment.TopCenter)
-                    .padding(top = 10.dp)
-            ) {
-                Surface(
-                    onClick = {
-                        isHeaderCompact = false
-                        coroutineScope.launch {
-                            when (pagerState.currentPage) {
-                                0 -> {
-                                    if (tracksListState.firstVisibleItemIndex > 10) {
-                                        tracksListState.scrollToItem(10)
-                                    }
-                                    tracksListState.animateScrollToItem(0)
-                                }
-                                1 -> {
-                                    if (albumsGridState.firstVisibleItemIndex > 10) {
-                                        albumsGridState.scrollToItem(10)
-                                    }
-                                    albumsGridState.animateScrollToItem(0)
-                                }
-                                2 -> {
-                                    if (playlistsListState.firstVisibleItemIndex > 10) {
-                                        playlistsListState.scrollToItem(10)
-                                    }
-                                    playlistsListState.animateScrollToItem(0)
-                                }
-                            }
-                        }
-                    },
-                    shape = CircleShape,
-                    color = MaterialTheme.colorScheme.surfaceContainerHighest.copy(alpha = 0.94f),
-                    border = BorderStroke(2.dp, MaterialTheme.colorScheme.primary),
-                    shadowElevation = 8.dp,
-                    tonalElevation = 4.dp,
-                    modifier = Modifier.size(48.dp)
-                ) {
-                    Box(
-                        contentAlignment = Alignment.Center,
-                        modifier = Modifier.fillMaxSize()
-                    ) {
-                        Icon(
-                            imageVector = Icons.Default.ArrowUpward,
-                            contentDescription = "Torna in alto",
-                            tint = MaterialTheme.colorScheme.primary,
-                            modifier = Modifier.size(24.dp)
-                        )
                     }
                 }
             }
@@ -1353,7 +1440,8 @@ fun MainScreen(
             onSkipToAutoplayItem = { index -> viewModel.skipToAutoplayItem(index) },
             onRemoveAutoplayItem = { index -> viewModel.removeAutoplayItem(index) },
             onMoveAutoplayItem = { fromIndex, toIndex -> viewModel.moveAutoplayItem(fromIndex, toIndex) },
-            onMoveAutoplayItemToTop = { index -> viewModel.moveAutoplayItemToTop(index) }
+            onMoveAutoplayItemToTop = { index -> viewModel.moveAutoplayItemToTop(index) },
+            onAddAutoplayItemToUserQueue = { index -> viewModel.moveAutoplayItemToUserQueue(index) }
         )
     }
 
@@ -1625,6 +1713,5 @@ private fun EmptyTracksView(
 private sealed interface MainContentScreen {
     data object Tabs : MainContentScreen
     data class Search(val query: String) : MainContentScreen
-    data class AlbumDetail(val album: Album) : MainContentScreen
     data class PlaylistDetail(val playlist: Playlist) : MainContentScreen
 }

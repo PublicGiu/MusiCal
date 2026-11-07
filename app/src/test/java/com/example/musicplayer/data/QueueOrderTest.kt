@@ -243,4 +243,67 @@ class QueueOrderTest {
         assertEquals("Played_2", timeline[startIndex - 1])
         assertEquals("Played_1", timeline[startIndex - 2])
     }
+
+    @Test
+    fun testSwipeLeftOnAutoplayItemPromotesTrackToUserQueueAndReplenishes() {
+        val currentTrack = "Current"
+        val userQueue = mutableListOf("User_1")
+        val autoplayQueue = (1..15).map { "Auto_$it" }.toMutableList()
+        val timeline = (listOf(currentTrack) + userQueue + autoplayQueue).toMutableList()
+        val currentIndex = 0
+
+        // Swipe a sinistra sul brano a indice 3 di autoplayQueue ("Auto_4")
+        val autoplayIndex = 3
+        val promotedTrack = autoplayQueue[autoplayIndex]
+        assertEquals("Auto_4", promotedTrack)
+
+        val fromExo = currentIndex + 1 + userQueue.size + autoplayIndex
+        val toExo = currentIndex + 1 + userQueue.size
+        assertEquals(5, fromExo)
+        assertEquals(2, toExo)
+
+        // Allineamento timeline ExoPlayer (moveMediaItem)
+        val movedItem = timeline.removeAt(fromExo)
+        timeline.add(toExo, movedItem)
+
+        // Aggiornamento code logiche + replenishment a 15 brani
+        userQueue.add(promotedTrack)
+        autoplayQueue.removeAt(autoplayIndex)
+        autoplayQueue.add("Auto_16")
+        timeline.add("Auto_16")
+
+        assertEquals(listOf("User_1", "Auto_4"), userQueue)
+        assertEquals(15, autoplayQueue.size)
+        assertTrue("Auto_4" !in autoplayQueue)
+        assertEquals("User_1", timeline[1])
+        assertEquals("Auto_4", timeline[2])
+        assertEquals("Auto_1", timeline[3])
+    }
+
+    @Test
+    fun testSwipeRightRemovesItemFromUserQueueAndAutoplayQueue() {
+        val currentTrack = "Current"
+        val userQueue = mutableListOf("User_1", "User_2")
+        val autoplayQueue = mutableListOf("Auto_1", "Auto_2", "Auto_3")
+        val timeline = (listOf(currentTrack) + userQueue + autoplayQueue).toMutableList()
+        val currentIndex = 0
+
+        // 1. Swipe a destra su User_1 (indice 0 della userQueue)
+        val removeUserIdx = 0
+        val exoUserIdx = currentIndex + 1 + removeUserIdx
+        timeline.removeAt(exoUserIdx)
+        userQueue.removeAt(removeUserIdx)
+
+        assertEquals(listOf("User_2"), userQueue)
+        assertEquals(listOf("Current", "User_2", "Auto_1", "Auto_2", "Auto_3"), timeline)
+
+        // 2. Swipe a destra su Auto_2 (indice 1 della autoplayQueue)
+        val removeAutoIdx = 1
+        val exoAutoIdx = currentIndex + 1 + userQueue.size + removeAutoIdx
+        timeline.removeAt(exoAutoIdx)
+        autoplayQueue.removeAt(removeAutoIdx)
+
+        assertEquals(listOf("Auto_1", "Auto_3"), autoplayQueue)
+        assertEquals(listOf("Current", "User_2", "Auto_1", "Auto_3"), timeline)
+    }
 }

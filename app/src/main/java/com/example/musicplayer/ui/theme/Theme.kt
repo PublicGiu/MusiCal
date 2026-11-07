@@ -66,8 +66,8 @@ private val LightColorScheme = lightColorScheme(
 
     tertiary = LocalMusicVioletNeon,
     onTertiary = Color.White,
-    tertiaryContainer = Color(0xFFF5E8FF),
-    onTertiaryContainer = Color(0xFF380860),
+    tertiaryContainer = Color(0xFFEBDEF8),
+    onTertiaryContainer = Color(0xFF270E48),
 
     background = LocalMusicLightBackground,
     onBackground = LocalMusicLightTextPrimary,
@@ -77,17 +77,17 @@ private val LightColorScheme = lightColorScheme(
     surfaceVariant = LocalMusicLightSurfaceVariant,
     onSurfaceVariant = LocalMusicLightTextSecondary,
 
-    surfaceContainerLowest = Color(0xFFFFFFFF),
-    surfaceContainerLow = Color(0xFFF7F3FB),
+    surfaceContainerLowest = Color(0xFFF9F6FC),
+    surfaceContainerLow = Color(0xFFE9E3F1),
     surfaceContainer = LocalMusicLightSurfaceCard,
-    surfaceContainerHigh = Color(0xFFECE6F4),
+    surfaceContainerHigh = Color(0xFFDDD4E8),
     surfaceContainerHighest = LocalMusicLightSurfaceCardHighest,
 
     outline = LocalMusicLightOutline,
     outlineVariant = LocalMusicLightOutlineVariant,
 
-    inverseSurface = Color(0xFF2A233A),
-    inverseOnSurface = Color(0xFFF7F2FA)
+    inverseSurface = Color(0xFF241D30),
+    inverseOnSurface = Color(0xFFF4EFF8)
 )
 
 /**
@@ -142,7 +142,7 @@ private fun harmonizeLightSurface(systemSurface: Color, brandSurface: Color): Co
 
     val finalHue = brandHsl[0]
     val finalSaturation = (sysHsl[1] * 0.3f + brandHsl[1] * 0.7f).coerceIn(0.04f, 0.12f)
-    val finalLightness = sysHsl[2].coerceIn(0.92f, 0.98f)
+    val finalLightness = (sysHsl[2] * 0.25f + brandHsl[2] * 0.75f).coerceIn(0.82f, 0.93f)
 
     val finalArgb = ColorUtils.HSLToColor(floatArrayOf(finalHue, finalSaturation, finalLightness))
     return Color(finalArgb)
@@ -216,17 +216,17 @@ private fun harmonizedDynamicLightColorScheme(context: Context): ColorScheme {
         surfaceVariant = harmonizeLightSurface(sys.surfaceVariant, LocalMusicLightSurfaceVariant),
         onSurfaceVariant = LocalMusicLightTextSecondary,
 
-        surfaceContainerLowest = Color(0xFFFFFFFF),
-        surfaceContainerLow = harmonizeLightSurface(sys.surfaceContainerLow, Color(0xFFF7F3FB)),
+        surfaceContainerLowest = Color(0xFFF9F6FC),
+        surfaceContainerLow = harmonizeLightSurface(sys.surfaceContainerLow, Color(0xFFE9E3F1)),
         surfaceContainer = harmonizeLightSurface(sys.surfaceContainer, LocalMusicLightSurfaceCard),
-        surfaceContainerHigh = harmonizeLightSurface(sys.surfaceContainerHigh, Color(0xFFECE6F4)),
+        surfaceContainerHigh = harmonizeLightSurface(sys.surfaceContainerHigh, Color(0xFFDDD4E8)),
         surfaceContainerHighest = harmonizeLightSurface(sys.surfaceContainerHighest, LocalMusicLightSurfaceCardHighest),
 
         outline = harmonizeLightSurface(sys.outline, LocalMusicLightOutline),
         outlineVariant = harmonizeLightSurface(sys.outlineVariant, LocalMusicLightOutlineVariant),
 
-        inverseSurface = Color(0xFF2A233A),
-        inverseOnSurface = Color(0xFFF7F2FA)
+        inverseSurface = Color(0xFF241D30),
+        inverseOnSurface = Color(0xFFF4EFF8)
     )
 }
 

@@ -186,16 +186,18 @@ fun QueueBottomSheet(
                                         }
                                     }
 
-                                    if (isPlaying) {
-                                        Surface(
+                                    Surface(
+                                        modifier = Modifier.fillMaxSize(),
+                                        color = MaterialTheme.colorScheme.primary.copy(alpha = 0.65f)
+                                    ) {
+                                        Box(
                                             modifier = Modifier.fillMaxSize(),
-                                            color = MaterialTheme.colorScheme.primary.copy(alpha = 0.65f)
+                                            contentAlignment = Alignment.Center
                                         ) {
-                                            Icon(
-                                                imageVector = Icons.Default.GraphicEq,
-                                                contentDescription = null,
-                                                tint = MaterialTheme.colorScheme.onPrimary,
-                                                modifier = Modifier.padding(10.dp)
+                                            AnimatedEqualizerBars(
+                                                isPlaying = isPlaying,
+                                                color = MaterialTheme.colorScheme.onPrimary,
+                                                modifier = Modifier.size(20.dp)
                                             )
                                         }
                                     }

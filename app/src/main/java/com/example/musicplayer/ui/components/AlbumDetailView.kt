@@ -17,6 +17,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.basicMarquee
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.awaitEachGesture
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -39,6 +40,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Album
 import androidx.compose.material.icons.filled.AutoFixHigh
+import androidx.compose.material.icons.filled.ContentCopy
 import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.MusicNote
 import androidx.compose.material.icons.filled.Pause
@@ -84,6 +86,7 @@ import coil.size.Precision
 import com.example.musicplayer.R
 import com.example.musicplayer.data.Album
 import com.example.musicplayer.data.AudioTrack
+import com.example.musicplayer.data.findDuplicateTrackGroups
 import com.example.musicplayer.data.isMixedOrGeneric
 import kotlinx.coroutines.launch
 import kotlin.math.abs
@@ -105,7 +108,8 @@ fun AlbumDetailView(
     onPlayPauseClick: (() -> Unit)? = null,
     onAutoTagAlbumClick: ((Album) -> Unit)? = null,
     onAutoTagAlbumSeparationClick: ((Album) -> Unit)? = null,
-    onAutoTagTrackClick: ((AudioTrack) -> Unit)? = null
+    onAutoTagTrackClick: ((AudioTrack) -> Unit)? = null,
+    onDeleteTracks: ((List<AudioTrack>) -> Unit)? = null
 ) {
     val isCurrentAlbumActive = currentTrack != null &&
         (currentTrack.albumId == album.id || album.tracks.any { it.id == currentTrack.id })
@@ -123,6 +127,9 @@ fun AlbumDetailView(
         val totalMs = albumSongs.sumOf { it.duration }
         (totalMs / 60000).coerceAtLeast(0)
     }
+
+    val duplicateGroups = remember(album.tracks) { album.findDuplicateTrackGroups() }
+    var showDuplicatesSheet by remember { mutableStateOf(false) }
 
     val listState = rememberLazyListState()
     var isScrolledDown by remember { mutableStateOf(false) }
@@ -331,6 +338,22 @@ fun AlbumDetailView(
                             onAddAlbumToQueueClick(album)
                         }
                     )
+                    if (duplicateGroups.isNotEmpty()) {
+                        DropdownMenuItem(
+                            text = { Text("Gestisci brani duplicati") },
+                            leadingIcon = {
+                                Icon(
+                                    imageVector = Icons.Default.ContentCopy,
+                                    contentDescription = null,
+                                    tint = MaterialTheme.colorScheme.primary
+                                )
+                            },
+                            onClick = {
+                                menuExpanded = false
+                                showDuplicatesSheet = true
+                            }
+                        )
+                    }
                     if (album.isMixedOrGeneric()) {
                         DropdownMenuItem(
                             text = { Text("Separa in album distinti") },
@@ -422,6 +445,46 @@ fun AlbumDetailView(
             Spacer(modifier = Modifier.height(4.dp))
         }
 
+        // Banner per brani duplicati nell'album
+        if (duplicateGroups.isNotEmpty()) {
+            Surface(
+                shape = RoundedCornerShape(12.dp),
+                color = MaterialTheme.colorScheme.tertiaryContainer.copy(alpha = 0.5f),
+                border = BorderStroke(1.dp, MaterialTheme.colorScheme.tertiary.copy(alpha = 0.35f)),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 16.dp, vertical = 4.dp)
+                    .clickable { showDuplicatesSheet = true }
+            ) {
+                Row(
+                    modifier = Modifier.padding(12.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.ContentCopy,
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.tertiary,
+                        modifier = Modifier.size(24.dp)
+                    )
+                    Spacer(modifier = Modifier.width(10.dp))
+                    Column(modifier = Modifier.weight(1f)) {
+                        val totalDuplicates = duplicateGroups.sumOf { it.tracks.size - 1 }
+                        Text(
+                            text = if (totalDuplicates == 1) "1 brano duplicato in questo album" else "$totalDuplicates brani duplicati in questo album",
+                            style = MaterialTheme.typography.labelLarge.copy(fontWeight = FontWeight.Bold),
+                            color = MaterialTheme.colorScheme.onTertiaryContainer
+                        )
+                        Text(
+                            text = "Tocca per confrontare e rimuovere i file ridondanti dallo storage.",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onTertiaryContainer.copy(alpha = 0.85f)
+                        )
+                    }
+                }
+            }
+            Spacer(modifier = Modifier.height(4.dp))
+        }
+
         // Lista brani dell'album con supporto allo swipe verso sinistra per mettere in coda
         LazyColumn(
             state = listState,
@@ -469,6 +532,25 @@ fun AlbumDetailView(
                     )
                 }
             }
+        }
+
+        // Foglio di gestione e rimozione dei brani duplicati nell'album
+        if (showDuplicatesSheet && duplicateGroups.isNotEmpty()) {
+            AlbumDuplicatesSheet(
+                album = album,
+                duplicateGroups = duplicateGroups,
+                currentTrack = currentTrack,
+                isPlaying = isPlaying,
+                onPlayTrack = { track ->
+                    val idx = albumSongs.indexOfFirst { it.id == track.id }
+                    if (idx >= 0) onPlayTrackIndex(idx)
+                },
+                onDeleteTracks = { tracksToDelete ->
+                    showDuplicatesSheet = false
+                    onDeleteTracks?.invoke(tracksToDelete)
+                },
+                onDismissRequest = { showDuplicatesSheet = false }
+            )
         }
     }
 }

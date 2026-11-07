@@ -80,6 +80,10 @@ class MusicViewModel(application: Application) : AndroidViewModel(application) {
     private val _writeRequestIntentSender = MutableStateFlow<IntentSender?>(null)
     val writeRequestIntentSender: StateFlow<IntentSender?> = _writeRequestIntentSender.asStateFlow()
 
+    private val _deleteRequestIntentSender = MutableStateFlow<IntentSender?>(null)
+    val deleteRequestIntentSender: StateFlow<IntentSender?> = _deleteRequestIntentSender.asStateFlow()
+    private var pendingTracksToDelete: List<AudioTrack> = emptyList()
+
     private val _currentLyrics = MutableStateFlow<LyricsData?>(null)
     val currentLyrics: StateFlow<LyricsData?> = _currentLyrics.asStateFlow()
 
@@ -1767,6 +1771,65 @@ class MusicViewModel(application: Application) : AndroidViewModel(application) {
     fun closeEnricher() {
         _enricherState.value = EnricherUiState.Idle
         _writeRequestIntentSender.value = null
+    }
+
+    /**
+     * Avvia la richiesta di eliminazione fisica dei file audio specificati dallo storage del dispositivo.
+     */
+    fun deleteTracks(tracks: List<AudioTrack>, onCompleted: ((Int) -> Unit)? = null) {
+        if (tracks.isEmpty()) return
+        pendingTracksToDelete = tracks
+        val uris = tracks.map { it.uri }
+        val intentSender = storageWriteManager.createDeleteRequestIntentSender(uris)
+        if (intentSender != null) {
+            _deleteRequestIntentSender.value = intentSender
+        } else {
+            viewModelScope.launch(Dispatchers.IO) {
+                var deletedCount = 0
+                for (track in tracks) {
+                    try {
+                        val count = getApplication<android.app.Application>().contentResolver.delete(track.uri, null, null)
+                        if (count > 0) deletedCount++
+                    } catch (_: Exception) {}
+                }
+                withContext(Dispatchers.Main) {
+                    onDeletePermissionResult(isGranted = deletedCount > 0, onDeletedCount = onCompleted)
+                }
+            }
+        }
+    }
+
+    /**
+     * Gestisce l'esito della finestra di dialogo di autorizzazione eliminazione di sistema (Android 16).
+     */
+    fun onDeletePermissionResult(isGranted: Boolean, onDeletedCount: ((Int) -> Unit)? = null) {
+        val tracks = pendingTracksToDelete
+        pendingTracksToDelete = emptyList()
+        _deleteRequestIntentSender.value = null
+
+        if (isGranted && tracks.isNotEmpty()) {
+            val deletedIds = tracks.map { it.id }.toSet()
+            val currentTracks = _tracks.value
+            val remainingTracks = currentTracks.filter { it.id !in deletedIds }
+            _tracks.value = remainingTracks
+            val updatedAlbums = groupTracksIntoAlbums(remainingTracks)
+            _albums.value = updatedAlbums
+
+            // Se la traccia attualmente in riproduzione è stata eliminata:
+            if (_currentTrack.value?.id in deletedIds) {
+                playNext()
+            }
+            val currentQueue = _queue.value
+            if (currentQueue.any { it.id in deletedIds }) {
+                _queue.value = currentQueue.filter { it.id !in deletedIds }
+            }
+
+            viewModelScope.launch(Dispatchers.IO) {
+                libraryCacheRepository.saveCache(_audioSourceMode.value, _customFolders.value, remainingTracks, updatedAlbums)
+            }
+
+            onDeletedCount?.invoke(tracks.size)
+        }
     }
 
     override fun onCleared() {

@@ -1,5 +1,8 @@
 package com.example.musicplayer.ui.components
 
+import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.combinedClickable
@@ -69,17 +72,25 @@ fun TrackListItem(
     var menuExpanded by remember { mutableStateOf(false) }
     val hasOptionsMenu = onAddToQueueClick != null || onAddToFavoritesClick != null || onAddToPlaylistClick != null || onRemoveClick != null || onAutoTagClick != null
 
-    val backgroundColor = if (isSelected) {
-        MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.6f)
-    } else {
-        MaterialTheme.colorScheme.surface
-    }
+    val backgroundColor by animateColorAsState(
+        targetValue = if (isSelected) {
+            MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.6f)
+        } else {
+            MaterialTheme.colorScheme.surface
+        },
+        animationSpec = tween(durationMillis = 220, easing = FastOutSlowInEasing),
+        label = "TrackItemBgColor"
+    )
 
-    val contentColor = if (isSelected) {
-        MaterialTheme.colorScheme.onPrimaryContainer
-    } else {
-        MaterialTheme.colorScheme.onSurface
-    }
+    val contentColor by animateColorAsState(
+        targetValue = if (isSelected) {
+            MaterialTheme.colorScheme.onPrimaryContainer
+        } else {
+            MaterialTheme.colorScheme.onSurface
+        },
+        animationSpec = tween(durationMillis = 220, easing = FastOutSlowInEasing),
+        label = "TrackItemContentColor"
+    )
 
     Surface(
         modifier = modifier
@@ -145,18 +156,17 @@ fun TrackListItem(
                     }
                 }
 
-                // Overlay con equalizzatore visivo se il brano è attualmente in riproduzione
-                if (isSelected && isPlaying) {
+                // Overlay con equalizzatore visivo dinamico se il brano è selezionato
+                if (isSelected) {
                     Box(
                         modifier = Modifier
                             .fillMaxSize()
                             .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.65f)),
                         contentAlignment = Alignment.Center
                     ) {
-                        Icon(
-                            imageVector = Icons.Default.GraphicEq,
-                            contentDescription = "In riproduzione",
-                            tint = MaterialTheme.colorScheme.onPrimary,
+                        AnimatedEqualizerBars(
+                            isPlaying = isPlaying,
+                            color = MaterialTheme.colorScheme.onPrimary,
                             modifier = Modifier.size(24.dp)
                         )
                     }

@@ -1,10 +1,19 @@
 package com.example.musicplayer.ui.components
 
 import android.graphics.drawable.BitmapDrawable
+import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.scaleIn
+import androidx.compose.animation.scaleOut
+import androidx.compose.animation.togetherWith
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.foundation.background
 import androidx.compose.foundation.basicMarquee
 import androidx.compose.foundation.clickable
@@ -255,6 +264,16 @@ fun FullScreenPlayerSheet(
         label = "PlayerBackgroundGradientAnimation"
     )
 
+    // 3. Effetto respiro e profondità della copertina grande (1.0f in riproduzione, 0.92f in pausa)
+    val coverScale by animateFloatAsState(
+        targetValue = if (isPlaying) 1.0f else 0.92f,
+        animationSpec = spring(
+            dampingRatio = Spring.DampingRatioLowBouncy,
+            stiffness = Spring.StiffnessLow
+        ),
+        label = "FullScreenCoverBreathingScale"
+    )
+
     ModalBottomSheet(
         onDismissRequest = onDismissRequest,
         sheetState = sheetState,
@@ -442,6 +461,10 @@ fun FullScreenPlayerSheet(
                     modifier = Modifier
                         .fillMaxWidth(0.92f)
                         .aspectRatio(1f)
+                        .graphicsLayer {
+                            scaleX = coverScale
+                            scaleY = coverScale
+                        }
                 ) { page ->
                     val trackForPage = effectiveQueue.getOrNull(page)
                     val coverImageRequest = remember(trackForPage?.albumArtUri) {
@@ -573,7 +596,7 @@ fun FullScreenPlayerSheet(
                     )
                 }
 
-                // Play / Pause circolare grande (72.dp) bianco con icona scura
+                // Play / Pause circolare grande (72.dp) bianco con morphing animato fluido
                 FilledIconButton(
                     onClick = onPlayPauseClick,
                     modifier = Modifier.size(72.dp),
@@ -583,11 +606,24 @@ fun FullScreenPlayerSheet(
                         contentColor = Color(0xFF140C26)
                     )
                 ) {
-                    Icon(
-                        imageVector = if (isPlaying) Icons.Default.Pause else Icons.Default.PlayArrow,
-                        contentDescription = if (isPlaying) "Pausa" else "Riproduci",
-                        modifier = Modifier.size(40.dp)
-                    )
+                    AnimatedContent(
+                        targetState = isPlaying,
+                        transitionSpec = {
+                            (fadeIn(animationSpec = tween(180)) +
+                                scaleIn(initialScale = 0.72f, animationSpec = tween(180)))
+                                .togetherWith(
+                                    fadeOut(animationSpec = tween(140)) +
+                                        scaleOut(targetScale = 0.72f, animationSpec = tween(140))
+                                )
+                        },
+                        label = "FullScreenPlayPauseIconMorph"
+                    ) { playing ->
+                        Icon(
+                            imageVector = if (playing) Icons.Default.Pause else Icons.Default.PlayArrow,
+                            contentDescription = if (playing) "Pausa" else "Riproduci",
+                            modifier = Modifier.size(40.dp)
+                        )
+                    }
                 }
 
                 // Traccia successiva

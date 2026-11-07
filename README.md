@@ -1,6 +1,6 @@
 # 🎵 MusiCal — Lettore Musicale Nativo per Android 16
 
-![Versione](https://img.shields.io/badge/versione-0.1.8-8B5CF6)
+![Versione](https://img.shields.io/badge/versione-0.1.10-8B5CF6)
 ![Android](https://img.shields.io/badge/Android-16%20(API%2036)-7C3AED)
 ![Kotlin](https://img.shields.io/badge/Kotlin-2.1.0-A855F7)
 ![Jetpack Compose](https://img.shields.io/badge/UI-Jetpack%20Compose%20%2B%20Material%203-C084FC)
@@ -49,6 +49,10 @@ Realizzato interamente in **Kotlin** e **Jetpack Compose** con un'identità visi
 - **Navigazione fluida a 3 schede (`Brani`, `Album`, `Playlist`)**:
   - Supporto allo swipe orizzontale tra le schede e **Collapsing Header** pilotato direttamente nelle fasi di Layout e Draw (zero ricomposizioni durante lo scroll).
   - **Viste di dettaglio compatte**: sia gli Album sia le Playlist adottano un'intestazione compatta su singola riga con copertina adattiva (`62dp → 44dp`), titolo scorrevole e pulsante Play circolare.
+- **Rilevamento e Gestione dei Brani Duplicati negli Album**:
+  - Algoritmo intelligente basato su normalizzazione del titolo (senza punteggiatura o suffissi rumore) e tolleranza di durata ($\le 5$ secondi).
+  - Banner informativo in evidenza nell'album e voce dedicata nel menu contestuale `⋮` ("*Gestisci brani duplicati*").
+  - Schermata di confronto (`AlbumDuplicatesSheet`) con badge *"Conserva"* / *"Elimina"*, dettagli sul file (dimensione, cartella, bitrate), ascolto dell'anteprima in tempo reale ed eliminazione fisica sicura dallo storage tramite `MediaStore.createDeleteRequest` nativo di Android 16.
 - **4 Criteri di Ordinamento con direzione invertibile (`↑` / `↓`)**:
   1. *Ascoltati di recente*
   2. *Più ascoltati* (con contatore ascolti visibile su ogni traccia)
@@ -73,7 +77,7 @@ Realizzato interamente in **Kotlin** e **Jetpack Compose** con un'identità visi
 | **Audio & Background** | AndroidX Media3 `1.5.1` (`ExoPlayer`, `MediaSessionService`, `MediaController`, `ForwardingPlayer`, custom `Media3BitmapLoader`) |
 | **Persistenza Locale** | `AtomicFile` JSON (`playlists.json`, `track_stats.json`), Room Database `2.6.1` (`scrobble_cache.db`), `SharedPreferences` |
 | **Immagini & Rete** | Coil Compose `2.7.0`, OkHttp `4.12.0` |
-| **Test Automatizzati** | JUnit 4, Mockito Core, suite di **224 unit test** su JVM |
+| **Test Automatizzati** | JUnit 4, Mockito Core, suite di **243+ unit test** su JVM |
 
 ```
 app/src/main/java/com/example/musicplayer/
@@ -92,7 +96,7 @@ app/src/main/java/com/example/musicplayer/
     ├── MainScreen.kt                       # Scaffold con Collapsing Header zero-jank e HorizontalPager
     ├── MusicViewModel.kt                   # Gestione stato, Coda Utente, Autoplay (15 brani) e Scrobbling
     ├── components/                         # PlayerBottomBar, FullScreenPlayerSheet, QueueBottomSheet,
-    │                                       # AlbumDetailView, PlaylistsView, TrackListItem, SettingsDialog...
+    │                                       # AlbumDetailView, AlbumDuplicatesSheet, PlaylistsView, TrackListItem...
     └── theme/                              # Palette Obsidian & Electric Violet e armonizzazione Material You
 ```
 

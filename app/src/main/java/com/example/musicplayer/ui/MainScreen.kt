@@ -8,6 +8,7 @@ import androidx.activity.result.PickVisualMediaRequest
 import androidx.activity.result.IntentSenderRequest
 import androidx.activity.result.contract.ActivityResultContracts
 import com.example.musicplayer.ui.tagger.MetadataEnricherSheet
+import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.LinearEasing
@@ -23,8 +24,11 @@ import androidx.compose.animation.fadeOut
 import androidx.compose.animation.scaleIn
 import androidx.compose.animation.scaleOut
 import androidx.compose.animation.shrinkHorizontally
+import androidx.compose.animation.slideInHorizontally
 import androidx.compose.animation.slideInVertically
+import androidx.compose.animation.slideOutHorizontally
 import androidx.compose.animation.slideOutVertically
+import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.pager.HorizontalPager
@@ -267,6 +271,30 @@ fun MainScreen(
     var showSettingsDialog by remember { mutableStateOf(false) }
     val snackbarHostState = remember { SnackbarHostState() }
     val coroutineScope = rememberCoroutineScope()
+
+    val deleteRequestIntentSender by viewModel.deleteRequestIntentSender.collectAsStateWithLifecycle()
+
+    val deletePermissionLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.StartIntentSenderForResult()
+    ) { result ->
+        val success = (result.resultCode == android.app.Activity.RESULT_OK)
+        viewModel.onDeletePermissionResult(success) { count ->
+            coroutineScope.launch {
+                snackbarHostState.showSnackbar(
+                    message = if (count == 1) "1 file duplicato eliminato dallo storage" else "$count file duplicati eliminati dallo storage",
+                    duration = SnackbarDuration.Short
+                )
+            }
+        }
+    }
+
+    LaunchedEffect(deleteRequestIntentSender) {
+        deleteRequestIntentSender?.let { sender ->
+            deletePermissionLauncher.launch(
+                IntentSenderRequest.Builder(sender).build()
+            )
+        }
+    }
 
     LaunchedEffect(enricherState) {
         val s = enricherState
@@ -1009,197 +1037,238 @@ fun MainScreen(
                     )
                 }
 
-                // Schermata Risultati Ricerca Globale
-                searchQuery.isNotBlank() -> {
-                    GlobalSearchResultsView(
-                        query = searchQuery,
-                        matchingTracks = matchingTracks,
-                        matchingAlbums = matchingAlbums,
-                        matchingPlaylists = matchingPlaylists,
-                        currentTrack = currentTrack,
-                        isPlaying = isPlaying,
-                        stats = stats,
-                        onTrackClick = { track ->
-                            viewModel.playTrack(track)
-                        },
-                        onAlbumClick = { album ->
-                            selectedAlbum = album
-                            viewModel.onSearchQueryChanged("")
-                        },
-                        onPlaylistClick = { playlist ->
-                            selectedPlaylist = playlist
-                            viewModel.onSearchQueryChanged("")
-                        },
-                        onAddToQueueClick = handleAddTrackToQueue,
-                        onAddToPlaylistClick = { track ->
-                            trackToAddToPlaylist = track
-                        },
-                        onDeletePlaylistClick = { playlist ->
-                            viewModel.deletePlaylist(playlist.id)
-                        },
-                        onAddAlbumToQueueClick = handleAddAlbumToQueue,
-                        onAddPlaylistToQueueClick = handleAddPlaylistToQueue,
-                        onAddToFavoritesClick = handleAddToFavorites,
-                        favoriteTrackIds = favoriteTrackIds,
-                        onChangePlaylistCoverClick = handleChangePlaylistCover,
-                        onRemovePlaylistCoverClick = handleRemovePlaylistCover,
-                        onAutoTagTrackClick = { viewModel.startTrackEnrichment(it) }
-                    )
-                }
-
-                // Dettaglio Album
-                selectedAlbum != null -> {
-                    val currentAlbum = albums.find { it.id == selectedAlbum?.id }
-                        ?: selectedAlbum?.tracks?.firstOrNull()?.let { firstTrack ->
-                            albums.find { alb -> alb.tracks.any { it.id == firstTrack.id } }
-                        }
-                    if (currentAlbum == null) {
-                        selectedAlbum = null
-                    } else {
-                        if (selectedAlbum?.id != currentAlbum.id) {
-                            selectedAlbum = currentAlbum
-                        }
-                        AlbumDetailView(
-                            album = currentAlbum,
-                            currentTrack = currentTrack,
-                            isPlaying = isPlaying,
-                            onBackClick = {
-                                selectedAlbum = null
-                                isSearchExpandedInDetail = false
-                                if (searchQuery.isNotBlank()) {
-                                    viewModel.onSearchQueryChanged("")
-                                }
-                            },
-                            onPlayTrackIndex = { index ->
-                                viewModel.playAlbum(currentAlbum, index)
-                            },
-                            onPlayAllClick = {
-                                viewModel.playAlbum(currentAlbum, 0)
-                            },
-                            onPlayPauseClick = {
-                                viewModel.togglePlayPause()
-                            },
-                            onAddToPlaylistClick = { trackToAddToPlaylist = it },
-                            onAddToQueueClick = handleAddTrackToQueue,
-                            onAddAlbumToQueueClick = handleAddAlbumToQueue,
-                            onAddToFavoritesClick = handleAddToFavorites,
-                            favoriteTrackIds = favoriteTrackIds,
-                            onAutoTagAlbumClick = { viewModel.startAlbumEnrichment(it, separateAlbums = false) },
-                            onAutoTagAlbumSeparationClick = { viewModel.startAlbumEnrichment(it, separateAlbums = true) },
-                            onAutoTagTrackClick = { viewModel.startTrackEnrichment(it) }
-                        )
-                    }
-                }
-
-                // Dettaglio Playlist
-                selectedPlaylist != null -> {
-                    val activePlaylist = playlists.find { it.id == selectedPlaylist?.id } ?: selectedPlaylist!!
-                    val playlistTracks = remember(activePlaylist.trackIds, tracks) {
-                        activePlaylist.trackIds.mapNotNull { id -> tracks.find { it.id == id } }
-                    }
-
-                    PlaylistDetailView(
-                        playlist = activePlaylist,
-                        playlistTracks = playlistTracks,
-                        currentTrack = currentTrack,
-                        isPlaying = isPlaying,
-                        onBackClick = {
-                            selectedPlaylist = null
-                            isSearchExpandedInDetail = false
-                            if (searchQuery.isNotBlank()) {
-                                viewModel.onSearchQueryChanged("")
-                            }
-                        },
-                        onPlayTrackIndex = { index ->
-                            viewModel.playPlaylist(playlistTracks, index)
-                        },
-                        onPlayAllClick = {
-                            viewModel.playPlaylist(playlistTracks, 0)
-                        },
-                        onPlayPauseClick = {
-                            viewModel.togglePlayPause()
-                        },
-                        onRemoveTrack = { trackId ->
-                            viewModel.removeTrackFromPlaylist(activePlaylist.id, trackId)
-                            selectedPlaylist = activePlaylist.copy(
-                                trackIds = activePlaylist.trackIds - trackId
-                            )
-                        },
-                        onAddToQueueClick = handleAddTrackToQueue,
-                        onAddPlaylistToQueueClick = handleAddPlaylistToQueue,
-                        onAddToPlaylistClick = { trackToAddToPlaylist = it },
-                        onAddToFavoritesClick = handleAddToFavorites,
-                        favoriteTrackIds = favoriteTrackIds,
-                        onChangeCoverClick = if (!activePlaylist.isFavorites) handleChangePlaylistCover else null,
-                        onRemoveCoverClick = if (!activePlaylist.isFavorites) handleRemovePlaylistCover else null,
-                        onAutoTagTrackClick = { viewModel.startTrackEnrichment(it) }
-                    )
-                }
-
-                // Schede Principali
+                // Contenuto principale con transizioni Shared-Axis animate fluide
                 else -> {
-                    HorizontalPager(
-                        state = pagerState,
-                        modifier = Modifier.fillMaxSize(),
-                        beyondViewportPageCount = 0,
-                        userScrollEnabled = true
-                    ) { page ->
-                        when (page) {
-                            // 1. Scheda 'Brani'
-                            0 -> {
-                                LazyColumn(
-                                    state = tracksListState,
-                                    modifier = Modifier.fillMaxSize(),
-                                    contentPadding = PaddingValues(bottom = 12.dp)
-                                ) {
-                                    items(
-                                        items = sortedTracks,
-                                        key = { it.id },
-                                        contentType = { "track_list_item" }
-                                    ) { track ->
-                                        TrackListItem(
-                                            modifier = Modifier.animateItem(),
-                                            track = track,
-                                            isSelected = currentTrack?.id == track.id,
-                                            isPlaying = isPlaying && currentTrack?.id == track.id,
-                                            onClick = { viewModel.playTrack(track) },
-                                            onAddToQueueClick = handleAddTrackToQueue,
-                                            onAddToPlaylistClick = { trackToAddToPlaylist = it },
-                                            onAddToFavoritesClick = { handleAddToFavorites(track) },
-                                            isFavorite = track.id in favoriteTrackIds,
-                                            playCount = stats[track.id]?.playCount ?: 0,
-                                            onAutoTagClick = { viewModel.startTrackEnrichment(it) }
-                                        )
-                                    }
-                                }
-                            }
+                    val currentContentScreen = when {
+                        searchQuery.isNotBlank() -> MainContentScreen.Search(searchQuery)
+                        selectedAlbum != null -> MainContentScreen.AlbumDetail(selectedAlbum!!)
+                        selectedPlaylist != null -> MainContentScreen.PlaylistDetail(selectedPlaylist!!)
+                        else -> MainContentScreen.Tabs
+                    }
 
-                            // 2. Scheda 'Album'
-                            1 -> {
-                                AlbumsGridView(
-                                    albums = sortedAlbums,
-                                    onAlbumClick = { album -> selectedAlbum = album },
-                                    onAddToQueueClick = handleAddAlbumToQueue,
-                                    onAutoTagAlbumClick = { viewModel.startAlbumEnrichment(it, separateAlbums = false) },
-                                    onAutoTagAlbumSeparationClick = { viewModel.startAlbumEnrichment(it, separateAlbums = true) },
-                                    state = albumsGridState
+                    AnimatedContent(
+                        targetState = currentContentScreen,
+                        transitionSpec = {
+                            val isNavigatingBack = (targetState is MainContentScreen.Tabs && initialState !is MainContentScreen.Tabs)
+                            if (isNavigatingBack) {
+                                (slideInHorizontally(
+                                    initialOffsetX = { fullWidth -> -(fullWidth * 0.12f).toInt() },
+                                    animationSpec = tween(durationMillis = 240, easing = FastOutSlowInEasing)
+                                ) + fadeIn(animationSpec = tween(durationMillis = 240))).togetherWith(
+                                    slideOutHorizontally(
+                                        targetOffsetX = { fullWidth -> (fullWidth * 0.16f).toInt() },
+                                        animationSpec = tween(durationMillis = 200, easing = FastOutSlowInEasing)
+                                    ) + fadeOut(animationSpec = tween(durationMillis = 200))
+                                )
+                            } else {
+                                (slideInHorizontally(
+                                    initialOffsetX = { fullWidth -> (fullWidth * 0.16f).toInt() },
+                                    animationSpec = tween(durationMillis = 260, easing = FastOutSlowInEasing)
+                                ) + fadeIn(animationSpec = tween(durationMillis = 260))).togetherWith(
+                                    slideOutHorizontally(
+                                        targetOffsetX = { fullWidth -> -(fullWidth * 0.12f).toInt() },
+                                        animationSpec = tween(durationMillis = 220, easing = FastOutSlowInEasing)
+                                    ) + fadeOut(animationSpec = tween(durationMillis = 220))
                                 )
                             }
-
-                            // 3. Scheda 'Playlist'
-                            2 -> {
-                                PlaylistsView(
-                                    playlists = sortedPlaylists,
-                                    onPlaylistClick = { playlist -> selectedPlaylist = playlist },
-                                    onCreatePlaylistClick = { showCreatePlaylistDialog = true },
+                        },
+                        contentKey = { screen ->
+                            when (screen) {
+                                is MainContentScreen.Tabs -> "screen_tabs"
+                                is MainContentScreen.Search -> "screen_search_${screen.query}"
+                                is MainContentScreen.AlbumDetail -> "screen_album_${screen.album.id}"
+                                is MainContentScreen.PlaylistDetail -> "screen_playlist_${screen.playlist.id}"
+                            }
+                        },
+                        label = "MainContentScreenTransition",
+                        modifier = Modifier.fillMaxSize()
+                    ) { targetScreen ->
+                        when (targetScreen) {
+                            is MainContentScreen.Search -> {
+                                GlobalSearchResultsView(
+                                    query = targetScreen.query,
+                                    matchingTracks = matchingTracks,
+                                    matchingAlbums = matchingAlbums,
+                                    matchingPlaylists = matchingPlaylists,
+                                    currentTrack = currentTrack,
+                                    isPlaying = isPlaying,
+                                    stats = stats,
+                                    onTrackClick = { track ->
+                                        viewModel.playTrack(track)
+                                    },
+                                    onAlbumClick = { album ->
+                                        selectedAlbum = album
+                                        viewModel.onSearchQueryChanged("")
+                                    },
+                                    onPlaylistClick = { playlist ->
+                                        selectedPlaylist = playlist
+                                        viewModel.onSearchQueryChanged("")
+                                    },
+                                    onAddToQueueClick = handleAddTrackToQueue,
+                                    onAddToPlaylistClick = { track ->
+                                        trackToAddToPlaylist = track
+                                    },
                                     onDeletePlaylistClick = { playlist ->
                                         viewModel.deletePlaylist(playlist.id)
                                     },
-                                    onAddToQueueClick = handleAddPlaylistToQueue,
-                                    onChangeCoverClick = handleChangePlaylistCover,
-                                    onRemoveCoverClick = handleRemovePlaylistCover,
-                                    state = playlistsListState
+                                    onAddAlbumToQueueClick = handleAddAlbumToQueue,
+                                    onAddPlaylistToQueueClick = handleAddPlaylistToQueue,
+                                    onAddToFavoritesClick = handleAddToFavorites,
+                                    favoriteTrackIds = favoriteTrackIds,
+                                    onChangePlaylistCoverClick = handleChangePlaylistCover,
+                                    onRemovePlaylistCoverClick = handleRemovePlaylistCover,
+                                    onAutoTagTrackClick = { viewModel.startTrackEnrichment(it) }
                                 )
+                            }
+
+                            is MainContentScreen.AlbumDetail -> {
+                                val currentAlbum = albums.find { it.id == targetScreen.album.id }
+                                    ?: targetScreen.album.tracks.firstOrNull()?.let { firstTrack ->
+                                        albums.find { alb -> alb.tracks.any { it.id == firstTrack.id } }
+                                    } ?: targetScreen.album
+
+                                AlbumDetailView(
+                                    album = currentAlbum,
+                                    currentTrack = currentTrack,
+                                    isPlaying = isPlaying,
+                                    onBackClick = {
+                                        selectedAlbum = null
+                                        isSearchExpandedInDetail = false
+                                        if (searchQuery.isNotBlank()) {
+                                            viewModel.onSearchQueryChanged("")
+                                        }
+                                    },
+                                    onPlayTrackIndex = { index ->
+                                        viewModel.playAlbum(currentAlbum, index)
+                                    },
+                                    onPlayAllClick = {
+                                        viewModel.playAlbum(currentAlbum, 0)
+                                    },
+                                    onPlayPauseClick = {
+                                        viewModel.togglePlayPause()
+                                    },
+                                    onAddToPlaylistClick = { trackToAddToPlaylist = it },
+                                    onAddToQueueClick = handleAddTrackToQueue,
+                                    onAddAlbumToQueueClick = handleAddAlbumToQueue,
+                                    onAddToFavoritesClick = handleAddToFavorites,
+                                    favoriteTrackIds = favoriteTrackIds,
+                                    onAutoTagAlbumClick = { viewModel.startAlbumEnrichment(it, separateAlbums = false) },
+                                    onAutoTagAlbumSeparationClick = { viewModel.startAlbumEnrichment(it, separateAlbums = true) },
+                                    onAutoTagTrackClick = { viewModel.startTrackEnrichment(it) },
+                                    onDeleteTracks = { tracks -> viewModel.deleteTracks(tracks) }
+                                )
+                            }
+
+                            is MainContentScreen.PlaylistDetail -> {
+                                val activePlaylist = playlists.find { it.id == targetScreen.playlist.id } ?: targetScreen.playlist
+                                val playlistTracks = remember(activePlaylist.trackIds, tracks) {
+                                    activePlaylist.trackIds.mapNotNull { id -> tracks.find { it.id == id } }
+                                }
+
+                                PlaylistDetailView(
+                                    playlist = activePlaylist,
+                                    playlistTracks = playlistTracks,
+                                    currentTrack = currentTrack,
+                                    isPlaying = isPlaying,
+                                    onBackClick = {
+                                        selectedPlaylist = null
+                                        isSearchExpandedInDetail = false
+                                        if (searchQuery.isNotBlank()) {
+                                            viewModel.onSearchQueryChanged("")
+                                        }
+                                    },
+                                    onPlayTrackIndex = { index ->
+                                        viewModel.playPlaylist(playlistTracks, index)
+                                    },
+                                    onPlayAllClick = {
+                                        viewModel.playPlaylist(playlistTracks, 0)
+                                    },
+                                    onPlayPauseClick = {
+                                        viewModel.togglePlayPause()
+                                    },
+                                    onRemoveTrack = { trackId ->
+                                        viewModel.removeTrackFromPlaylist(activePlaylist.id, trackId)
+                                        selectedPlaylist = activePlaylist.copy(
+                                            trackIds = activePlaylist.trackIds - trackId
+                                        )
+                                    },
+                                    onAddToQueueClick = handleAddTrackToQueue,
+                                    onAddPlaylistToQueueClick = handleAddPlaylistToQueue,
+                                    onAddToPlaylistClick = { trackToAddToPlaylist = it },
+                                    onAddToFavoritesClick = handleAddToFavorites,
+                                    favoriteTrackIds = favoriteTrackIds,
+                                    onChangeCoverClick = if (!activePlaylist.isFavorites) handleChangePlaylistCover else null,
+                                    onRemoveCoverClick = if (!activePlaylist.isFavorites) handleRemovePlaylistCover else null,
+                                    onAutoTagTrackClick = { viewModel.startTrackEnrichment(it) }
+                                )
+                            }
+
+                            is MainContentScreen.Tabs -> {
+                                HorizontalPager(
+                                    state = pagerState,
+                                    modifier = Modifier.fillMaxSize(),
+                                    beyondViewportPageCount = 0,
+                                    userScrollEnabled = true
+                                ) { page ->
+                                    when (page) {
+                                        // 1. Scheda 'Brani'
+                                        0 -> {
+                                            LazyColumn(
+                                                state = tracksListState,
+                                                modifier = Modifier.fillMaxSize(),
+                                                contentPadding = PaddingValues(bottom = 12.dp)
+                                            ) {
+                                                items(
+                                                    items = sortedTracks,
+                                                    key = { it.id },
+                                                    contentType = { "track_list_item" }
+                                                ) { track ->
+                                                    TrackListItem(
+                                                        modifier = Modifier.animateItem(),
+                                                        track = track,
+                                                        isSelected = currentTrack?.id == track.id,
+                                                        isPlaying = isPlaying && currentTrack?.id == track.id,
+                                                        onClick = { viewModel.playTrack(track) },
+                                                        onAddToQueueClick = handleAddTrackToQueue,
+                                                        onAddToPlaylistClick = { trackToAddToPlaylist = it },
+                                                        onAddToFavoritesClick = { handleAddToFavorites(track) },
+                                                        isFavorite = track.id in favoriteTrackIds,
+                                                        playCount = stats[track.id]?.playCount ?: 0,
+                                                        onAutoTagClick = { viewModel.startTrackEnrichment(it) }
+                                                    )
+                                                }
+                                            }
+                                        }
+
+                                        // 2. Scheda 'Album'
+                                        1 -> {
+                                            AlbumsGridView(
+                                                albums = sortedAlbums,
+                                                onAlbumClick = { album -> selectedAlbum = album },
+                                                onAddToQueueClick = handleAddAlbumToQueue,
+                                                onAutoTagAlbumClick = { viewModel.startAlbumEnrichment(it, separateAlbums = false) },
+                                                onAutoTagAlbumSeparationClick = { viewModel.startAlbumEnrichment(it, separateAlbums = true) },
+                                                state = albumsGridState
+                                            )
+                                        }
+
+                                        // 3. Scheda 'Playlist'
+                                        2 -> {
+                                            PlaylistsView(
+                                                playlists = sortedPlaylists,
+                                                onPlaylistClick = { playlist -> selectedPlaylist = playlist },
+                                                onCreatePlaylistClick = { showCreatePlaylistDialog = true },
+                                                onDeletePlaylistClick = { playlist ->
+                                                    viewModel.deletePlaylist(playlist.id)
+                                                },
+                                                onAddToQueueClick = handleAddPlaylistToQueue,
+                                                onChangeCoverClick = handleChangePlaylistCover,
+                                                onRemoveCoverClick = handleRemovePlaylistCover,
+                                                state = playlistsListState
+                                            )
+                                        }
+                                    }
+                                }
                             }
                         }
                     }
@@ -1551,4 +1620,11 @@ private fun EmptyTracksView(
             Text(text = "Riprova")
         }
     }
+}
+
+private sealed interface MainContentScreen {
+    data object Tabs : MainContentScreen
+    data class Search(val query: String) : MainContentScreen
+    data class AlbumDetail(val album: Album) : MainContentScreen
+    data class PlaylistDetail(val playlist: Playlist) : MainContentScreen
 }

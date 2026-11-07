@@ -73,6 +73,17 @@ class StorageWriteManager(private val context: Context) {
     }
 
     /**
+     * Crea un IntentSender per la richiesta di eliminazione definitiva di file tramite MediaStore (Android 16).
+     */
+    fun createDeleteRequestIntentSender(uris: List<Uri>): IntentSender? {
+        return try {
+            MediaStore.createDeleteRequest(context.contentResolver, uris).intentSender
+        } catch (e: Exception) {
+            null
+        }
+    }
+
+    /**
      * Sovrascrive il file audio originale con il file preparato in cache,
      * aggiorna il database MediaStore e salva i testi .lrc localmente.
      */

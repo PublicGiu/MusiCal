@@ -29,6 +29,22 @@ class AppPreferences(context: Context) {
         private const val KEY_CUSTOM_FOLDERS = "custom_folders"
         private const val KEY_DISMISSED_UPDATE_VERSION = "dismissed_update_version"
         private const val KEY_LAST_UPDATE_CHECK_TIMESTAMP = "last_update_check_timestamp"
+
+        // Ripristino ultima sessione di riproduzione
+        private const val KEY_LAST_PLAYED_TRACK_ID = "last_played_track_id"
+        private const val KEY_LAST_PLAYBACK_POSITION_MS = "last_playback_position_ms"
+        private const val KEY_LAST_REPEAT_MODE = "last_repeat_mode"
+        private const val KEY_LAST_SHUFFLE_ENABLED = "last_shuffle_enabled"
+        private const val KEY_LAST_CONTEXT_TYPE = "last_context_type"
+        private const val KEY_LAST_CONTEXT_ID = "last_context_id"
+        private const val KEY_LAST_CONTEXT_NAME = "last_context_name"
+
+        // Equalizzatore ed effetti sonori
+        private const val KEY_EQUALIZER_ENABLED = "equalizer_enabled"
+        private const val KEY_EQUALIZER_PRESET = "equalizer_preset"
+        private const val KEY_EQUALIZER_BANDS = "equalizer_bands"
+        private const val KEY_BASS_BOOST = "bass_boost"
+        private const val KEY_VIRTUALIZER = "virtualizer"
     }
 
     /**
@@ -130,4 +146,53 @@ class AppPreferences(context: Context) {
     fun setLastUpdateCheckTimestamp(timestamp: Long) {
         prefs.edit().putLong(KEY_LAST_UPDATE_CHECK_TIMESTAMP, timestamp).apply()
     }
+
+    /**
+     * Salvataggio e recupero dello stato dell'ultima sessione di riproduzione.
+     */
+    fun saveLastPlaybackState(
+        trackId: Long,
+        positionMs: Long,
+        repeatMode: Int,
+        shuffleEnabled: Boolean,
+        contextType: String? = null,
+        contextId: String? = null,
+        contextName: String? = null
+    ) {
+        prefs.edit()
+            .putLong(KEY_LAST_PLAYED_TRACK_ID, trackId)
+            .putLong(KEY_LAST_PLAYBACK_POSITION_MS, positionMs)
+            .putInt(KEY_LAST_REPEAT_MODE, repeatMode)
+            .putBoolean(KEY_LAST_SHUFFLE_ENABLED, shuffleEnabled)
+            .putString(KEY_LAST_CONTEXT_TYPE, contextType)
+            .putString(KEY_LAST_CONTEXT_ID, contextId)
+            .putString(KEY_LAST_CONTEXT_NAME, contextName)
+            .apply()
+    }
+
+    fun getLastPlayedTrackId(): Long = prefs.getLong(KEY_LAST_PLAYED_TRACK_ID, -1L)
+    fun getLastPlaybackPositionMs(): Long = prefs.getLong(KEY_LAST_PLAYBACK_POSITION_MS, 0L)
+    fun getLastRepeatMode(): Int = prefs.getInt(KEY_LAST_REPEAT_MODE, 0)
+    fun getLastShuffleEnabled(): Boolean = prefs.getBoolean(KEY_LAST_SHUFFLE_ENABLED, false)
+    fun getLastContextType(): String? = prefs.getString(KEY_LAST_CONTEXT_TYPE, null)
+    fun getLastContextId(): String? = prefs.getString(KEY_LAST_CONTEXT_ID, null)
+    fun getLastContextName(): String? = prefs.getString(KEY_LAST_CONTEXT_NAME, null)
+
+    /**
+     * Preferenze dell'equalizzatore audio ed effetti sonori.
+     */
+    fun isEqualizerEnabled(): Boolean = prefs.getBoolean(KEY_EQUALIZER_ENABLED, false)
+    fun setEqualizerEnabled(enabled: Boolean) = prefs.edit().putBoolean(KEY_EQUALIZER_ENABLED, enabled).apply()
+
+    fun getEqualizerPreset(): Int = prefs.getInt(KEY_EQUALIZER_PRESET, -1)
+    fun setEqualizerPreset(presetIndex: Int) = prefs.edit().putInt(KEY_EQUALIZER_PRESET, presetIndex).apply()
+
+    fun getEqualizerBandLevels(): String? = prefs.getString(KEY_EQUALIZER_BANDS, null)
+    fun setEqualizerBandLevels(levelsCsv: String) = prefs.edit().putString(KEY_EQUALIZER_BANDS, levelsCsv).apply()
+
+    fun getBassBoostStrength(): Int = prefs.getInt(KEY_BASS_BOOST, 0)
+    fun setBassBoostStrength(strength: Int) = prefs.edit().putInt(KEY_BASS_BOOST, strength).apply()
+
+    fun getVirtualizerStrength(): Int = prefs.getInt(KEY_VIRTUALIZER, 0)
+    fun setVirtualizerStrength(strength: Int) = prefs.edit().putInt(KEY_VIRTUALIZER, strength).apply()
 }

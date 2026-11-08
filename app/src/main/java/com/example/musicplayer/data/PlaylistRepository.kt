@@ -248,4 +248,23 @@ class PlaylistRepository(private val context: Context) {
         }
         savePlaylists(updated)
     }
+
+    @Synchronized
+    fun moveTrackInPlaylist(playlistId: String, fromIndex: Int, toIndex: Int): Boolean {
+        val current = loadPlaylists()
+        val target = current.find { it.id == playlistId } ?: return false
+        val trackIds = target.trackIds.toMutableList()
+        if (fromIndex !in trackIds.indices || toIndex !in trackIds.indices || fromIndex == toIndex) return false
+        val moved = trackIds.removeAt(fromIndex)
+        trackIds.add(toIndex, moved)
+        val updated = current.map {
+            if (it.id == playlistId) {
+                it.copy(trackIds = trackIds)
+            } else {
+                it
+            }
+        }
+        savePlaylists(updated)
+        return true
+    }
 }

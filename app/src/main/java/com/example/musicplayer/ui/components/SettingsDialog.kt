@@ -2,9 +2,17 @@ package com.example.musicplayer.ui.components
 
 import android.content.Intent
 import android.net.Uri
+import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.animation.core.Spring
+import androidx.compose.animation.core.spring
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.Orientation
+import androidx.compose.foundation.gestures.draggable
+import androidx.compose.foundation.gestures.rememberDraggableState
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -32,10 +40,13 @@ import androidx.compose.material.icons.filled.ColorLens
 import androidx.compose.material.icons.filled.Download
 import androidx.compose.material.icons.filled.Folder
 import androidx.compose.material.icons.filled.FolderOpen
+import androidx.compose.material.icons.filled.GraphicEq
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.MusicNote
+import androidx.compose.material.icons.filled.QueryStats
 import androidx.compose.material.icons.filled.Radio
 import androidx.compose.material.icons.filled.Refresh
+import androidx.compose.material.icons.filled.Timer
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
@@ -58,11 +69,17 @@ import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableFloatStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
@@ -75,6 +92,7 @@ import com.example.musicplayer.data.AudioSourceMode
 import com.example.musicplayer.data.ThemeMode
 import com.example.musicplayer.data.update.GithubUpdateChecker
 import com.example.musicplayer.ui.MusicViewModel
+import kotlinx.coroutines.launch
 
 /**
  * Finestra di dialogo a schermo intero per la gestione delle impostazioni dell'app:
@@ -86,7 +104,10 @@ fun SettingsDialog(
     viewModel: MusicViewModel,
     onDismiss: () -> Unit,
     onOpenLastFmDialog: () -> Unit,
-    onPickCustomFolder: () -> Unit
+    onPickCustomFolder: () -> Unit,
+    onOpenEqualizer: () -> Unit = {},
+    onOpenSleepTimer: () -> Unit = {},
+    onOpenStats: () -> Unit = {}
 ) {
     val context = LocalContext.current
     val themeMode by viewModel.themeMode.collectAsState()
@@ -103,6 +124,10 @@ fun SettingsDialog(
     val isCheckingUpdate by viewModel.isCheckingUpdate.collectAsState()
     val updateCheckError by viewModel.updateCheckError.collectAsState()
 
+    val coroutineScope = rememberCoroutineScope()
+    val offsetX = remember { Animatable(0f) }
+    var containerWidthPx by remember { mutableFloatStateOf(1080f) }
+
     Dialog(
         onDismissRequest = onDismiss,
         properties = DialogProperties(
@@ -110,8 +135,53 @@ fun SettingsDialog(
             decorFitsSystemWindows = false
         )
     ) {
-        Scaffold(
-            topBar = {
+        val dismissProgress = (offsetX.value / containerWidthPx).coerceIn(0f, 1f)
+
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .background(Color.Black.copy(alpha = 0.5f * (1f - dismissProgress)))
+                .onSizeChanged { containerWidthPx = it.width.toFloat().coerceAtLeast(1f) }
+                .draggable(
+                    state = rememberDraggableState { delta ->
+                        val target = (offsetX.value + delta).coerceAtLeast(0f)
+                        coroutineScope.launch {
+                            offsetX.snapTo(target)
+                        }
+                    },
+                    orientation = Orientation.Horizontal,
+                    onDragStopped = { velocity ->
+                        val threshold = containerWidthPx * 0.25f
+                        if (offsetX.value >= threshold || (velocity > 1000f && offsetX.value > 30f)) {
+                            coroutineScope.launch {
+                                offsetX.animateTo(
+                                    targetValue = containerWidthPx,
+                                    animationSpec = tween(durationMillis = 180, easing = FastOutSlowInEasing)
+                                )
+                                onDismiss()
+                            }
+                        } else {
+                            coroutineScope.launch {
+                                offsetX.animateTo(
+                                    targetValue = 0f,
+                                    animationSpec = spring(
+                                        dampingRatio = Spring.DampingRatioNoBouncy,
+                                        stiffness = Spring.StiffnessMediumLow
+                                    )
+                                )
+                            }
+                        }
+                    }
+                )
+        ) {
+            Scaffold(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .graphicsLayer {
+                        translationX = offsetX.value
+                        shadowElevation = if (offsetX.value > 0f) 16f else 0f
+                    },
+                topBar = {
                 TopAppBar(
                     title = {
                         Text(
@@ -204,28 +274,126 @@ fun SettingsDialog(
                     modifier = Modifier.fillMaxWidth(),
                     colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f))
                 ) {
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(16.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.SpaceBetween
-                    ) {
-                        Column(modifier = Modifier.weight(1f).padding(end = 16.dp)) {
-                            Text(
-                                text = "Riproduzione automatica continua",
-                                style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.SemiBold)
-                            )
-                            Text(
-                                text = "Continua a riprodurre brani casuali al termine della coda",
-                                style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                    Column {
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(16.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.SpaceBetween
+                        ) {
+                            Column(modifier = Modifier.weight(1f).padding(end = 16.dp)) {
+                                Text(
+                                    text = "Riproduzione automatica continua",
+                                    style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.SemiBold)
+                                )
+                                Text(
+                                    text = "Continua a riprodurre brani casuali al termine della coda",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                            }
+                            Switch(
+                                checked = isAutoplayEnabled,
+                                onCheckedChange = { viewModel.setAutoplayEnabled(it) }
                             )
                         }
-                        Switch(
-                            checked = isAutoplayEnabled,
-                            onCheckedChange = { viewModel.setAutoplayEnabled(it) }
+
+                        HorizontalDivider(
+                            modifier = Modifier.padding(horizontal = 16.dp),
+                            color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)
                         )
+
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clickable { onOpenEqualizer() }
+                                .padding(16.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.GraphicEq,
+                                contentDescription = null,
+                                tint = MaterialTheme.colorScheme.primary,
+                                modifier = Modifier.size(24.dp)
+                            )
+                            Spacer(modifier = Modifier.width(14.dp))
+                            Column(modifier = Modifier.weight(1f)) {
+                                Text(
+                                    text = "Equalizzatore audio",
+                                    style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.SemiBold)
+                                )
+                                Text(
+                                    text = "Regola 5 bande di frequenza, bass boost e virtualizzatore",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                            }
+                        }
+
+                        HorizontalDivider(
+                            modifier = Modifier.padding(horizontal = 16.dp),
+                            color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)
+                        )
+
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clickable { onOpenSleepTimer() }
+                                .padding(16.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.Timer,
+                                contentDescription = null,
+                                tint = MaterialTheme.colorScheme.primary,
+                                modifier = Modifier.size(24.dp)
+                            )
+                            Spacer(modifier = Modifier.width(14.dp))
+                            Column(modifier = Modifier.weight(1f)) {
+                                Text(
+                                    text = "Timer di spegnimento",
+                                    style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.SemiBold)
+                                )
+                                Text(
+                                    text = "Interrompi la musica con timer o a fine brano con dissolvenza",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                            }
+                        }
+
+                        HorizontalDivider(
+                            modifier = Modifier.padding(horizontal = 16.dp),
+                            color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)
+                        )
+
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clickable { onOpenStats() }
+                                .padding(16.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.QueryStats,
+                                contentDescription = null,
+                                tint = MaterialTheme.colorScheme.primary,
+                                modifier = Modifier.size(24.dp)
+                            )
+                            Spacer(modifier = Modifier.width(14.dp))
+                            Column(modifier = Modifier.weight(1f)) {
+                                Text(
+                                    text = "Statistiche d'ascolto",
+                                    style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.SemiBold)
+                                )
+                                Text(
+                                    text = "Visualizza brani e artisti più ascoltati e tempo totale",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                            }
+                        }
                     }
                 }
 
@@ -657,6 +825,7 @@ fun SettingsDialog(
             }
         }
     }
+}
 }
 
 @Composable

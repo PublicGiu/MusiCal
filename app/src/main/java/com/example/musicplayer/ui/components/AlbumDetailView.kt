@@ -109,7 +109,8 @@ fun AlbumDetailView(
     onAutoTagAlbumClick: ((Album) -> Unit)? = null,
     onAutoTagAlbumSeparationClick: ((Album) -> Unit)? = null,
     onAutoTagTrackClick: ((AudioTrack) -> Unit)? = null,
-    onDeleteTracks: ((List<AudioTrack>) -> Unit)? = null
+    onDeleteTracks: ((List<AudioTrack>) -> Unit)? = null,
+    onArtistClick: ((String) -> Unit)? = null
 ) {
     val isCurrentAlbumActive = currentTrack != null &&
         (currentTrack.albumId == album.id || album.tracks.any { it.id == currentTrack.id })
@@ -265,7 +266,12 @@ fun AlbumDetailView(
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
                     modifier = Modifier
-                        .fillMaxWidth()
+                        .clip(RoundedCornerShape(4.dp))
+                        .then(
+                            if (onArtistClick != null && album.artist.isNotBlank()) {
+                                Modifier.clickable { onArtistClick(album.artist) }
+                            } else Modifier
+                        )
                         .basicMarquee()
                 )
             }
@@ -509,7 +515,8 @@ fun AlbumDetailView(
                         onAddToPlaylistClick = onAddToPlaylistClick,
                         onAddToFavoritesClick = onAddToFavoritesClick?.let { cb -> { cb(track) } },
                         isFavorite = track.id in favoriteTrackIds,
-                        onAutoTagClick = onAutoTagTrackClick
+                        onAutoTagClick = onAutoTagTrackClick,
+                        onArtistClick = onArtistClick
                     )
                 }
             }

@@ -15,16 +15,20 @@ import androidx.media3.session.SessionToken
 import com.example.musicplayer.data.Album
 import com.example.musicplayer.data.AppPreferences
 import com.example.musicplayer.data.AudioTrack
+import com.example.musicplayer.data.PlaybackContext
 import com.example.musicplayer.data.Playlist
 import com.example.musicplayer.data.PlaylistRepository
+import com.example.musicplayer.playback.SleepTimerState
 import com.example.musicplayer.data.SortOption
 import com.example.musicplayer.data.ThemeMode
 import com.example.musicplayer.data.StatsRepository
 import com.example.musicplayer.data.TrackStats
 import com.example.musicplayer.data.LibraryCacheRepository
+import com.example.musicplayer.data.extractMainArtist
 import com.example.musicplayer.data.groupTracksIntoAlbums
 import com.example.musicplayer.data.isMixedOrGeneric
 import com.example.musicplayer.data.loadAudioFiles
+import com.example.musicplayer.data.matchesArtist
 import com.example.musicplayer.data.sortAlbums
 import com.example.musicplayer.data.sortPlaylists
 import com.example.musicplayer.data.sortTracks
@@ -119,6 +123,17 @@ class MusicViewModel(application: Application) : AndroidViewModel(application) {
 
     private val _repeatMode = MutableStateFlow(Player.REPEAT_MODE_OFF)
     val repeatMode: StateFlow<Int> = _repeatMode.asStateFlow()
+
+    // --- Contesto di riproduzione e Timer di spegnimento ---
+    private val _playbackContext = MutableStateFlow<PlaybackContext>(PlaybackContext.Library)
+    val playbackContext: StateFlow<PlaybackContext> = _playbackContext.asStateFlow()
+
+    private val _sleepTimerState = MutableStateFlow<SleepTimerState>(SleepTimerState.Inactive)
+    val sleepTimerState: StateFlow<SleepTimerState> = _sleepTimerState.asStateFlow()
+    private var sleepTimerJob: Job? = null
+    private var isPlaybackStateRestored: Boolean = false
+    private var isRestoringPlaybackState: Boolean = false
+    private var hasRecordedPlayForRestoredTrack: Boolean = true
 
     // --- 1. Coda di riproduzione (Coda Utente, Autoplay a 15 brani e Timeline generale) ---
     private val _userQueue = MutableStateFlow<List<AudioTrack>>(emptyList())
@@ -257,6 +272,10 @@ class MusicViewModel(application: Application) : AndroidViewModel(application) {
 
     private val recentPlayedTrackIds = ArrayDeque<Long>()
 
+    // Contesto di riproduzione attivo (es. tracce dell'album o della playlist avviata)
+    private var activeContextTracks: List<AudioTrack> = emptyList()
+    private var isCustomContextActive: Boolean = false
+
     // Tracciamento stato scrobble per il brano corrente
     private var currentTrackStartTimeSeconds: Long = 0L
     private var scrobbleSentForCurrentTrack: Boolean = false
@@ -274,6 +293,14 @@ class MusicViewModel(application: Application) : AndroidViewModel(application) {
         override fun onIsPlayingChanged(isPlaying: Boolean) {
             _isPlaying.value = isPlaying
             if (isPlaying) {
+                if (!hasRecordedPlayForRestoredTrack) {
+                    hasRecordedPlayForRestoredTrack = true
+                    _currentTrack.value?.let { current ->
+                        recordTrackPlayed(current.id)
+                        recordRecentTrack(current.id)
+                        handleTrackStartedForScrobble(current)
+                    }
+                }
                 startProgressTicker()
             } else {
                 stopProgressTicker()
@@ -281,18 +308,33 @@ class MusicViewModel(application: Application) : AndroidViewModel(application) {
         }
 
         override fun onShuffleModeEnabledChanged(shuffleModeEnabled: Boolean) {
-            _isShuffleEnabled.value = shuffleModeEnabled
+            // Se un controller esterno (es. Bluetooth/notifica) abilita shuffleModeEnabled su ExoPlayer,
+            // invertiamo lo stato logico di shuffle interno mantenendo sequenziale ExoPlayer (1:1 con la Coda).
+            if (shuffleModeEnabled) {
+                mediaController?.shuffleModeEnabled = false
+                val newShuffle = !_isShuffleEnabled.value
+                _isShuffleEnabled.value = newShuffle
+                rebuildAutoplayForCurrentMode()
+                saveCurrentPlaybackState()
+            }
         }
 
         override fun onRepeatModeChanged(repeatMode: Int) {
+            val changed = _repeatMode.value != repeatMode
             _repeatMode.value = repeatMode
+            if (changed) {
+                rebuildAutoplayForCurrentMode()
+                saveCurrentPlaybackState()
+            }
         }
 
         override fun onMediaItemTransition(mediaItem: MediaItem?, reason: Int) {
             mediaItem?.let { item ->
                 val controller = mediaController
+                val prevIndex = lastKnownQueueIndex
                 val newIndex = controller?.currentMediaItemIndex ?: 0
-                val isSteppingBack = newIndex < lastKnownQueueIndex
+                val isSteppingBack = newIndex < prevIndex
+                val stepsForward = newIndex - prevIndex
                 lastKnownQueueIndex = newIndex
 
                 val trackId = item.mediaId.toLongOrNull()
@@ -305,15 +347,48 @@ class MusicViewModel(application: Application) : AndroidViewModel(application) {
                     uri = item.requestMetadata.mediaUri ?: android.net.Uri.EMPTY,
                     albumArtUri = item.mediaMetadata.artworkUri
                 )
+                val previousTrackId = _currentTrack.value?.id
                 _currentTrack.value = current
+
+                // Se la transizione è causata dal ripristino iniziale a freddo (in pausa),
+                // non registriamo un falso ascolto né sovrascriviamo la posizione salvata.
+                if (isRestoringPlaybackState) {
+                    isRestoringPlaybackState = false
+                    updateDuration()
+                    updateQueueFromController()
+                    return
+                }
+
+                val timer = _sleepTimerState.value
+                if (timer is SleepTimerState.Active && timer.isEndOfTrack && previousTrackId != null) {
+                    if (reason == Player.MEDIA_ITEM_TRANSITION_REASON_AUTO ||
+                        reason == Player.MEDIA_ITEM_TRANSITION_REASON_REPEAT
+                    ) {
+                        cancelSleepTimer()
+                        controller?.pause()
+                        hasRecordedPlayForRestoredTrack = false
+                        saveCurrentPlaybackState()
+                        updateDuration()
+                        updateQueueFromController()
+                        return
+                    } else {
+                        // Cambio traccia manuale da parte dell'utente: ripristina il volume pieno per il nuovo brano
+                        controller?.setVolume(1.0f)
+                    }
+                }
+
+                hasRecordedPlayForRestoredTrack = true
                 // Registra la statistica d'ascolto della traccia avviata
                 trackId?.let { id ->
                     recordTrackPlayed(id)
                     recordRecentTrack(id)
                 }
                 handleTrackStartedForScrobble(current)
+                saveCurrentPlaybackState()
 
-                if (isSteppingBack && controller != null) {
+                if (_repeatMode.value == Player.REPEAT_MODE_ONE && previousTrackId != null && previousTrackId != current.id) {
+                    rebuildAutoplayForCurrentMode()
+                } else if (isSteppingBack && controller != null) {
                     // Ritorno a un brano precedente: riallinea _autoplayQueue con gli elementi effettivi dopo _userQueue
                     val allTracks = _tracks.value
                     val autoStartExo = (newIndex + 1 + _userQueue.value.size).coerceAtMost(controller.mediaItemCount)
@@ -340,18 +415,15 @@ class MusicViewModel(application: Application) : AndroidViewModel(application) {
                     } else {
                         _autoplayQueue.value = rebuiltAutoplay
                     }
-                } else {
-                    // Gestione consumo Coda Utente vs Riproduzione Automatica in avanzamento
+                } else if (stepsForward > 0) {
+                    // Gestione consumo Coda Utente vs Riproduzione Automatica in avanzamento basata sull'offset esatto
                     val userList = _userQueue.value
-                    val userIndex = userList.indexOfFirst { it.id == current.id }
-                    if (userIndex != -1) {
-                        _userQueue.value = userList.drop(userIndex + 1)
+                    if (stepsForward <= userList.size) {
+                        _userQueue.value = userList.drop(stepsForward)
                     } else {
-                        val autoList = _autoplayQueue.value
-                        val autoIndex = autoList.indexOfFirst { it.id == current.id }
-                        if (autoIndex != -1) {
-                            _autoplayQueue.value = autoList.drop(autoIndex + 1)
-                        }
+                        val autoConsumed = stepsForward - userList.size
+                        _userQueue.value = emptyList()
+                        _autoplayQueue.value = _autoplayQueue.value.drop(autoConsumed)
                     }
                 }
                 replenishAutoplayIfNeeded(current)
@@ -375,7 +447,13 @@ class MusicViewModel(application: Application) : AndroidViewModel(application) {
                 _currentPositionMs.value = mediaController?.currentPosition?.coerceAtLeast(0L) ?: 0L
             }
             if (playbackState == Player.STATE_ENDED) {
-                checkAndTriggerAutoplayIfNeeded()
+                val timer = _sleepTimerState.value
+                if (timer is SleepTimerState.Active && timer.isEndOfTrack) {
+                    mediaController?.pause()
+                    cancelSleepTimer()
+                } else {
+                    checkAndTriggerAutoplayIfNeeded()
+                }
             }
             updateQueueFromController()
         }
@@ -403,6 +481,7 @@ class MusicViewModel(application: Application) : AndroidViewModel(application) {
                             _tracks.value = cachedTracks
                             _albums.value = cachedAlbums
                             _isLoading.value = false
+                            restoreLastPlaybackStateIfPossible()
                         }
                     }
                 }
@@ -446,7 +525,8 @@ class MusicViewModel(application: Application) : AndroidViewModel(application) {
                 controller.addListener(playerListener)
 
                 _isPlaying.value = controller.isPlaying
-                _isShuffleEnabled.value = controller.shuffleModeEnabled
+                controller.shuffleModeEnabled = false
+                _isShuffleEnabled.value = appPreferences.getLastShuffleEnabled()
                 _repeatMode.value = controller.repeatMode
 
                 controller.currentMediaItem?.let { item ->
@@ -458,6 +538,8 @@ class MusicViewModel(application: Application) : AndroidViewModel(application) {
 
                 if (controller.isPlaying) {
                     startProgressTicker()
+                } else if (controller.playbackState == Player.STATE_IDLE && _tracks.value.isNotEmpty()) {
+                    restoreLastPlaybackStateIfPossible()
                 }
             } catch (e: Exception) {
                 e.printStackTrace()
@@ -506,6 +588,7 @@ class MusicViewModel(application: Application) : AndroidViewModel(application) {
             }
             updateQueueFromController()
             _isLoading.value = false
+            restoreLastPlaybackStateIfPossible()
         }
     }
 
@@ -883,6 +966,8 @@ class MusicViewModel(application: Application) : AndroidViewModel(application) {
     fun clearQueue() {
         val controller = mediaController ?: return
         controller.clearMediaItems()
+        activeContextTracks = emptyList()
+        isCustomContextActive = false
         _currentTrack.value = null
         _queue.value = emptyList()
         _userQueue.value = emptyList()
@@ -900,26 +985,68 @@ class MusicViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
+    /**
+     * Restituisce le tracce del contesto attivo per la modalità di ripetizione:
+     * 1. Se è attiva una coda contestuale (album o playlist avviati dall'utente) e il brano vi appartiene, usa quella.
+     * 2. Altrimenti cerca l'album del brano di riferimento nella libreria e ne restituisce le tracce ordinate.
+     * 3. Fallback: lista con il solo brano di riferimento.
+     */
+    private fun getRepeatContextTracks(referenceTrack: AudioTrack?): List<AudioTrack> {
+        if (activeContextTracks.isNotEmpty() && (referenceTrack == null || activeContextTracks.any { it.id == referenceTrack.id })) {
+            return activeContextTracks
+        }
+        if (referenceTrack != null) {
+            val matchingAlbum = _albums.value.find { it.id == referenceTrack.albumId }
+                ?: _albums.value.find { alb -> alb.tracks.any { it.id == referenceTrack.id } }
+                ?: _albums.value.find { it.title.equals(referenceTrack.album, ignoreCase = true) }
+            val albumTracks = matchingAlbum?.tracks?.sortedWith(
+                compareBy<AudioTrack> { it.discNumber }
+                    .thenBy { it.trackNumber }
+                    .thenBy { it.title }
+            )
+            if (!albumTracks.isNullOrEmpty()) {
+                return albumTracks
+            }
+            return listOf(referenceTrack)
+        }
+        return emptyList()
+    }
+
     fun playCustomQueue(trackList: List<AudioTrack>, startIndex: Int = 0) {
         val controller = mediaController ?: return
         if (trackList.isEmpty()) return
+
+        isRestoringPlaybackState = false
+        hasRecordedPlayForRestoredTrack = true
+        activeContextTracks = trackList
+        isCustomContextActive = true
 
         val safeIndex = startIndex.coerceIn(0, trackList.size - 1)
         val previousInList = trackList.subList(0, safeIndex)
         val current = trackList[safeIndex]
         _userQueue.value = emptyList()
 
-        val upcomingInList = trackList.subList(safeIndex + 1, trackList.size)
-        val needed = 15 - upcomingInList.size
-        val autoplaySupplement = if (_isAutoplayEnabled.value && needed > 0) {
-            val excludeIds = (trackList.map { it.id } + recentPlayedTrackIds).toSet()
-            val candidates = _tracks.value.filter { it.id !in excludeIds }
-            candidates.shuffled().take(needed)
-        } else {
-            emptyList()
+        val isShuffled = _isShuffleEnabled.value
+        val initialAutoplay = when (_repeatMode.value) {
+            Player.REPEAT_MODE_ALL -> buildCyclicContextQueue(trackList, current, count = 15, isShuffled = isShuffled)
+            Player.REPEAT_MODE_ONE -> List(15) { current }
+            else -> {
+                val orderedUpcoming = if (isShuffled) {
+                    trackList.filterIndexed { index, _ -> index != safeIndex }.shuffled()
+                } else {
+                    trackList.subList(safeIndex + 1, trackList.size)
+                }
+                val needed = 15 - orderedUpcoming.size
+                val autoplaySupplement = if (_isAutoplayEnabled.value && needed > 0) {
+                    val excludeIds = (trackList.map { it.id } + recentPlayedTrackIds).toSet()
+                    val candidates = _tracks.value.filter { it.id !in excludeIds }
+                    candidates.shuffled().take(needed)
+                } else {
+                    emptyList()
+                }
+                (orderedUpcoming + autoplaySupplement).take(15)
+            }
         }
-
-        val initialAutoplay = (upcomingInList + autoplaySupplement).take(15)
         _autoplayQueue.value = initialAutoplay
 
         val allItems = (previousInList + listOf(current) + initialAutoplay).map { trackToMediaItem(it) }
@@ -928,12 +1055,15 @@ class MusicViewModel(application: Application) : AndroidViewModel(application) {
         controller.prepare()
         controller.play()
         _currentTrack.value = current
+        _currentPositionMs.value = 0L
         _isPlaying.value = true
         startProgressTicker()
         updateQueueFromController()
+        saveCurrentPlaybackState()
     }
 
     fun playAlbum(album: Album, startIndex: Int = 0) {
+        _playbackContext.value = PlaybackContext.Album(album.id, album.title, album.artist)
         val albumSongs = album.tracks.sortedWith(
             compareBy<AudioTrack> { it.discNumber }
                 .thenBy { it.trackNumber }
@@ -942,14 +1072,43 @@ class MusicViewModel(application: Application) : AndroidViewModel(application) {
         playCustomQueue(albumSongs, startIndex)
     }
 
-    fun playPlaylist(playlistTracks: List<AudioTrack>, startIndex: Int = 0) {
+    fun playPlaylist(playlist: Playlist, startIndex: Int = 0) {
+        val trackMap = _tracks.value.associateBy { it.id }
+        val playlistTracks = playlist.trackIds.mapNotNull { trackMap[it] }
+        _playbackContext.value = PlaybackContext.Playlist(playlist.id, playlist.name)
         playCustomQueue(playlistTracks, startIndex)
+    }
+
+    fun playPlaylist(playlistTracks: List<AudioTrack>, startIndex: Int = 0) {
+        if (_playbackContext.value !is PlaybackContext.Playlist) {
+            _playbackContext.value = PlaybackContext.Playlist("", "Playlist")
+        }
+        playCustomQueue(playlistTracks, startIndex)
+    }
+
+    fun playPlaylist(playlistId: String, playlistName: String, playlistTracks: List<AudioTrack>, startIndex: Int = 0) {
+        _playbackContext.value = PlaybackContext.Playlist(playlistId, playlistName)
+        playCustomQueue(playlistTracks, startIndex)
+    }
+
+    fun playArtist(artistName: String, startIndex: Int = 0) {
+        val artistTracks = _tracks.value.filter { it.matchesArtist(artistName) }
+        if (artistTracks.isEmpty()) return
+        val displayArtist = extractMainArtist(artistName).ifBlank { artistName }
+        _playbackContext.value = PlaybackContext.Artist(displayArtist)
+        playCustomQueue(artistTracks, startIndex)
     }
 
     fun playTrack(track: AudioTrack) {
         val controller = mediaController ?: return
         val currentQueueSnapshot = _queue.value
         val currentIdxSnapshot = _currentQueueIndex.value
+
+        isRestoringPlaybackState = false
+        hasRecordedPlayForRestoredTrack = true
+        _playbackContext.value = PlaybackContext.Library
+        activeContextTracks = emptyList()
+        isCustomContextActive = false
 
         // Preserva i brani già riprodotti nella sessione corrente (fino a max 25 brani) per consentire il tasto Precedente
         val rawHistory = if (currentQueueSnapshot.isNotEmpty() && currentIdxSnapshot in currentQueueSnapshot.indices) {
@@ -962,11 +1121,17 @@ class MusicViewModel(application: Application) : AndroidViewModel(application) {
             .takeLast(25)
 
         _userQueue.value = emptyList()
+        _autoplayQueue.value = emptyList()
 
-        val autoplayCandidates = if (_isAutoplayEnabled.value) {
-            selectAutoplayTracks(referenceTrack = track, count = 15)
-        } else {
-            emptyList()
+        val isShuffled = _isShuffleEnabled.value
+        val autoplayCandidates = when (_repeatMode.value) {
+            Player.REPEAT_MODE_ALL -> buildCyclicContextQueue(getRepeatContextTracks(track), track, count = 15, isShuffled = isShuffled)
+            Player.REPEAT_MODE_ONE -> List(15) { track }
+            else -> if (_isAutoplayEnabled.value) {
+                selectAutoplayTracks(referenceTrack = track, count = 15)
+            } else {
+                emptyList()
+            }
         }
         _autoplayQueue.value = autoplayCandidates
 
@@ -977,9 +1142,11 @@ class MusicViewModel(application: Application) : AndroidViewModel(application) {
         controller.prepare()
         controller.play()
         _currentTrack.value = track
+        _currentPositionMs.value = 0L
         _isPlaying.value = true
         startProgressTicker()
         updateQueueFromController()
+        saveCurrentPlaybackState()
     }
 
     fun togglePlayPause() {
@@ -1064,9 +1231,11 @@ class MusicViewModel(application: Application) : AndroidViewModel(application) {
 
     fun toggleShuffle() {
         val controller = mediaController ?: return
-        val newShuffle = !controller.shuffleModeEnabled
-        controller.shuffleModeEnabled = newShuffle
+        val newShuffle = !_isShuffleEnabled.value
         _isShuffleEnabled.value = newShuffle
+        controller.shuffleModeEnabled = false
+        rebuildAutoplayForCurrentMode()
+        saveCurrentPlaybackState()
     }
 
     fun toggleRepeatMode() {
@@ -1079,6 +1248,73 @@ class MusicViewModel(application: Application) : AndroidViewModel(application) {
         }
         controller.repeatMode = nextMode
         _repeatMode.value = nextMode
+        rebuildAutoplayForCurrentMode()
+        saveCurrentPlaybackState()
+    }
+
+    /**
+     * Ricalcola immediatamente la lista di Riproduzione Automatica (_autoplayQueue, 15 brani)
+     * e aggiorna i MediaItem corrispondenti in ExoPlayer quando cambia la modalità di ripetizione,
+     * lo shuffle o l'impostazione di autoplay, rendendo immediatamente visibile nella coda l'effetto.
+     */
+    private fun rebuildAutoplayForCurrentMode() {
+        val controller = mediaController ?: return
+        val current = _currentTrack.value ?: return
+
+        _autoplayQueue.value = emptyList()
+
+        val isShuffled = _isShuffleEnabled.value
+        val newAutoplay = when (_repeatMode.value) {
+            Player.REPEAT_MODE_ALL -> {
+                val contextTracks = getRepeatContextTracks(current)
+                buildCyclicContextQueue(contextTracks, current, count = 15, isShuffled = isShuffled)
+            }
+            Player.REPEAT_MODE_ONE -> {
+                List(15) { current }
+            }
+            else -> {
+                if (isCustomContextActive && activeContextTracks.isNotEmpty()) {
+                    val idxInContext = activeContextTracks.indexOfFirst { it.id == current.id }
+                    val orderedUpcoming = if (isShuffled) {
+                        activeContextTracks.filter { it.id != current.id }.shuffled()
+                    } else if (idxInContext != -1 && idxInContext + 1 < activeContextTracks.size) {
+                        activeContextTracks.subList(idxInContext + 1, activeContextTracks.size)
+                    } else {
+                        emptyList()
+                    }
+                    val needed = 15 - orderedUpcoming.size
+                    val autoplaySupplement = if (_isAutoplayEnabled.value && needed > 0) {
+                        val excludeIds = (activeContextTracks.map { it.id } + _userQueue.value.map { it.id } + recentPlayedTrackIds + current.id).toSet()
+                        val candidates = _tracks.value.filter { it.id !in excludeIds }
+                            .ifEmpty { _tracks.value.filter { it.id != current.id } }
+                        candidates.shuffled().take(needed)
+                    } else {
+                        emptyList()
+                    }
+                    (orderedUpcoming + autoplaySupplement).take(15)
+                } else {
+                    if (_isAutoplayEnabled.value) {
+                        selectAutoplayTracks(referenceTrack = current, count = 15)
+                    } else {
+                        emptyList()
+                    }
+                }
+            }
+        }
+
+        _autoplayQueue.value = newAutoplay
+
+        if (controller.mediaItemCount > 0) {
+            val currentIndex = controller.currentMediaItemIndex.coerceAtLeast(0)
+            val autoStartExo = (currentIndex + 1 + _userQueue.value.size).coerceAtMost(controller.mediaItemCount)
+            if (autoStartExo < controller.mediaItemCount) {
+                controller.removeMediaItems(autoStartExo, controller.mediaItemCount)
+            }
+            if (newAutoplay.isNotEmpty()) {
+                controller.addMediaItems(newAutoplay.map { trackToMediaItem(it) })
+            }
+            updateQueueFromController()
+        }
     }
 
     fun seekTo(positionMs: Long) {
@@ -1119,6 +1355,7 @@ class MusicViewModel(application: Application) : AndroidViewModel(application) {
         mediaController?.let { controller ->
             _currentPositionMs.value = controller.currentPosition.coerceAtLeast(0L)
         }
+        saveCurrentPlaybackState()
     }
 
     // --- Scrobbling & Now Playing Logic ---
@@ -1325,12 +1562,51 @@ class MusicViewModel(application: Application) : AndroidViewModel(application) {
      */
     fun replenishAutoplayIfNeeded(referenceTrack: AudioTrack? = _currentTrack.value) {
         val controller = mediaController ?: return
-        if (!_isAutoplayEnabled.value) return
+        val mode = _repeatMode.value
         val currentSize = _autoplayQueue.value.size
         val needed = 15 - currentSize
         if (needed <= 0) return
 
-        val newTracks = selectAutoplayTracks(referenceTrack, count = needed)
+        val newTracks = when (mode) {
+            Player.REPEAT_MODE_ALL -> {
+                val contextTracks = getRepeatContextTracks(referenceTrack)
+                val tailTrack = _autoplayQueue.value.lastOrNull() ?: referenceTrack
+                buildCyclicContextQueue(contextTracks, tailTrack, count = needed, isShuffled = _isShuffleEnabled.value)
+            }
+            Player.REPEAT_MODE_ONE -> {
+                val target = referenceTrack ?: _currentTrack.value
+                if (target != null) List(needed) { target } else emptyList()
+            }
+            else -> {
+                // In modalità REPEAT_MODE_OFF: se c'è un contesto attivo (es. album/playlist con >15 brani),
+                // accoda prima le eventuali tracce rimanenti non ancora inserite di quel contesto
+                val remainingFromContext = if (isCustomContextActive && activeContextTracks.isNotEmpty()) {
+                    val contextIdSet = activeContextTracks.map { it.id }.toSet()
+                    val allQueuedAreFromContext = _autoplayQueue.value.all { it.id in contextIdSet }
+                    val tailTrack = _autoplayQueue.value.lastOrNull() ?: referenceTrack
+                    val tailIndex = if (tailTrack != null && allQueuedAreFromContext) {
+                        activeContextTracks.indexOfFirst { it.id == tailTrack.id }
+                    } else {
+                        -1
+                    }
+                    if (tailIndex != -1 && tailIndex + 1 < activeContextTracks.size) {
+                        activeContextTracks.subList(tailIndex + 1, activeContextTracks.size).take(needed)
+                    } else {
+                        emptyList()
+                    }
+                } else {
+                    emptyList()
+                }
+
+                val stillNeeded = needed - remainingFromContext.size
+                val supplement = if (_isAutoplayEnabled.value && stillNeeded > 0) {
+                    selectAutoplayTracks(referenceTrack, count = stillNeeded)
+                } else {
+                    emptyList()
+                }
+                remainingFromContext + supplement
+            }
+        }
         if (newTracks.isEmpty()) return
 
         _autoplayQueue.value = _autoplayQueue.value + newTracks
@@ -1357,6 +1633,8 @@ class MusicViewModel(application: Application) : AndroidViewModel(application) {
         appPreferences.setAutoplayEnabled(enabled)
         if (enabled) {
             checkAndTriggerAutoplayIfNeeded()
+        } else if (_repeatMode.value == Player.REPEAT_MODE_OFF) {
+            rebuildAutoplayForCurrentMode()
         }
     }
 
@@ -1856,9 +2134,256 @@ class MusicViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
+    fun saveCurrentPlaybackState() {
+        val track = _currentTrack.value ?: return
+        val pos = _currentPositionMs.value
+        val rep = _repeatMode.value
+        val shuf = _isShuffleEnabled.value
+        val (cType, cId, cName) = when (val ctx = _playbackContext.value) {
+            is PlaybackContext.Album -> Triple("ALBUM", ctx.id.toString(), ctx.title)
+            is PlaybackContext.Playlist -> Triple("PLAYLIST", ctx.id, ctx.name)
+            is PlaybackContext.Artist -> Triple("ARTIST", null, ctx.name)
+            is PlaybackContext.Library -> Triple("LIBRARY", null, null)
+        }
+        appPreferences.saveLastPlaybackState(
+            trackId = track.id,
+            positionMs = pos,
+            repeatMode = rep,
+            shuffleEnabled = shuf,
+            contextType = cType,
+            contextId = cId,
+            contextName = cName
+        )
+    }
+
+    private fun restoreLastPlaybackStateIfPossible() {
+        val controller = mediaController ?: return
+        if (isPlaybackStateRestored || controller.playbackState != Player.STATE_IDLE || _currentTrack.value != null) {
+            return
+        }
+        val allTracks = _tracks.value
+        if (allTracks.isEmpty()) return
+
+        val lastTrackId = appPreferences.getLastPlayedTrackId()
+        if (lastTrackId == -1L) return
+        val track = allTracks.find { it.id == lastTrackId } ?: return
+
+        isPlaybackStateRestored = true
+        isRestoringPlaybackState = true
+        hasRecordedPlayForRestoredTrack = false
+
+        val lastRepeat = appPreferences.getLastRepeatMode()
+        val lastShuffle = appPreferences.getLastShuffleEnabled()
+        _repeatMode.value = lastRepeat
+        _isShuffleEnabled.value = lastShuffle
+        controller.repeatMode = lastRepeat
+        controller.shuffleModeEnabled = false
+
+        val cType = appPreferences.getLastContextType()
+        val cId = appPreferences.getLastContextId()
+        val cName = appPreferences.getLastContextName()
+        when (cType) {
+            "ALBUM" -> {
+                val albumId = cId?.toLongOrNull()
+                val alb = _albums.value.find { it.id == albumId } ?: _albums.value.find { it.tracks.any { t -> t.id == track.id } }
+                if (alb != null) {
+                    _playbackContext.value = PlaybackContext.Album(alb.id, alb.title, alb.artist)
+                    activeContextTracks = alb.tracks.sortedWith(compareBy<AudioTrack> { it.discNumber }.thenBy { it.trackNumber }.thenBy { it.title })
+                    isCustomContextActive = true
+                } else {
+                    _playbackContext.value = PlaybackContext.Album(track.albumId, track.album, track.artist)
+                    activeContextTracks = emptyList()
+                    isCustomContextActive = false
+                }
+            }
+            "PLAYLIST" -> {
+                val currentPlaylists = _playlists.value.ifEmpty { playlistRepository.loadPlaylists() }
+                val p = currentPlaylists.find { it.id == cId }
+                _playbackContext.value = PlaybackContext.Playlist(cId ?: "", cName ?: (p?.name ?: "Playlist"))
+                if (p != null) {
+                    val trackMap = allTracks.associateBy { it.id }
+                    activeContextTracks = p.trackIds.mapNotNull { trackMap[it] }
+                    isCustomContextActive = true
+                }
+            }
+            "ARTIST" -> {
+                val artistName = cName ?: track.artist
+                _playbackContext.value = PlaybackContext.Artist(artistName)
+                activeContextTracks = allTracks.filter { it.matchesArtist(artistName) }
+                isCustomContextActive = true
+            }
+            else -> {
+                _playbackContext.value = PlaybackContext.Library
+                activeContextTracks = emptyList()
+                isCustomContextActive = false
+            }
+        }
+
+        val posMs = appPreferences.getLastPlaybackPositionMs().coerceAtLeast(0L)
+        val contextTracks = if (activeContextTracks.isNotEmpty()) activeContextTracks else getRepeatContextTracks(track)
+        val initialAutoplay = when (lastRepeat) {
+            Player.REPEAT_MODE_ALL -> buildCyclicContextQueue(contextTracks, track, count = 15, isShuffled = lastShuffle)
+            Player.REPEAT_MODE_ONE -> List(15) { track }
+            else -> {
+                if (isCustomContextActive && activeContextTracks.isNotEmpty()) {
+                    val idx = activeContextTracks.indexOfFirst { it.id == track.id }
+                    val ord = if (lastShuffle) {
+                        activeContextTracks.filter { it.id != track.id }.shuffled()
+                    } else if (idx != -1 && idx + 1 < activeContextTracks.size) {
+                        activeContextTracks.subList(idx + 1, activeContextTracks.size)
+                    } else emptyList()
+                    val needed = 15 - ord.size
+                    val supp = if (_isAutoplayEnabled.value && needed > 0) {
+                        val exIds = (activeContextTracks.map { it.id } + track.id).toSet()
+                        allTracks.filter { it.id !in exIds }.shuffled().take(needed)
+                    } else emptyList()
+                    (ord + supp).take(15)
+                } else if (_isAutoplayEnabled.value) {
+                    selectAutoplayTracks(track, count = 15)
+                } else {
+                    emptyList()
+                }
+            }
+        }
+
+        _autoplayQueue.value = initialAutoplay
+        _userQueue.value = emptyList()
+        val allItems = (listOf(track) + initialAutoplay).map { trackToMediaItem(it) }
+        controller.setMediaItems(allItems, 0, posMs)
+        controller.prepare()
+        controller.pause()
+        _currentTrack.value = track
+        _currentPositionMs.value = posMs
+        _isPlaying.value = false
+        updateDuration()
+        updateQueueFromController()
+    }
+
+    // --- Sleep Timer ---
+    fun setSleepTimerMinutes(minutes: Int) {
+        sleepTimerJob?.cancel()
+        if (minutes <= 0) {
+            cancelSleepTimer()
+            return
+        }
+        val totalMs = minutes * 60 * 1000L
+        val targetTime = System.currentTimeMillis() + totalMs
+        _sleepTimerState.value = SleepTimerState.Active(
+            remainingMillis = totalMs,
+            totalMillis = totalMs,
+            isEndOfTrack = false
+        )
+
+        sleepTimerJob = viewModelScope.launch(Dispatchers.Main) {
+            while (isActive) {
+                val now = System.currentTimeMillis()
+                val remaining = targetTime - now
+                if (remaining <= 0) {
+                    mediaController?.pause()
+                    mediaController?.setVolume(1.0f)
+                    _sleepTimerState.value = SleepTimerState.Inactive
+                    break
+                }
+
+                // Smooth fade-out nei 15 secondi finali
+                if (remaining <= 15_000L) {
+                    val fadeVolume = (remaining.toFloat() / 15_000f).coerceIn(0f, 1f)
+                    mediaController?.setVolume(fadeVolume)
+                } else {
+                    mediaController?.setVolume(1.0f)
+                }
+
+                _sleepTimerState.value = SleepTimerState.Active(
+                    remainingMillis = remaining,
+                    totalMillis = totalMs,
+                    isEndOfTrack = false
+                )
+                delay(500L)
+            }
+        }
+    }
+
+    fun setSleepTimerEndOfTrack() {
+        sleepTimerJob?.cancel()
+        val current = _currentTrack.value
+        if (current == null) {
+            cancelSleepTimer()
+            return
+        }
+        val dur = if (_durationMs.value > 0L) _durationMs.value else current.duration
+        val pos = _currentPositionMs.value
+        val remaining = (dur - pos).coerceAtLeast(0L)
+
+        _sleepTimerState.value = SleepTimerState.Active(
+            remainingMillis = remaining,
+            totalMillis = dur.coerceAtLeast(remaining),
+            isEndOfTrack = true
+        )
+
+        sleepTimerJob = viewModelScope.launch(Dispatchers.Main) {
+            val initialTrackId = current.id
+            while (isActive) {
+                val currTrack = _currentTrack.value
+                val currentPos = _currentPositionMs.value
+                val currentDur = if (_durationMs.value > 0L) _durationMs.value else (currTrack?.duration ?: 0L)
+                val rem = (currentDur - currentPos).coerceAtLeast(0L)
+
+                if (currTrack?.id != initialTrackId || (currentDur > 0L && currentPos >= currentDur - 300L)) {
+                    mediaController?.pause()
+                    cancelSleepTimer()
+                    break
+                }
+
+                if (rem <= 10_000L && currentDur > 15_000L) {
+                    val fadeVolume = (rem.toFloat() / 10_000f).coerceIn(0f, 1f)
+                    mediaController?.setVolume(fadeVolume)
+                } else {
+                    mediaController?.setVolume(1.0f)
+                }
+
+                _sleepTimerState.value = SleepTimerState.Active(
+                    remainingMillis = rem,
+                    totalMillis = currentDur.coerceAtLeast(rem),
+                    isEndOfTrack = true
+                )
+                delay(500L)
+            }
+        }
+    }
+
+    fun cancelSleepTimer() {
+        sleepTimerJob?.cancel()
+        sleepTimerJob = null
+        mediaController?.setVolume(1.0f)
+        _sleepTimerState.value = SleepTimerState.Inactive
+    }
+
+    fun moveTrackInPlaylist(playlistId: String, fromIndex: Int, toIndex: Int) {
+        viewModelScope.launch(Dispatchers.IO) {
+            val success = playlistRepository.moveTrackInPlaylist(playlistId, fromIndex, toIndex)
+            if (success) {
+                val updated = playlistRepository.loadPlaylists()
+                withContext(Dispatchers.Main) {
+                    _playlists.value = updated
+                }
+            }
+        }
+    }
+
+    fun clearListeningStats() {
+        viewModelScope.launch(Dispatchers.IO) {
+            statsRepository.clearStats()
+            withContext(Dispatchers.Main) {
+                _stats.value = emptyMap()
+            }
+        }
+    }
+
     override fun onCleared() {
         super.onCleared()
         isViewModelCleared = true
+        cancelSleepTimer()
+        saveCurrentPlaybackState()
         syncManager.stopMonitoring()
         stopProgressTicker()
         controllerFuture?.let { MediaController.releaseFuture(it) }
@@ -1868,5 +2393,45 @@ class MusicViewModel(application: Application) : AndroidViewModel(application) {
             release()
         }
         mediaController = null
+    }
+}
+
+/**
+ * Costruisce una coda ciclica di [count] brani a partire dal brano successivo ad [anchorTrack]
+ * all'interno di [contextTracks]. Se le tracce del contesto (es. album o playlist) terminano,
+ * ricomincia dalle prime tracce in modo da rendere visibile nella coda l'effetto della ripetizione.
+ * Se [isShuffled] è true, mescola l'ordine dei brani del ciclo.
+ */
+fun buildCyclicContextQueue(
+    contextTracks: List<AudioTrack>,
+    anchorTrack: AudioTrack?,
+    count: Int = 15,
+    isShuffled: Boolean = false
+): List<AudioTrack> {
+    if (contextTracks.isEmpty() || count <= 0) return emptyList()
+    if (contextTracks.size == 1) return List(count) { contextTracks[0] }
+
+    if (isShuffled) {
+        val otherTracks = if (anchorTrack != null) {
+            contextTracks.filter { it.id != anchorTrack.id }
+        } else {
+            contextTracks
+        }
+        val pool = otherTracks.ifEmpty { contextTracks }
+        val result = mutableListOf<AudioTrack>()
+        while (result.size < count) {
+            result.addAll(pool.shuffled())
+        }
+        return result.take(count)
+    }
+
+    val anchorIndex = if (anchorTrack != null) {
+        contextTracks.indexOfFirst { it.id == anchorTrack.id }
+    } else {
+        -1
+    }
+    val startOffset = if (anchorIndex != -1) anchorIndex + 1 else 0
+    return List(count) { i ->
+        contextTracks[(startOffset + i) % contextTracks.size]
     }
 }

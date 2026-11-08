@@ -25,6 +25,7 @@ import androidx.compose.material.icons.filled.FavoriteBorder
 import androidx.compose.material.icons.filled.GraphicEq
 import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.MusicNote
+import androidx.compose.material.icons.filled.Person
 import androidx.compose.ui.res.painterResource
 import com.example.musicplayer.R
 import androidx.compose.material3.DropdownMenu
@@ -67,10 +68,12 @@ fun TrackListItem(
     onRemoveClick: (() -> Unit)? = null,
     removeLabel: String = "Rimuovi da playlist",
     playCount: Int = 0,
-    onAutoTagClick: ((AudioTrack) -> Unit)? = null
+    onAutoTagClick: ((AudioTrack) -> Unit)? = null,
+    onArtistClick: ((String) -> Unit)? = null,
+    dragHandle: (@Composable () -> Unit)? = null
 ) {
     var menuExpanded by remember { mutableStateOf(false) }
-    val hasOptionsMenu = onAddToQueueClick != null || onAddToFavoritesClick != null || onAddToPlaylistClick != null || onRemoveClick != null || onAutoTagClick != null
+    val hasOptionsMenu = onAddToQueueClick != null || onAddToFavoritesClick != null || onAddToPlaylistClick != null || onRemoveClick != null || onAutoTagClick != null || onArtistClick != null
 
     val backgroundColor by animateColorAsState(
         targetValue = if (isSelected) {
@@ -217,7 +220,7 @@ fun TrackListItem(
             )
 
             // Menu opzioni (tre puntini)
-            if (onAddToQueueClick != null || onAddToFavoritesClick != null || onAddToPlaylistClick != null || onRemoveClick != null) {
+            if (hasOptionsMenu) {
                 Box {
                     IconButton(
                         onClick = { menuExpanded = true },
@@ -234,6 +237,22 @@ fun TrackListItem(
                         expanded = menuExpanded,
                         onDismissRequest = { menuExpanded = false }
                     ) {
+                        if (onArtistClick != null) {
+                            DropdownMenuItem(
+                                text = { Text("Visualizza artista") },
+                                leadingIcon = {
+                                    Icon(
+                                        imageVector = Icons.Default.Person,
+                                        contentDescription = null,
+                                        tint = MaterialTheme.colorScheme.primary
+                                    )
+                                },
+                                onClick = {
+                                    menuExpanded = false
+                                    onArtistClick(track.artist)
+                                }
+                            )
+                        }
                         if (onAddToQueueClick != null) {
                             DropdownMenuItem(
                                 text = { Text("Aggiungi alla coda") },
@@ -318,6 +337,11 @@ fun TrackListItem(
                         }
                     }
                 }
+            }
+
+            if (dragHandle != null) {
+                Spacer(modifier = Modifier.width(4.dp))
+                dragHandle()
             }
         }
     }

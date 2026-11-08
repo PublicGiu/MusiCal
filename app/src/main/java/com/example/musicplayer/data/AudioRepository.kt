@@ -316,6 +316,33 @@ fun extractMainArtist(artist: String?): String {
 }
 
 /**
+ * Verifica se un brano appartiene a un determinato artista (considerando sia il tag artist completo,
+ * sia l'albumArtist, sia l'artista principale estratto senza featuring).
+ */
+fun AudioTrack.matchesArtist(artistName: String): Boolean {
+    val target = artistName.trim()
+    if (target.isBlank()) return false
+    val mainTarget = extractMainArtist(target)
+    return artist.trim().equals(target, ignoreCase = true) ||
+            albumArtist.trim().equals(target, ignoreCase = true) ||
+            extractMainArtist(artist).equals(target, ignoreCase = true) ||
+            (mainTarget.isNotBlank() && extractMainArtist(artist).equals(mainTarget, ignoreCase = true))
+}
+
+/**
+ * Verifica se un album appartiene a un determinato artista o contiene suoi brani.
+ */
+fun Album.matchesArtist(artistName: String): Boolean {
+    val target = artistName.trim()
+    if (target.isBlank()) return false
+    val mainTarget = extractMainArtist(target)
+    return artist.trim().equals(target, ignoreCase = true) ||
+            extractMainArtist(artist).equals(target, ignoreCase = true) ||
+            (mainTarget.isNotBlank() && extractMainArtist(artist).equals(mainTarget, ignoreCase = true)) ||
+            tracks.any { it.matchesArtist(target) }
+}
+
+/**
  * Verifica se un album raggruppa tracce eterogenee (album diversi o titolo generico)
  * che necessitano di separazione/disaggregazione.
  */

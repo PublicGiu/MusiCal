@@ -1,6 +1,6 @@
 # 🎵 MusiCal — Lettore Musicale Nativo per Android 16
 
-![Versione](https://img.shields.io/badge/versione-0.1.10-8B5CF6)
+![Versione](https://img.shields.io/badge/versione-0.1.13-8B5CF6)
 ![Android](https://img.shields.io/badge/Android-16%20(API%2036)-7C3AED)
 ![Kotlin](https://img.shields.io/badge/Kotlin-2.1.0-A855F7)
 ![Jetpack Compose](https://img.shields.io/badge/UI-Jetpack%20Compose%20%2B%20Material%203-C084FC)
@@ -23,28 +23,36 @@ Realizzato interamente in **Kotlin** e **Jetpack Compose** con un'identità visi
 - **Player a Schermo Intero (`FullScreenPlayerSheet`)**:
   - Sfondo dinamico immersivo generato estraendo i colori dominanti dalla copertina del brano tramite **AndroidX Palette**.
   - Scorrimento orizzontale (`HorizontalPager`) tra le copertine dei brani in coda.
-  - Intestazione dell'album interattiva: toccando il nome dell'album in alto si salta direttamente alla pagina di dettaglio dell'album.
+  - **Intestazione contestuale dinamica**: mostra l'origine della riproduzione (*"IN RIPRODUZIONE DALL'ALBUM"*, *"DALLA PLAYLIST"*, *"DALL'ARTISTA"*, *"DALLA LIBRERIA"*) e toccandola naviga direttamente alla schermata sorgente; toccando il nome dell'artista si apre la scheda monografica dedicata.
+  - **Ripristino persistente della sessione**: all'avvio a freddo dell'app ripristina in stato di pausa l'ultimo brano ascoltato, il minutaggio esatto, la coda e il contesto attivo.
 
-### 📋 2. Coda Utente Prioritaria & Autoplay Intelligente (15 Brani)
+### 📋 2. Coda Utente Prioritaria, Sincronizzazione Ripeti/Shuffle & Autoplay (15 Brani)
 - **Separazione netta tra Coda Utente e Autoplay**:
   - **Coda Utente (Prioritaria)**: tutti i brani, album o playlist aggiunti tramite *"Aggiungi alla coda"* vengono inseriti subito dopo la traccia in riproduzione secondo un ordine FIFO naturale, avendo sempre precedenza assoluta. Se vuota, la sezione si nasconde automaticamente.
-  - **Riproduzione Automatica (Finestra Rolling di 15 brani)**: mantiene costantemente pronti 15 brani successivi (proseguimento dell'album/playlist o selezione intelligente anti-ripetizione dalla libreria), reintegrando automaticamente un nuovo brano ogni volta che uno viene riprodotto o rimosso.
+  - **Riproduzione Automatica (Finestra Rolling di 15 brani)**: mantiene costantemente pronti 15 brani successivi, reintegrando automaticamente un nuovo brano ogni volta che uno viene riprodotto o rimosso.
+  - **Sincronizzazione 1:1 con Ripeti e Shuffle**: attivando la ripetizione (`REPEAT_MODE_ALL` o `REPEAT_MODE_ONE`) o lo Shuffle, la lista di Riproduzione Automatica nella coda si aggiorna istantaneamente per mostrare l'ordine reale dei brani che verranno riprodotti (incluso il riavvolgimento ciclico dalle prime tracce dell'album/playlist).
 - **Controllo totale in `QueueBottomSheet`**:
-  - Riordinamento fluido tramite **Drag & Drop**, pulsante **`↑`** per spostare istantaneamente qualsiasi traccia in cima alla coda e pulsante **`X`** per rimuoverla.
+  - Riordinamento fluido tramite **Drag & Drop**, pulsante **`↑`** per spostare istantaneamente qualsiasi traccia in cima alla coda, pulsante **`X`** e gesti di swipe orizzontali (swipe a destra per rimuovere, swipe a sinistra sull'autoplay per promuovere in coda utente).
 - **Swipe-to-Queue negli Album e nelle Playlist**:
   - Nelle viste di dettaglio di album e playlist (inclusa *"Brani preferiti"*), basta trascinare un brano verso sinistra con il dito per metterlo rapidamente in coda con resistenza elastica e feedback visivo animato.
 - **Menu contestuale rapido (Long Press o `⋮`)**:
   - Puoi aprire le opzioni di qualsiasi brano sia toccando l'icona a tre puntini (`⋮`) sia tenendo premuto direttamente sulla riga del brano.
 
-### 💜 3. "Brani preferiti" & Playlist con Copertina Personalizzata
+### 💜 3. "Brani preferiti" & Playlist con Riordinamento Drag & Drop
 - **Playlist di sistema "Brani preferiti"**:
   - Sempre presente e fissata automaticamente al primo posto (`indice 0`) con qualsiasi criterio di ordinamento, dotata di copertina dedicata e protetta contro l'eliminazione.
   - Dal menu a tre puntini (`⋮`) di qualsiasi brano (in Brani, Album, Playlist o Ricerca) puoi aggiungerlo o rimuoverlo rapidamente: quando il brano è già nei preferiti, la voce mostra **"Aggiunto ai brani preferiti"** con il **cuore pieno**.
 - **Playlist create dall'utente**:
-  - Creazione, eliminazione e gestione completa dei brani con persistenza atomica locale (`playlists.json`).
+  - Creazione, eliminazione, riordinamento manuale dei brani tramite **Drag & Drop** e gestione completa con persistenza atomica locale (`playlists.json`).
   - **Copertina personalizzata**: possibilità di scegliere un'immagine dalla galleria tramite il **Photo Picker di Android 16** sia al momento della creazione della playlist sia in seguito (toccando la copertina o dal menu `⋮` con *"Cambia copertina"* / *"Rimuovi copertina"*).
 
-### 🗂️ 4. Libreria Locale, Ordinamenti Animati e Ricerca Globale
+### 🎚️ 4. Equalizzatore Audio, Sleep Timer, Statistiche & Scheda Artista
+- **Equalizzatore Audio ed Effetti Sonori (`EqualizerDialog`)**: equalizzatore hardware a 5 bande (-15 dB / +15 dB), preset musicali integrati (Flat, Rock, Pop, Jazz, Hip Hop, Elettronica, Classica, Bass Boost, Voce), potenziamento bassi (**Bass Boost**) e spazializzatore 3D (**Virtualizer**).
+- **Sleep Timer con Fade-Out (`SleepTimerDialog`)**: spegnimento programmato con preset rapidi, slider personalizzato o opzione *"Al termine del brano"*, con dissolvenza graduale del volume negli ultimi secondi.
+- **Dashboard Statistiche d'Ascolto (`PlaybackStatsDialog`)**: riepilogo di ascolti totali, tempo complessivo d'ascolto e brani unici, con classifiche interattive Top 10 Brani, Top 5 Artisti e Top 5 Album.
+- **Scheda Monografica Artista (`ArtistDetailSheet`)**: vista dedicata per ogni artista con carosello degli album, conteggio brani, riproduzione rapida e accodamento.
+
+### 🗂️ 5. Libreria Locale, Ordinamenti Animati e Ricerca Globale
 - **Scansione selettiva `Music/`**: interroga `MediaStore` filtrando esclusivamente la cartella `Music/` e le sue sottocartelle, ignorando note vocali, suonerie o notifiche di altre app.
 - **Navigazione fluida a 3 schede (`Brani`, `Album`, `Playlist`)**:
   - Supporto allo swipe orizzontale tra le schede e **Collapsing Header** pilotato direttamente nelle fasi di Layout e Draw (zero ricomposizioni durante lo scroll).

@@ -100,4 +100,9 @@ class StatsRepository(context: Context) {
         saveStats(current)
         return updated
     }
+
+    @Synchronized
+    fun clearStats() {
+        saveStats(emptyMap())
+    }
 }

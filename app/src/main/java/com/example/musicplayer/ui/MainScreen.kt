@@ -120,8 +120,10 @@ import androidx.core.content.ContextCompat
 import com.example.musicplayer.R
 import com.example.musicplayer.data.Album
 import com.example.musicplayer.data.AudioTrack
+import com.example.musicplayer.data.PlaybackContext
 import com.example.musicplayer.data.Playlist
 import com.example.musicplayer.data.SortOption
+import com.example.musicplayer.data.matchesArtist
 import androidx.compose.foundation.background
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.filled.Radio
@@ -132,16 +134,20 @@ import androidx.compose.ui.draw.clip
 import com.example.musicplayer.ui.components.AddToPlaylistDialog
 import com.example.musicplayer.ui.components.AlbumDetailView
 import com.example.musicplayer.ui.components.AlbumsGridView
+import com.example.musicplayer.ui.components.ArtistDetailSheet
 import com.example.musicplayer.ui.components.CreatePlaylistDialog
+import com.example.musicplayer.ui.components.EqualizerDialog
 import com.example.musicplayer.ui.components.FullScreenPlayerSheet
 import com.example.musicplayer.ui.components.GlobalSearchResultsView
 import com.example.musicplayer.ui.components.LastFmDialog
+import com.example.musicplayer.ui.components.PlaybackStatsDialog
 import com.example.musicplayer.ui.components.PlayerBottomBar
 import com.example.musicplayer.ui.components.PlaylistDetailView
 import com.example.musicplayer.ui.components.PlaylistsView
 import com.example.musicplayer.ui.components.QueueBottomSheet
 import android.content.Intent
 import com.example.musicplayer.ui.components.SettingsDialog
+import com.example.musicplayer.ui.components.SleepTimerDialog
 import com.example.musicplayer.ui.components.SortSelectorRow
 import com.example.musicplayer.ui.components.TrackListItem
 import com.example.musicplayer.ui.components.UpdateAvailableDialog
@@ -168,6 +174,8 @@ fun MainScreen(
     val isShuffleEnabled by viewModel.isShuffleEnabled.collectAsStateWithLifecycle()
     val repeatMode by viewModel.repeatMode.collectAsStateWithLifecycle()
     val isAutoplayEnabled by viewModel.isAutoplayEnabled.collectAsStateWithLifecycle()
+    val playbackContext by viewModel.playbackContext.collectAsStateWithLifecycle()
+    val sleepTimerState by viewModel.sleepTimerState.collectAsStateWithLifecycle()
 
     // Coda di riproduzione
     val userQueue by viewModel.userQueue.collectAsStateWithLifecycle()
@@ -176,6 +184,12 @@ fun MainScreen(
     val currentQueueIndex by viewModel.currentQueueIndex.collectAsStateWithLifecycle()
     var showQueueSheet by remember { mutableStateOf(false) }
     var showFullScreenPlayer by remember { mutableStateOf(false) }
+
+    // Dialog e visualizzazioni dedicate
+    var showEqualizerDialog by remember { mutableStateOf(false) }
+    var showSleepTimerDialog by remember { mutableStateOf(false) }
+    var showStatsDialog by remember { mutableStateOf(false) }
+    var selectedArtistForSheet by remember { mutableStateOf<String?>(null) }
 
     // Statistiche e ordinamento
     val stats by viewModel.stats.collectAsStateWithLifecycle()
@@ -480,9 +494,10 @@ fun MainScreen(
     }
 
     // Gestione tasto indietro
-    BackHandler(enabled = showFullScreenPlayer || isSearchExpandedInDetail || isSearchExpandedInCompact || searchQuery.isNotBlank() || selectedAlbum != null || selectedPlaylist != null || selectedTabIndex != 0) {
+    BackHandler(enabled = showFullScreenPlayer || selectedArtistForSheet != null || isSearchExpandedInDetail || isSearchExpandedInCompact || searchQuery.isNotBlank() || selectedAlbum != null || selectedPlaylist != null || selectedTabIndex != 0) {
         when {
             showFullScreenPlayer -> showFullScreenPlayer = false
+            selectedArtistForSheet != null -> selectedArtistForSheet = null
             isSearchExpandedInDetail -> {
                 isSearchExpandedInDetail = false
                 if (searchQuery.isNotBlank()) {
@@ -1103,7 +1118,8 @@ fun MainScreen(
                                     favoriteTrackIds = favoriteTrackIds,
                                     onChangePlaylistCoverClick = handleChangePlaylistCover,
                                     onRemovePlaylistCoverClick = handleRemovePlaylistCover,
-                                    onAutoTagTrackClick = { viewModel.startTrackEnrichment(it) }
+                                    onAutoTagTrackClick = { viewModel.startTrackEnrichment(it) },
+                                    onArtistClick = { artist -> selectedArtistForSheet = artist }
                                 )
                             }
 
@@ -1126,10 +1142,10 @@ fun MainScreen(
                                         }
                                     },
                                     onPlayTrackIndex = { index ->
-                                        viewModel.playPlaylist(playlistTracks, index)
+                                        viewModel.playPlaylist(activePlaylist.id, activePlaylist.name, playlistTracks, index)
                                     },
                                     onPlayAllClick = {
-                                        viewModel.playPlaylist(playlistTracks, 0)
+                                        viewModel.playPlaylist(activePlaylist.id, activePlaylist.name, playlistTracks, 0)
                                     },
                                     onPlayPauseClick = {
                                         viewModel.togglePlayPause()
@@ -1147,7 +1163,13 @@ fun MainScreen(
                                     favoriteTrackIds = favoriteTrackIds,
                                     onChangeCoverClick = if (!activePlaylist.isFavorites) handleChangePlaylistCover else null,
                                     onRemoveCoverClick = if (!activePlaylist.isFavorites) handleRemovePlaylistCover else null,
-                                    onAutoTagTrackClick = { viewModel.startTrackEnrichment(it) }
+                                    onAutoTagTrackClick = { viewModel.startTrackEnrichment(it) },
+                                    onMoveTrack = { from, to ->
+                                        viewModel.moveTrackInPlaylist(activePlaylist.id, from, to)
+                                    },
+                                    onArtistClick = { artist ->
+                                        selectedArtistForSheet = artist
+                                    }
                                 )
                             }
 
@@ -1275,7 +1297,8 @@ fun MainScreen(
                                                                             onAddToFavoritesClick = { handleAddToFavorites(track) },
                                                                             isFavorite = track.id in favoriteTrackIds,
                                                                             playCount = stats[track.id]?.playCount ?: 0,
-                                                                            onAutoTagClick = { viewModel.startTrackEnrichment(it) }
+                                                                            onAutoTagClick = { viewModel.startTrackEnrichment(it) },
+                                                                            onArtistClick = { artist -> selectedArtistForSheet = artist }
                                                                         )
                                                                     }
                                                                 }
@@ -1410,7 +1433,8 @@ fun MainScreen(
                                                     onAutoTagAlbumClick = { viewModel.startAlbumEnrichment(it, separateAlbums = false) },
                                                     onAutoTagAlbumSeparationClick = { viewModel.startAlbumEnrichment(it, separateAlbums = true) },
                                                     onAutoTagTrackClick = { viewModel.startTrackEnrichment(it) },
-                                                    onDeleteTracks = { tracks -> viewModel.deleteTracks(tracks) }
+                                                    onDeleteTracks = { tracks -> viewModel.deleteTracks(tracks) },
+                                                    onArtistClick = { artist -> selectedArtistForSheet = artist }
                                                 )
                                             }
                                         }
@@ -1474,6 +1498,53 @@ fun MainScreen(
             onAddToFavoritesClick = handleAddToFavorites,
             isFavorite = currentTrack?.id in favoriteTrackIds,
             onAutoTagClick = { viewModel.startTrackEnrichment(it) },
+            playbackContext = playbackContext,
+            onContextClick = {
+                when (val ctx = playbackContext) {
+                    is PlaybackContext.Album -> {
+                        val matchingAlbum = albums.find { it.id == ctx.id }
+                            ?: albums.find { it.title.equals(ctx.title, ignoreCase = true) }
+                        if (matchingAlbum != null) {
+                            if (searchQuery.isNotBlank()) viewModel.onSearchQueryChanged("")
+                            isSearchExpandedInDetail = false
+                            selectedArtistForSheet = null
+                            selectedAlbum = matchingAlbum
+                            selectedPlaylist = null
+                            showFullScreenPlayer = false
+                        }
+                    }
+                    is PlaybackContext.Playlist -> {
+                        val matchingPlaylist = playlists.find { it.id == ctx.id }
+                        if (matchingPlaylist != null) {
+                            if (searchQuery.isNotBlank()) viewModel.onSearchQueryChanged("")
+                            isSearchExpandedInDetail = false
+                            selectedArtistForSheet = null
+                            selectedPlaylist = matchingPlaylist
+                            selectedAlbum = null
+                            showFullScreenPlayer = false
+                        }
+                    }
+                    is PlaybackContext.Artist -> {
+                        selectedArtistForSheet = ctx.name
+                        showFullScreenPlayer = false
+                    }
+                    is PlaybackContext.Library -> {
+                        if (searchQuery.isNotBlank()) viewModel.onSearchQueryChanged("")
+                        isSearchExpandedInDetail = false
+                        selectedArtistForSheet = null
+                        selectedAlbum = null
+                        selectedPlaylist = null
+                        showFullScreenPlayer = false
+                    }
+                }
+            },
+            onArtistClick = { artist ->
+                selectedArtistForSheet = artist
+                showFullScreenPlayer = false
+            },
+            onOpenEqualizer = { showEqualizerDialog = true },
+            onOpenSleepTimer = { showSleepTimerDialog = true },
+            onOpenStats = { showStatsDialog = true },
             onAlbumClick = {
                 val track = currentTrack
                 if (track != null) {
@@ -1493,6 +1564,9 @@ fun MainScreen(
                         } else null
 
                     if (matchingAlbum != null) {
+                        if (searchQuery.isNotBlank()) viewModel.onSearchQueryChanged("")
+                        isSearchExpandedInDetail = false
+                        selectedArtistForSheet = null
                         selectedAlbum = matchingAlbum
                         selectedPlaylist = null
                         showFullScreenPlayer = false
@@ -1569,7 +1643,96 @@ fun MainScreen(
             },
             onPickCustomFolder = {
                 folderPickerLauncher.launch(null)
+            },
+            onOpenEqualizer = { showEqualizerDialog = true },
+            onOpenSleepTimer = { showSleepTimerDialog = true },
+            onOpenStats = { showStatsDialog = true }
+        )
+    }
+
+    // Dialog Equalizzatore Audio ed Effetti Sonori
+    if (showEqualizerDialog) {
+        EqualizerDialog(
+            onDismissRequest = { showEqualizerDialog = false }
+        )
+    }
+
+    // Dialog Timer di Spegnimento con dissolvenza progressiva
+    if (showSleepTimerDialog) {
+        SleepTimerDialog(
+            sleepTimerState = sleepTimerState,
+            onSetMinutes = { minutes -> viewModel.setSleepTimerMinutes(minutes) },
+            onSetEndOfTrack = { viewModel.setSleepTimerEndOfTrack() },
+            onCancelTimer = { viewModel.cancelSleepTimer() },
+            onDismissRequest = { showSleepTimerDialog = false }
+        )
+    }
+
+    // Dialog Statistiche d'ascolto
+    if (showStatsDialog) {
+        PlaybackStatsDialog(
+            tracks = tracks,
+            stats = stats,
+            onDismissRequest = { showStatsDialog = false },
+            onResetStats = { viewModel.clearListeningStats() },
+            onTrackClick = { track ->
+                showStatsDialog = false
+                viewModel.playTrack(track)
+            },
+            onArtistClick = { artist ->
+                showStatsDialog = false
+                selectedArtistForSheet = artist
+            },
+            onAlbumClick = { albumTitle ->
+                val matchingAlbum = albums.find { it.title.equals(albumTitle, ignoreCase = true) }
+                if (matchingAlbum != null) {
+                    if (searchQuery.isNotBlank()) viewModel.onSearchQueryChanged("")
+                    isSearchExpandedInDetail = false
+                    selectedArtistForSheet = null
+                    selectedPlaylist = null
+                    selectedAlbum = matchingAlbum
+                    showStatsDialog = false
+                }
             }
+        )
+    }
+
+    // ModalBottomSheet Vista Dettaglio Artista
+    selectedArtistForSheet?.let { artistName ->
+        val artistTracks = remember(artistName, tracks) {
+            tracks.filter { it.matchesArtist(artistName) }
+        }
+        ArtistDetailSheet(
+            artistName = artistName,
+            tracks = tracks,
+            albums = albums,
+            currentTrack = currentTrack,
+            isPlaying = isPlaying,
+            onDismissRequest = { selectedArtistForSheet = null },
+            onPlayTrackIndex = { index ->
+                viewModel.playArtist(artistName, index)
+            },
+            onPlayAllClick = {
+                viewModel.playArtist(artistName, 0)
+            },
+            onAddAllToQueueClick = {
+                viewModel.addTracksToQueue(artistTracks)
+                coroutineScope.launch {
+                    snackbarHostState.showSnackbar(
+                        message = "${artistTracks.size} brani di $artistName aggiunti alla coda",
+                        duration = SnackbarDuration.Short
+                    )
+                }
+            },
+            onAlbumClick = { album ->
+                selectedArtistForSheet = null
+                selectedAlbum = album
+            },
+            onAddToQueueClick = handleAddTrackToQueue,
+            onAddToPlaylistClick = { trackToAddToPlaylist = it },
+            onAddToFavoritesClick = handleAddToFavorites,
+            favoriteTrackIds = favoriteTrackIds,
+            onAutoTagTrackClick = { viewModel.startTrackEnrichment(it) }
         )
     }
 

@@ -16,7 +16,15 @@ import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.basicMarquee
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.material.icons.filled.DragHandle
+import androidx.compose.runtime.mutableFloatStateOf
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.zIndex
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
@@ -70,6 +78,7 @@ import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -387,7 +396,9 @@ fun PlaylistDetailView(
     onChangeCoverClick: ((Playlist) -> Unit)? = null,
     onRemoveCoverClick: ((Playlist) -> Unit)? = null,
     onPlayPauseClick: (() -> Unit)? = null,
-    onAutoTagTrackClick: ((AudioTrack) -> Unit)? = null
+    onAutoTagTrackClick: ((AudioTrack) -> Unit)? = null,
+    onMoveTrack: ((fromIndex: Int, toIndex: Int) -> Unit)? = null,
+    onArtistClick: ((String) -> Unit)? = null
 ) {
     val isCurrentPlaylistActive = currentTrack != null && playlistTracks.any { it.id == currentTrack.id }
     val isPlaylistPlaying = isPlaying && isCurrentPlaylistActive
@@ -682,34 +693,130 @@ fun PlaylistDetailView(
                 }
             }
         } else {
+            var localTracks by remember { mutableStateOf(playlistTracks) }
+            var initialDragIndex by remember { mutableStateOf<Int?>(null) }
+            var draggingIndex by remember { mutableStateOf<Int?>(null) }
+            var dragOffsetY by remember { mutableFloatStateOf(0f) }
+            val density = LocalDensity.current
+            val itemHeightPx = remember(density) { with(density) { 72.dp.toPx() } }
+
+            LaunchedEffect(playlistTracks) {
+                if (draggingIndex == null) {
+                    localTracks = playlistTracks
+                }
+            }
+
             LazyColumn(
                 state = listState,
                 modifier = Modifier.weight(1f),
                 contentPadding = PaddingValues(bottom = 12.dp)
             ) {
                 itemsIndexed(
-                    items = playlistTracks,
-                    key = { index, track -> "${track.id}_$index" },
+                    items = localTracks,
+                    key = { _, track -> track.id },
                     contentType = { _, _ -> "playlist_track_item" }
                 ) { index, track ->
-                    if (onAddToQueueClick != null) {
+                    val currentIndex by rememberUpdatedState(index)
+                    val isBeingDragged = draggingIndex == index
+                    val itemModifier = if (isBeingDragged) {
+                        Modifier
+                            .zIndex(10f)
+                            .graphicsLayer {
+                                translationY = dragOffsetY
+                                scaleX = 1.02f
+                                scaleY = 1.02f
+                                shadowElevation = 8f
+                            }
+                    } else {
+                        Modifier.zIndex(1f)
+                    }
+
+                    val dragHandleComponent: (@Composable () -> Unit)? = if (!playlist.isFavorites && onMoveTrack != null && localTracks.size > 1) {
+                        {
+                            Box(
+                                modifier = Modifier
+                                    .size(36.dp)
+                                    .pointerInput(track.id, localTracks.size) {
+                                        detectDragGestures(
+                                            onDragStart = {
+                                                initialDragIndex = currentIndex
+                                                draggingIndex = currentIndex
+                                                dragOffsetY = 0f
+                                            },
+                                            onDrag = { change, dragAmount ->
+                                                change.consume()
+                                                dragOffsetY += dragAmount.y
+                                                val curr = draggingIndex ?: return@detectDragGestures
+                                                val threshold = itemHeightPx * 0.7f
+                                                if (dragOffsetY > threshold && curr < localTracks.size - 1) {
+                                                    val next = curr + 1
+                                                    val mutable = localTracks.toMutableList()
+                                                    val item = mutable.removeAt(curr)
+                                                    mutable.add(next, item)
+                                                    localTracks = mutable
+                                                    draggingIndex = next
+                                                    dragOffsetY -= itemHeightPx
+                                                } else if (dragOffsetY < -threshold && curr > 0) {
+                                                    val prev = curr - 1
+                                                    val mutable = localTracks.toMutableList()
+                                                    val item = mutable.removeAt(curr)
+                                                    mutable.add(prev, item)
+                                                    localTracks = mutable
+                                                    draggingIndex = prev
+                                                    dragOffsetY += itemHeightPx
+                                                }
+                                            },
+                                            onDragEnd = {
+                                                val from = initialDragIndex
+                                                val to = draggingIndex
+                                                if (from != null && to != null && from != to) {
+                                                    onMoveTrack(from, to)
+                                                }
+                                                initialDragIndex = null
+                                                draggingIndex = null
+                                                dragOffsetY = 0f
+                                            },
+                                            onDragCancel = {
+                                                initialDragIndex = null
+                                                draggingIndex = null
+                                                dragOffsetY = 0f
+                                                localTracks = playlistTracks
+                                            }
+                                        )
+                                    },
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.DragHandle,
+                                    contentDescription = "Trascina per riordinare",
+                                    tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f),
+                                    modifier = Modifier.size(20.dp)
+                                )
+                            }
+                        }
+                    } else null
+
+                    if (onAddToQueueClick != null && draggingIndex == null) {
                         SwipeToQueueTrackItem(
                             track = track,
                             onSwipeToQueue = { onAddToQueueClick(track) },
-                            key = "${track.id}_$index"
+                            key = track.id.toString()
                         ) {
                             TrackListItem(
                                 track = track,
                                 isSelected = currentTrack?.id == track.id,
                                 isPlaying = isPlaying && currentTrack?.id == track.id,
-                                onClick = { onPlayTrackIndex(index) },
+                                onClick = { onPlayTrackIndex(currentIndex) },
+                                modifier = itemModifier,
                                 onAddToQueueClick = onAddToQueueClick,
                                 onAddToPlaylistClick = onAddToPlaylistClick,
                                 onAddToFavoritesClick = if (!playlist.isFavorites) onAddToFavoritesClick?.let { cb -> { cb(track) } } else null,
                                 isFavorite = track.id in favoriteTrackIds,
                                 onRemoveClick = { onRemoveTrack(track.id) },
                                 removeLabel = if (playlist.isFavorites) "Rimuovi dai brani preferiti" else "Rimuovi da playlist",
-                                onAutoTagClick = onAutoTagTrackClick
+                                onAutoTagClick = onAutoTagTrackClick,
+                                onArtistClick = onArtistClick,
+                                dragHandle = dragHandleComponent
                             )
                         }
                     } else {
@@ -717,14 +824,17 @@ fun PlaylistDetailView(
                             track = track,
                             isSelected = currentTrack?.id == track.id,
                             isPlaying = isPlaying && currentTrack?.id == track.id,
-                            onClick = { onPlayTrackIndex(index) },
+                            onClick = { onPlayTrackIndex(currentIndex) },
+                            modifier = itemModifier,
                             onAddToQueueClick = onAddToQueueClick,
                             onAddToPlaylistClick = onAddToPlaylistClick,
                             onAddToFavoritesClick = if (!playlist.isFavorites) onAddToFavoritesClick?.let { cb -> { cb(track) } } else null,
                             isFavorite = track.id in favoriteTrackIds,
                             onRemoveClick = { onRemoveTrack(track.id) },
                             removeLabel = if (playlist.isFavorites) "Rimuovi dai brani preferiti" else "Rimuovi da playlist",
-                            onAutoTagClick = onAutoTagTrackClick
+                            onAutoTagClick = onAutoTagTrackClick,
+                            onArtistClick = onArtistClick,
+                            dragHandle = dragHandleComponent
                         )
                     }
                 }

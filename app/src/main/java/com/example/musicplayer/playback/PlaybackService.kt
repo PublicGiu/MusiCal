@@ -39,6 +39,16 @@ class PlaybackService : MediaSessionService() {
             .build()
         player = exoPlayer
 
+        // Inizializzazione equalizzatore ed effetti hardware collegati alla sessione audio
+        EqualizerManager.init(this, exoPlayer.audioSessionId)
+        exoPlayer.addListener(object : androidx.media3.common.Player.Listener {
+            override fun onAudioSessionIdChanged(audioSessionId: Int) {
+                if (audioSessionId != androidx.media3.common.C.AUDIO_SESSION_ID_UNSET && audioSessionId != 0) {
+                    EqualizerManager.init(this@PlaybackService, audioSessionId)
+                }
+            }
+        })
+
         // PendingIntent per consentire all'utente di toccare la notifica e riaprire l'app
         val openAppIntent = Intent(this, MainActivity::class.java).apply {
             flags = Intent.FLAG_ACTIVITY_SINGLE_TOP
@@ -98,6 +108,7 @@ class PlaybackService : MediaSessionService() {
     }
 
     override fun onDestroy() {
+        EqualizerManager.release()
         mediaSession?.run {
             player.release()
             release()

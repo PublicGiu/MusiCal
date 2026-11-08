@@ -1,15 +1,31 @@
 package com.example.musicplayer.data
 
+import android.net.Uri
+import com.example.musicplayer.ui.buildCyclicContextQueue
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
+import org.mockito.Mockito
 
 /**
  * Test unitari per la logica di prioritizzazione della coda, separazione Coda Utente vs Autoplay
  * e finestra rolling di 15 brani successivi.
  */
 class QueueOrderTest {
+
+    private val dummyUri: Uri = Mockito.mock(Uri::class.java)
+
+    private fun makeTrack(id: Long, title: String, album: String = "Cura"): AudioTrack {
+        return AudioTrack(
+            id = id,
+            title = title,
+            artist = "Tony Boy",
+            album = album,
+            duration = 180_000L,
+            uri = dummyUri
+        )
+    }
 
     private fun calculateMoveToTopTargetIndex(fromIndex: Int, currentIndex: Int, count: Int): Int? {
         if (fromIndex !in 0 until count) return null
@@ -305,5 +321,71 @@ class QueueOrderTest {
 
         assertEquals(listOf("Auto_1", "Auto_3"), autoplayQueue)
         assertEquals(listOf("Current", "User_2", "Auto_1", "Auto_3"), timeline)
+    }
+
+    @Test
+    fun testRepeatAllOnAlbumPopulatesOnlyAlbumTracksAndWrapsAroundFromFirstTrack() {
+        val albumTracks = listOf(
+            makeTrack(1L, "Cura"),
+            makeTrack(2L, "Indistruttibile"),
+            makeTrack(3L, "Fuori dal castello"),
+            makeTrack(4L, "Ti amo ti odio"),
+            makeTrack(5L, "Nuove esperienze"),
+            makeTrack(6L, "Don't cry"),
+            makeTrack(7L, "Apatia")
+        )
+        val currentPlaying = albumTracks[1] // "Indistruttibile"
+
+        val repeatAutoplayQueue = buildCyclicContextQueue(
+            contextTracks = albumTracks,
+            anchorTrack = currentPlaying,
+            count = 15
+        )
+
+        assertEquals(15, repeatAutoplayQueue.size)
+        // Tutte le tracce devono appartenere esclusivamente all'album
+        val albumIds = albumTracks.map { it.id }.toSet()
+        assertTrue(repeatAutoplayQueue.all { it.id in albumIds })
+
+        // Le prime 5 tracce in coda sono le rimanenti dell'album dopo "Indistruttibile"
+        assertEquals(
+            listOf("Fuori dal castello", "Ti amo ti odio", "Nuove esperienze", "Don't cry", "Apatia"),
+            repeatAutoplayQueue.take(5).map { it.title }
+        )
+        // Appena finiscono le tracce dell'album (dopo "Apatia"), ricominciano le prime dell'album
+        assertEquals(
+            listOf("Cura", "Indistruttibile", "Fuori dal castello", "Ti amo ti odio", "Nuove esperienze", "Don't cry", "Apatia"),
+            repeatAutoplayQueue.subList(5, 12).map { it.title }
+        )
+        // E così via fino a completare i 15 slot
+        assertEquals(
+            listOf("Cura", "Indistruttibile", "Fuori dal castello"),
+            repeatAutoplayQueue.subList(12, 15).map { it.title }
+        )
+    }
+
+    @Test
+    fun testRepeatAllReplenishmentAppendsNextTrackInAlbumCycle() {
+        val albumTracks = (1L..5L).map { makeTrack(it, "Track_$it") }
+        val currentPlaying = albumTracks[0] // Track_1
+
+        val queue = buildCyclicContextQueue(albumTracks, currentPlaying, count = 15).toMutableList()
+        assertEquals(15, queue.size)
+        // Ultimo elemento iniziale a indice 14: (1 + 14) % 5 = 0 -> Track_1
+        assertEquals("Track_1", queue.last().title)
+
+        // Viene consumato il primo brano in coda (Track_2)
+        queue.removeAt(0)
+        assertEquals(14, queue.size)
+
+        // Il replenishment usa l'ultimo brano della coda (Track_1) come ancora per accodare Track_2
+        val replenished = buildCyclicContextQueue(albumTracks, queue.lastOrNull(), count = 15 - queue.size)
+        assertEquals(1, replenished.size)
+        assertEquals("Track_2", replenished.first().title)
+
+        queue.addAll(replenished)
+        assertEquals(15, queue.size)
+        assertEquals("Track_3", queue.first().title)
+        assertEquals("Track_2", queue.last().title)
     }
 }

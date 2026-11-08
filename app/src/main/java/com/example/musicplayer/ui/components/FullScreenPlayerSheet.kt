@@ -44,17 +44,21 @@ import androidx.compose.material.icons.automirrored.filled.QueueMusic
 import androidx.compose.material.icons.filled.AutoFixHigh
 import androidx.compose.material.icons.filled.Favorite
 import androidx.compose.material.icons.filled.FavoriteBorder
+import androidx.compose.material.icons.filled.GraphicEq
 import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.material.icons.filled.Lyrics
 import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.MusicNote
 import androidx.compose.material.icons.filled.Pause
+import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.PlayArrow
+import androidx.compose.material.icons.filled.QueryStats
 import androidx.compose.material.icons.filled.Repeat
 import androidx.compose.material.icons.filled.RepeatOne
 import androidx.compose.material.icons.filled.Shuffle
 import androidx.compose.material.icons.filled.SkipNext
 import androidx.compose.material.icons.filled.SkipPrevious
+import androidx.compose.material.icons.filled.Timer
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -102,6 +106,7 @@ import coil.request.SuccessResult
 import coil.size.Precision
 import com.example.musicplayer.data.AudioTrack
 import com.example.musicplayer.data.LyricsData
+import com.example.musicplayer.data.PlaybackContext
 import com.example.musicplayer.data.formatDurationMs
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -137,7 +142,13 @@ fun FullScreenPlayerSheet(
     onAddToPlaylistClick: ((AudioTrack) -> Unit)? = null,
     onAddToFavoritesClick: ((AudioTrack) -> Unit)? = null,
     isFavorite: Boolean = false,
-    onAutoTagClick: ((AudioTrack) -> Unit)? = null
+    onAutoTagClick: ((AudioTrack) -> Unit)? = null,
+    playbackContext: PlaybackContext = PlaybackContext.Library,
+    onContextClick: (() -> Unit)? = null,
+    onArtistClick: ((String) -> Unit)? = null,
+    onOpenSleepTimer: () -> Unit = {},
+    onOpenEqualizer: () -> Unit = {},
+    onOpenStats: () -> Unit = {}
 ) {
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
     val context = LocalContext.current
@@ -316,25 +327,33 @@ fun FullScreenPlayerSheet(
                     )
                 }
 
+                val (headerCategory, headerTitle) = when (playbackContext) {
+                    is PlaybackContext.Album -> "IN RIPRODUZIONE DALL'ALBUM" to playbackContext.title
+                    is PlaybackContext.Playlist -> "IN RIPRODUZIONE DALLA PLAYLIST" to playbackContext.name
+                    is PlaybackContext.Artist -> "IN RIPRODUZIONE DALL'ARTISTA" to playbackContext.name
+                    is PlaybackContext.Library -> "IN RIPRODUZIONE DALLA LIBRERIA" to (currentTrack?.album?.takeIf { it.isNotBlank() } ?: "Tutti i brani")
+                }
+                val canClickHeader = onContextClick != null || onAlbumClick != null
+
                 Column(
                     modifier = Modifier
                         .weight(1f)
                         .clip(RoundedCornerShape(8.dp))
                         .then(
-                            if (onAlbumClick != null) Modifier.clickable(onClick = onAlbumClick)
+                            if (canClickHeader) Modifier.clickable { onContextClick?.invoke() ?: onAlbumClick?.invoke() }
                             else Modifier
                         )
                         .padding(horizontal = 8.dp, vertical = 4.dp),
                     horizontalAlignment = Alignment.CenterHorizontally
                 ) {
                     Text(
-                        text = "IN RIPRODUZIONE DALL'ALBUM",
+                        text = headerCategory,
                         style = MaterialTheme.typography.labelSmall,
                         color = Color.White.copy(alpha = 0.7f),
                         maxLines = 1
                     )
                     Text(
-                        text = currentTrack?.album?.takeIf { it.isNotBlank() } ?: "Libreria locale",
+                        text = headerTitle,
                         style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold),
                         color = Color.White,
                         maxLines = 1,
@@ -359,6 +378,22 @@ fun FullScreenPlayerSheet(
                         onDismissRequest = { menuExpanded = false }
                     ) {
                         if (currentTrack != null) {
+                            if (onArtistClick != null && currentTrack.artist.isNotBlank()) {
+                                DropdownMenuItem(
+                                    text = { Text("Visualizza artista") },
+                                    leadingIcon = {
+                                        Icon(
+                                            imageVector = Icons.Default.Person,
+                                            contentDescription = null,
+                                            tint = MaterialTheme.colorScheme.primary
+                                        )
+                                    },
+                                    onClick = {
+                                        menuExpanded = false
+                                        onArtistClick(currentTrack.artist)
+                                    }
+                                )
+                            }
                             if (onAddToQueueClick != null) {
                                 DropdownMenuItem(
                                     text = { Text("Aggiungi alla coda") },
@@ -430,6 +465,48 @@ fun FullScreenPlayerSheet(
                                 )
                             }
                         }
+                        DropdownMenuItem(
+                            text = { Text("Equalizzatore audio") },
+                            leadingIcon = {
+                                Icon(
+                                    imageVector = Icons.Default.GraphicEq,
+                                    contentDescription = null,
+                                    tint = MaterialTheme.colorScheme.primary
+                                )
+                            },
+                            onClick = {
+                                menuExpanded = false
+                                onOpenEqualizer()
+                            }
+                        )
+                        DropdownMenuItem(
+                            text = { Text("Timer di spegnimento") },
+                            leadingIcon = {
+                                Icon(
+                                    imageVector = Icons.Default.Timer,
+                                    contentDescription = null,
+                                    tint = MaterialTheme.colorScheme.primary
+                                )
+                            },
+                            onClick = {
+                                menuExpanded = false
+                                onOpenSleepTimer()
+                            }
+                        )
+                        DropdownMenuItem(
+                            text = { Text("Statistiche d'ascolto") },
+                            leadingIcon = {
+                                Icon(
+                                    imageVector = Icons.Default.QueryStats,
+                                    contentDescription = null,
+                                    tint = MaterialTheme.colorScheme.primary
+                                )
+                            },
+                            onClick = {
+                                menuExpanded = false
+                                onOpenStats()
+                            }
+                        )
                     }
                 }
             }
@@ -455,7 +532,7 @@ fun FullScreenPlayerSheet(
                 // 2. Copertina grande con HorizontalPager (finger-following fluido, animazione a molla e sincronizzazione reattiva)
                 HorizontalPager(
                     state = pagerState,
-                    key = { page -> effectiveQueue.getOrNull(page)?.id ?: page },
+                    key = { page -> if (page in effectiveQueue.indices) "${effectiveQueue[page].id}_$page" else "$page" },
                     beyondViewportPageCount = 1,
                     pageSpacing = 16.dp,
                     modifier = Modifier
@@ -533,7 +610,14 @@ fun FullScreenPlayerSheet(
                     color = Color.White.copy(alpha = 0.75f),
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
-                    modifier = Modifier.basicMarquee()
+                    modifier = Modifier
+                        .clip(RoundedCornerShape(4.dp))
+                        .then(
+                            if (onArtistClick != null && currentTrack != null && currentTrack.artist.isNotBlank()) {
+                                Modifier.clickable { onArtistClick(currentTrack.artist) }
+                            } else Modifier
+                        )
+                        .basicMarquee()
                 )
             }
 

@@ -376,12 +376,15 @@ private fun ReorderableTrackList(
 
     Column(modifier = modifier.fillMaxWidth()) {
         localTracks.forEachIndexed { index, track ->
-            androidx.compose.runtime.key(track.id) {
+            val occurrenceIndex = localTracks.subList(0, index).count { it.id == track.id }
+            val itemKey = "${track.id}_$occurrenceIndex"
+            androidx.compose.runtime.key(itemKey) {
+                val currentIndex by androidx.compose.runtime.rememberUpdatedState(index)
                 val isBeingDragged = draggingIndex == index
                 val canMoveToTop = index > 0
 
                 SwipeableQueueTrackItem(
-                    key = track.id,
+                    key = itemKey,
                     enabled = draggingIndex == null,
                     onSwipeRightToRemove = { onRemoveItem(index) },
                     onSwipeLeftToQueue = onSwipeLeftItem?.let { cb -> { cb(index) } },
@@ -507,11 +510,11 @@ private fun ReorderableTrackList(
                             Box(
                                 modifier = Modifier
                                     .size(36.dp)
-                                    .pointerInput(localTracks.size) {
+                                    .pointerInput(itemKey, localTracks.size) {
                                         detectDragGestures(
                                             onDragStart = {
-                                                initialDragIndex = index
-                                                draggingIndex = index
+                                                initialDragIndex = currentIndex
+                                                draggingIndex = currentIndex
                                                 dragOffsetY = 0f
                                             },
                                             onDrag = { change, dragAmount ->

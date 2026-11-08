@@ -2,12 +2,15 @@ package com.example.musicplayer.playback
 
 import android.app.PendingIntent
 import android.content.Intent
+import android.os.Process
 import androidx.annotation.OptIn
 import androidx.media3.common.ForwardingPlayer
+import androidx.media3.common.Player
 import androidx.media3.common.util.UnstableApi
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.session.MediaSession
 import androidx.media3.session.MediaSessionService
+import androidx.media3.session.SessionCommands
 import com.example.musicplayer.MainActivity
 
 /**
@@ -88,14 +91,79 @@ class PlaybackService : MediaSessionService() {
         val bitmapLoader = Media3BitmapLoader(this)
 
         // Configurazione della MediaSession associata al ForwardingPlayer
+        // con verifica del chiamante e restrizione dei comandi concessi (CWE-284)
         mediaSession = MediaSession.Builder(this, autoPlayForwardingPlayer)
             .setSessionActivity(sessionActivityPendingIntent)
             .setBitmapLoader(bitmapLoader)
+            .setCallback(object : MediaSession.Callback {
+                override fun onConnect(
+                    session: MediaSession,
+                    controller: MediaSession.ControllerInfo
+                ): MediaSession.ConnectionResult {
+                    if (isSelfOrNotificationController(session, controller)) {
+                        return MediaSession.ConnectionResult.AcceptedResultBuilder(session).build()
+                    }
+                    if (isTrustedSystemController(session, controller)) {
+                        val safePlayerCommands = Player.Commands.Builder()
+                            .addAll(
+                                Player.COMMAND_PLAY_PAUSE,
+                                Player.COMMAND_SEEK_TO_NEXT,
+                                Player.COMMAND_SEEK_TO_PREVIOUS,
+                                Player.COMMAND_SEEK_TO_NEXT_MEDIA_ITEM,
+                                Player.COMMAND_SEEK_TO_PREVIOUS_MEDIA_ITEM,
+                                Player.COMMAND_SEEK_IN_CURRENT_MEDIA_ITEM,
+                                Player.COMMAND_STOP,
+                                Player.COMMAND_GET_CURRENT_MEDIA_ITEM,
+                                Player.COMMAND_GET_METADATA,
+                                Player.COMMAND_GET_TIMELINE,
+                                Player.COMMAND_GET_AUDIO_ATTRIBUTES,
+                                Player.COMMAND_GET_VOLUME,
+                                Player.COMMAND_GET_DEVICE_VOLUME
+                            )
+                            .build()
+                        return MediaSession.ConnectionResult.AcceptedResultBuilder(session)
+                            .setAvailableSessionCommands(SessionCommands.EMPTY)
+                            .setAvailablePlayerCommands(safePlayerCommands)
+                            .build()
+                    }
+                    return MediaSession.ConnectionResult.reject()
+                }
+            })
             .build()
     }
 
+    @OptIn(UnstableApi::class)
     override fun onGetSession(controllerInfo: MediaSession.ControllerInfo): MediaSession? {
-        return mediaSession
+        val session = mediaSession ?: return null
+        return if (
+            isSelfOrNotificationController(session, controllerInfo) ||
+            isTrustedSystemController(session, controllerInfo)
+        ) {
+            session
+        } else {
+            null
+        }
+    }
+
+    @OptIn(UnstableApi::class)
+    private fun isSelfOrNotificationController(
+        session: MediaSession,
+        controllerInfo: MediaSession.ControllerInfo
+    ): Boolean {
+        val isOwnApp = controllerInfo.uid == Process.myUid() &&
+            controllerInfo.packageName == packageName
+        return isOwnApp || session.isMediaNotificationController(controllerInfo)
+    }
+
+    @OptIn(UnstableApi::class)
+    private fun isTrustedSystemController(
+        session: MediaSession,
+        controllerInfo: MediaSession.ControllerInfo
+    ): Boolean {
+        return controllerInfo.uid == Process.SYSTEM_UID ||
+            controllerInfo.isTrusted ||
+            session.isAutomotiveController(controllerInfo) ||
+            session.isAutoCompanionController(controllerInfo)
     }
 
     override fun onTaskRemoved(rootIntent: Intent?) {

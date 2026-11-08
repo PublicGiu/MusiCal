@@ -24,6 +24,7 @@ class LrclibApiClient(
 ) {
 
     private val baseUrl = "https://lrclib.net/api"
+    private val userAgent = "MusiCal/${com.example.musicplayer.BuildConfig.VERSION_NAME} (Android; Mobile)"
 
     /**
      * Recupera i testi sincronizzati o semplici per un brano.
@@ -68,7 +69,7 @@ class LrclibApiClient(
 
         val request = Request.Builder()
             .url(urlBuilder.toString())
-            .header("User-Agent", "MusiCal/0.1.4 (Android; Mobile)")
+            .header("User-Agent", userAgent)
             .get()
             .build()
 
@@ -89,7 +90,7 @@ class LrclibApiClient(
 
         val request = Request.Builder()
             .url(url)
-            .header("User-Agent", "MusiCal/0.1.4 (Android; Mobile)")
+            .header("User-Agent", userAgent)
             .get()
             .build()
 

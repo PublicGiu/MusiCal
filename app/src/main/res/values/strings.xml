@@ -4,4 +4,40 @@
     <string name="permission_rationale">L\'applicazione richiede i permessi per accedere ai brani audio e mostrare i controlli di riproduzione nelle notifiche.</string>
     <string name="grant_permissions">Concedi permessi</string>
     <string name="no_songs_found">Nessun file audio trovato sul dispositivo.</string>
+
+    <!-- Schede di navigazione principale -->
+    <string name="tab_tracks">Brani</string>
+    <string name="tab_albums">Album</string>
+    <string name="tab_artists">Artisti</string>
+    <string name="tab_playlists">Playlist</string>
+    <string name="tab_stats">Statistiche</string>
+    <string name="tab_settings">Impostazioni</string>
+
+    <!-- Controlli di riproduzione -->
+    <string name="play">Riproduci</string>
+    <string name="pause">Pausa</string>
+    <string name="skip_next">Traccia successiva</string>
+    <string name="skip_previous">Traccia precedente</string>
+    <string name="shuffle">Casuale</string>
+    <string name="repeat">Ripeti</string>
+    <string name="queue">Coda di riproduzione</string>
+    <string name="lyrics">Testo</string>
+
+    <!-- Timer di spegnimento -->
+    <string name="sleep_timer">Timer di spegnimento</string>
+    <string name="sleep_timer_off">Disattivato</string>
+    <string name="sleep_timer_end_of_track">Fine del brano</string>
+    <string name="sleep_timer_minutes">%d minuti</string>
+
+    <!-- Azioni comuni -->
+    <string name="cancel">Annulla</string>
+    <string name="confirm">Conferma</string>
+    <string name="save">Salva</string>
+    <string name="close">Chiudi</string>
+    <string name="apply">Applica</string>
+    <string name="delete">Elimina</string>
+    <string name="search">Cerca</string>
+    <string name="details">Dettagli brano</string>
+    <string name="edit_tags">Modifica tag</string>
+    <string name="equalizer">Equalizzatore</string>
 </resources>

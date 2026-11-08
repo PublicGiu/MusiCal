@@ -1,6 +1,6 @@
 # 🎵 MusiCal — Lettore Musicale Nativo per Android 16
 
-![Versione](https://img.shields.io/badge/versione-0.1.13-8B5CF6)
+![Versione](https://img.shields.io/badge/versione-0.1.14-8B5CF6)
 ![Android](https://img.shields.io/badge/Android-16%20(API%2036)-7C3AED)
 ![Kotlin](https://img.shields.io/badge/Kotlin-2.1.0-A855F7)
 ![Jetpack Compose](https://img.shields.io/badge/UI-Jetpack%20Compose%20%2B%20Material%203-C084FC)

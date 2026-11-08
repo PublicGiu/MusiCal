@@ -32,23 +32,19 @@ import com.example.musicplayer.data.matchesArtist
 import com.example.musicplayer.data.sortAlbums
 import com.example.musicplayer.data.sortPlaylists
 import com.example.musicplayer.data.sortTracks
-import com.example.musicplayer.data.lastfm.LastFmClient
-import com.example.musicplayer.data.lastfm.LastFmConfig
-import com.example.musicplayer.data.lastfm.LastFmSessionManager
-import com.example.musicplayer.data.lastfm.cache.ScrobbleSyncManager
 import com.example.musicplayer.data.LyricsData
 import com.example.musicplayer.data.LyricsRepository
 import com.example.musicplayer.data.tagger.model.DeezerSearchTrack
 import com.example.musicplayer.data.tagger.model.EnrichedMetadata
 import com.example.musicplayer.data.tagger.repository.EnricherOptions
-import com.example.musicplayer.data.tagger.repository.MetadataEnricherRepository
-import com.example.musicplayer.data.tagger.sanitizer.QuerySanitizer
-import com.example.musicplayer.data.tagger.writer.StorageWriteManager
 import com.example.musicplayer.data.AudioSourceMode
 import com.example.musicplayer.data.update.AppUpdateInfo
 import com.example.musicplayer.data.update.GithubUpdateChecker
 import com.example.musicplayer.ui.tagger.EnricherUiState
+import com.example.musicplayer.ui.tagger.MetadataEnricherCoordinator
 import com.example.musicplayer.playback.PlaybackService
+import com.example.musicplayer.playback.SleepTimerCoordinator
+import com.example.musicplayer.data.lastfm.LastFmCoordinator
 import android.content.IntentSender
 import java.io.File
 import kotlinx.coroutines.Dispatchers
@@ -73,25 +69,18 @@ class MusicViewModel(application: Application) : AndroidViewModel(application) {
     private val playlistRepository = PlaylistRepository(application)
     private val statsRepository = StatsRepository(application)
     private val libraryCacheRepository = LibraryCacheRepository(application)
-    private val enricherRepository = MetadataEnricherRepository()
-    private val storageWriteManager = StorageWriteManager(application)
-    private val lyricsRepository = LyricsRepository(application)
-
-    // --- StateFlow per Auto-Tagger & Testi ---
-    private val _enricherState = MutableStateFlow<EnricherUiState>(EnricherUiState.Idle)
-    val enricherState: StateFlow<EnricherUiState> = _enricherState.asStateFlow()
-
-    private val _writeRequestIntentSender = MutableStateFlow<IntentSender?>(null)
-    val writeRequestIntentSender: StateFlow<IntentSender?> = _writeRequestIntentSender.asStateFlow()
+    val metadataEnricherCoordinator = MetadataEnricherCoordinator(
+        context = application,
+        scope = viewModelScope,
+        onReloadLibrary = { affectedMap -> handleEnricherPostSave(affectedMap) }
+    )
+    val enricherState: StateFlow<EnricherUiState> = metadataEnricherCoordinator.enricherState
+    val writeRequestIntentSender: StateFlow<IntentSender?> = metadataEnricherCoordinator.writeRequestIntentSender
+    val currentLyrics: StateFlow<LyricsData?> = metadataEnricherCoordinator.currentLyrics
 
     private val _deleteRequestIntentSender = MutableStateFlow<IntentSender?>(null)
     val deleteRequestIntentSender: StateFlow<IntentSender?> = _deleteRequestIntentSender.asStateFlow()
     private var pendingTracksToDelete: List<AudioTrack> = emptyList()
-
-    private val _currentLyrics = MutableStateFlow<LyricsData?>(null)
-    val currentLyrics: StateFlow<LyricsData?> = _currentLyrics.asStateFlow()
-
-    private val pendingWrites = mutableMapOf<AudioTrack, Pair<File, EnrichedMetadata>>()
 
     // --- StateFlow principali ---
     private val _tracks = MutableStateFlow<List<AudioTrack>>(emptyList())
@@ -128,9 +117,15 @@ class MusicViewModel(application: Application) : AndroidViewModel(application) {
     private val _playbackContext = MutableStateFlow<PlaybackContext>(PlaybackContext.Library)
     val playbackContext: StateFlow<PlaybackContext> = _playbackContext.asStateFlow()
 
-    private val _sleepTimerState = MutableStateFlow<SleepTimerState>(SleepTimerState.Inactive)
-    val sleepTimerState: StateFlow<SleepTimerState> = _sleepTimerState.asStateFlow()
-    private var sleepTimerJob: Job? = null
+    val sleepTimerCoordinator = SleepTimerCoordinator(
+        scope = viewModelScope,
+        onPausePlayback = { mediaController?.pause() },
+        onSetVolume = { vol -> mediaController?.setVolume(vol) },
+        getCurrentTrack = { _currentTrack.value },
+        getCurrentPositionMs = { _currentPositionMs.value },
+        getDurationMs = { _durationMs.value }
+    )
+    val sleepTimerState: StateFlow<SleepTimerState> = sleepTimerCoordinator.sleepTimerState
     private var isPlaybackStateRestored: Boolean = false
     private var isRestoringPlaybackState: Boolean = false
     private var hasRecordedPlayForRestoredTrack: Boolean = true
@@ -209,33 +204,20 @@ class MusicViewModel(application: Application) : AndroidViewModel(application) {
      .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
     // --- 4. Last.fm Scrobbling & Offline Cache ---
-    private val lastFmSessionManager = LastFmSessionManager(application)
-    private val lastFmClient = LastFmClient()
-    private val syncManager = ScrobbleSyncManager(application, lastFmClient, lastFmSessionManager)
-
-    private val _isLastFmLoggedIn = MutableStateFlow(lastFmSessionManager.isLoggedIn())
-    val isLastFmLoggedIn: StateFlow<Boolean> = _isLastFmLoggedIn.asStateFlow()
-
-    private val _lastFmUsername = MutableStateFlow(lastFmSessionManager.getUsername())
-    val lastFmUsername: StateFlow<String?> = _lastFmUsername.asStateFlow()
-
-    private val _lastFmAuthLoading = MutableStateFlow(false)
-    val lastFmAuthLoading: StateFlow<Boolean> = _lastFmAuthLoading.asStateFlow()
-
-    private val _lastFmAuthError = MutableStateFlow<String?>(null)
-    val lastFmAuthError: StateFlow<String?> = _lastFmAuthError.asStateFlow()
-
-    private val _lastFmStatusMessage = MutableStateFlow<String?>(null)
-    val lastFmStatusMessage: StateFlow<String?> = _lastFmStatusMessage.asStateFlow()
-
-    private val _lastFmCustomApiKey = MutableStateFlow(lastFmSessionManager.getCustomApiKey() ?: "")
-    val lastFmCustomApiKey: StateFlow<String> = _lastFmCustomApiKey.asStateFlow()
-
-    private val _lastFmCustomSharedSecret = MutableStateFlow(lastFmSessionManager.getCustomSharedSecret() ?: "")
-    val lastFmCustomSharedSecret: StateFlow<String> = _lastFmCustomSharedSecret.asStateFlow()
-
-    val pendingScrobblesCount: StateFlow<Int> = syncManager.pendingCountFlow
-        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), 0)
+    val lastFmCoordinator = LastFmCoordinator(
+        context = application,
+        scope = viewModelScope,
+        getCurrentTrack = { _currentTrack.value },
+        isPlayingProvider = { _isPlaying.value }
+    )
+    val isLastFmLoggedIn: StateFlow<Boolean> = lastFmCoordinator.isLastFmLoggedIn
+    val lastFmUsername: StateFlow<String?> = lastFmCoordinator.lastFmUsername
+    val lastFmAuthLoading: StateFlow<Boolean> = lastFmCoordinator.lastFmAuthLoading
+    val lastFmAuthError: StateFlow<String?> = lastFmCoordinator.lastFmAuthError
+    val lastFmStatusMessage: StateFlow<String?> = lastFmCoordinator.lastFmStatusMessage
+    val lastFmCustomApiKey: StateFlow<String> = lastFmCoordinator.lastFmCustomApiKey
+    val lastFmCustomSharedSecret: StateFlow<String> = lastFmCoordinator.lastFmCustomSharedSecret
+    val pendingScrobblesCount: StateFlow<Int> = lastFmCoordinator.pendingScrobblesCount
 
     // --- 5. Preferenze dell'applicazione (Tema, Colori dinamici, Autoplay) ---
     private val appPreferences = AppPreferences(application)
@@ -276,10 +258,6 @@ class MusicViewModel(application: Application) : AndroidViewModel(application) {
     private var activeContextTracks: List<AudioTrack> = emptyList()
     private var isCustomContextActive: Boolean = false
 
-    // Tracciamento stato scrobble per il brano corrente
-    private var currentTrackStartTimeSeconds: Long = 0L
-    private var scrobbleSentForCurrentTrack: Boolean = false
-    private var currentScrobbleTrackId: Long? = null
     private var lastKnownQueueIndex: Int = 0
 
     // --- Riferimenti interni ---
@@ -298,7 +276,7 @@ class MusicViewModel(application: Application) : AndroidViewModel(application) {
                     _currentTrack.value?.let { current ->
                         recordTrackPlayed(current.id)
                         recordRecentTrack(current.id)
-                        handleTrackStartedForScrobble(current)
+                        lastFmCoordinator.handleTrackStarted(current)
                     }
                 }
                 startProgressTicker()
@@ -359,12 +337,12 @@ class MusicViewModel(application: Application) : AndroidViewModel(application) {
                     return
                 }
 
-                val timer = _sleepTimerState.value
+                val timer = sleepTimerCoordinator.sleepTimerState.value
                 if (timer is SleepTimerState.Active && timer.isEndOfTrack && previousTrackId != null) {
                     if (reason == Player.MEDIA_ITEM_TRANSITION_REASON_AUTO ||
                         reason == Player.MEDIA_ITEM_TRANSITION_REASON_REPEAT
                     ) {
-                        cancelSleepTimer()
+                        sleepTimerCoordinator.cancel()
                         controller?.pause()
                         hasRecordedPlayForRestoredTrack = false
                         saveCurrentPlaybackState()
@@ -383,7 +361,7 @@ class MusicViewModel(application: Application) : AndroidViewModel(application) {
                     recordTrackPlayed(id)
                     recordRecentTrack(id)
                 }
-                handleTrackStartedForScrobble(current)
+                lastFmCoordinator.handleTrackStarted(current)
                 saveCurrentPlaybackState()
 
                 if (_repeatMode.value == Player.REPEAT_MODE_ONE && previousTrackId != null && previousTrackId != current.id) {
@@ -429,8 +407,7 @@ class MusicViewModel(application: Application) : AndroidViewModel(application) {
                 replenishAutoplayIfNeeded(current)
             } ?: run {
                 _currentTrack.value = null
-                currentScrobbleTrackId = null
-                scrobbleSentForCurrentTrack = false
+                lastFmCoordinator.resetCurrentTrackScrobble()
                 lastKnownQueueIndex = 0
             }
             updateDuration()
@@ -447,10 +424,10 @@ class MusicViewModel(application: Application) : AndroidViewModel(application) {
                 _currentPositionMs.value = mediaController?.currentPosition?.coerceAtLeast(0L) ?: 0L
             }
             if (playbackState == Player.STATE_ENDED) {
-                val timer = _sleepTimerState.value
+                val timer = sleepTimerCoordinator.sleepTimerState.value
                 if (timer is SleepTimerState.Active && timer.isEndOfTrack) {
                     mediaController?.pause()
-                    cancelSleepTimer()
+                    sleepTimerCoordinator.cancel()
                 } else {
                     checkAndTriggerAutoplayIfNeeded()
                 }
@@ -464,7 +441,6 @@ class MusicViewModel(application: Application) : AndroidViewModel(application) {
         loadInitialCachedLibrary()
         loadPlaylists()
         loadStats()
-        initOfflineScrobbleSync()
         initLyricsObserver()
     }
 
@@ -492,19 +468,8 @@ class MusicViewModel(application: Application) : AndroidViewModel(application) {
     private fun initLyricsObserver() {
         viewModelScope.launch {
             _currentTrack.collect { track ->
-                _currentLyrics.value = track?.let { lyricsRepository.getLyricsForTrack(it.id) }
+                metadataEnricherCoordinator.updateCurrentLyricsForTrack(track)
             }
-        }
-    }
-
-    private fun initOfflineScrobbleSync() {
-        syncManager.startMonitoring()
-        syncManager.onSyncCompletedListener = { syncedCount ->
-            Log.d("LastFm", "Sincronizzati $syncedCount scrobble dalla cache offline")
-        }
-        viewModelScope.launch(Dispatchers.IO) {
-            delay(3000L) // Differito di 3 secondi dall'avvio per non intasare il cold start
-            syncManager.syncPendingScrobbles()
         }
     }
 
@@ -582,8 +547,8 @@ class MusicViewModel(application: Application) : AndroidViewModel(application) {
                 val trackId = item.mediaId.toLongOrNull()
                 val foundTrack = loadedTracks.find { it.id == trackId }
                 _currentTrack.value = foundTrack
-                if (foundTrack != null && currentScrobbleTrackId != trackId && mediaController?.isPlaying == true) {
-                    handleTrackStartedForScrobble(foundTrack)
+                if (foundTrack != null && !lastFmCoordinator.isCurrentScrobbleTrack(trackId ?: -1L) && mediaController?.isPlaying == true) {
+                    lastFmCoordinator.handleTrackStarted(foundTrack)
                 }
             }
             updateQueueFromController()
@@ -1172,7 +1137,7 @@ class MusicViewModel(application: Application) : AndroidViewModel(application) {
             if (controller.repeatMode == Player.REPEAT_MODE_ONE) {
                 controller.seekTo(0L)
                 _currentPositionMs.value = 0L
-                _currentTrack.value?.let { handleTrackStartedForScrobble(it) }
+                _currentTrack.value?.let { lastFmCoordinator.handleTrackStarted(it) }
             } else if (controller.hasNextMediaItem()) {
                 controller.seekToNextMediaItem()
             }
@@ -1342,7 +1307,7 @@ class MusicViewModel(application: Application) : AndroidViewModel(application) {
                         _durationMs.value
                     }
 
-                    checkAndTriggerScrobble(pos, effectiveDur)
+                    lastFmCoordinator.checkAndTriggerScrobble(pos, effectiveDur)
                 }
                 delay(250L)
             }
@@ -1358,70 +1323,9 @@ class MusicViewModel(application: Application) : AndroidViewModel(application) {
         saveCurrentPlaybackState()
     }
 
-    // --- Scrobbling & Now Playing Logic ---
-    private fun handleTrackStartedForScrobble(track: AudioTrack) {
-        currentScrobbleTrackId = track.id
-        currentTrackStartTimeSeconds = System.currentTimeMillis() / 1000
-        scrobbleSentForCurrentTrack = false
-
-        val sessionKey = lastFmSessionManager.getSessionKey()
-        if (!sessionKey.isNullOrBlank()) {
-            viewModelScope.launch(Dispatchers.IO) {
-                val result = lastFmClient.updateNowPlaying(track, sessionKey)
-                result.onSuccess {
-                    Log.d("LastFm", "Now Playing inviato con successo: ${track.title} - ${track.artist}")
-                }.onFailure { e ->
-                    Log.d("LastFm", "Errore invio Now Playing (${track.title}): ${e.message}")
-                }
-            }
-        }
-    }
-
-    private fun checkAndTriggerScrobble(positionMs: Long, durationMs: Long) {
-        if (scrobbleSentForCurrentTrack) return
-        val track = _currentTrack.value ?: return
-        val sessionKey = lastFmSessionManager.getSessionKey() ?: return
-
-        val trackDurMs = if (durationMs > 0L) durationMs else track.duration
-        if (trackDurMs < 30_000L) return
-
-        val thresholdMs = minOf(trackDurMs / 2, 240_000L)
-        if (positionMs >= thresholdMs) {
-            scrobbleSentForCurrentTrack = true
-            val startTime = currentTrackStartTimeSeconds
-            viewModelScope.launch(Dispatchers.IO) {
-                if (!syncManager.isNetworkAvailable()) {
-                    // Dispositivo offline: salva nella tabella Room dei pendenti
-                    syncManager.savePendingScrobble(track, startTime)
-                    Log.d("LastFm", "Dispositivo offline: scrobble salvato in cache Room per ${track.title} - ${track.artist}")
-                } else {
-                    // Dispositivo online: tenta l'invio immediato
-                    val result = lastFmClient.scrobble(track, startTime, sessionKey)
-                    result.onSuccess {
-                        Log.d("LastFm", "Ascolto registrato su Last.fm con successo: ${track.title} - ${track.artist}")
-                    }.onFailure { e ->
-                        // In caso di errore di rete: salva nei pendenti anziché scartarlo
-                        syncManager.savePendingScrobble(track, startTime)
-                        Log.d("LastFm", "Errore invio scrobble (${e.message}): salvato in cache offline Room per ${track.title}")
-                    }
-                }
-            }
-        }
-    }
-
     // --- Metodi Pubblici Last.fm ---
     fun saveLastFmApiCredentials(apiKey: String, sharedSecret: String) {
-        val cleanKey = apiKey.trim()
-        val cleanSecret = sharedSecret.trim()
-        if (cleanKey.isBlank() && cleanSecret.isBlank()) {
-            lastFmSessionManager.clearCustomApiCredentials()
-            _lastFmCustomApiKey.value = ""
-            _lastFmCustomSharedSecret.value = ""
-        } else {
-            lastFmSessionManager.saveCustomApiCredentials(cleanKey, cleanSecret)
-            _lastFmCustomApiKey.value = cleanKey
-            _lastFmCustomSharedSecret.value = cleanSecret
-        }
+        lastFmCoordinator.saveApiCredentials(apiKey, sharedSecret)
     }
 
     fun loginLastFm(
@@ -1430,68 +1334,19 @@ class MusicViewModel(application: Application) : AndroidViewModel(application) {
         customApiKey: String? = null,
         customSharedSecret: String? = null
     ) {
-        if (!customApiKey.isNullOrBlank() && !customSharedSecret.isNullOrBlank()) {
-            saveLastFmApiCredentials(customApiKey, customSharedSecret)
-        }
-        if (!LastFmConfig.isConfigured) {
-            _lastFmAuthError.value = "Inserisci API Key e Shared Secret di Last.fm per continuare."
-            return
-        }
-        if (username.isBlank() || password.isBlank()) {
-            _lastFmAuthError.value = "Inserisci username e password"
-            return
-        }
-        viewModelScope.launch(Dispatchers.Main) {
-            _lastFmAuthLoading.value = true
-            _lastFmAuthError.value = null
-            val result = lastFmClient.getMobileSession(username, password)
-            result.onSuccess { (user, sessionKey) ->
-                lastFmSessionManager.saveSession(user, sessionKey)
-                _isLastFmLoggedIn.value = true
-                _lastFmUsername.value = user
-                _lastFmAuthLoading.value = false
-                _lastFmStatusMessage.value = "Connesso a Last.fm come $user"
-
-                _currentTrack.value?.let { current ->
-                    if (_isPlaying.value) {
-                        handleTrackStartedForScrobble(current)
-                    }
-                }
-
-                // Sincronizza eventuali scrobble offline accumulati in precedenza
-                viewModelScope.launch(Dispatchers.IO) {
-                    syncManager.syncPendingScrobbles()
-                }
-            }.onFailure { error ->
-                _lastFmAuthLoading.value = false
-                _lastFmAuthError.value = error.message ?: "Errore durante l'accesso a Last.fm"
-            }
-        }
+        lastFmCoordinator.login(username, password, customApiKey, customSharedSecret)
     }
 
     fun logoutLastFm() {
-        lastFmSessionManager.clearSession()
-        _isLastFmLoggedIn.value = false
-        _lastFmUsername.value = null
-        _lastFmAuthError.value = null
-        _lastFmStatusMessage.value = "Disconnesso da Last.fm"
+        lastFmCoordinator.logout()
     }
 
     fun syncOfflineScrobbles() {
-        viewModelScope.launch(Dispatchers.IO) {
-            val count = syncManager.syncPendingScrobbles()
-            if (count > 0) {
-                _lastFmStatusMessage.value = "Sincronizzati $count scrobble offline"
-            } else if (!syncManager.isNetworkAvailable()) {
-                _lastFmStatusMessage.value = "Connessione assente: scrobble mantenuti in coda"
-            } else {
-                _lastFmStatusMessage.value = "Nessuno scrobble in attesa"
-            }
-        }
+        lastFmCoordinator.syncOfflineScrobbles()
     }
 
     fun clearLastFmStatusMessage() {
-        _lastFmStatusMessage.value = null
+        lastFmCoordinator.clearStatusMessage()
     }
 
     // --- Gestione Riproduzione Automatica Continua (Autoplay) ---
@@ -1718,22 +1573,7 @@ class MusicViewModel(application: Application) : AndroidViewModel(application) {
     // --- Funzionalità Smart Auto-Tagger & Metadata Enricher ---
 
     fun startTrackEnrichment(track: AudioTrack) {
-        _enricherState.value = EnricherUiState.Loading("Ricerca metadati Deezer e testi LRCLIB...")
-        viewModelScope.launch {
-            val result = enricherRepository.enrichTrackWithCandidates(track, EnricherOptions())
-            result.onSuccess { (enriched, candidates) ->
-                _enricherState.value = EnricherUiState.ReviewTrack(
-                    track = track,
-                    enriched = enriched,
-                    candidates = candidates,
-                    options = EnricherOptions()
-                )
-            }.onFailure { err ->
-                _enricherState.value = EnricherUiState.Error(
-                    err.message ?: "Errore durante la ricerca dei metadati online"
-                )
-            }
-        }
+        metadataEnricherCoordinator.startTrackEnrichment(track)
     }
 
     fun selectAlternativeCandidate(
@@ -1741,26 +1581,7 @@ class MusicViewModel(application: Application) : AndroidViewModel(application) {
         candidate: DeezerSearchTrack,
         options: EnricherOptions
     ) {
-        val currentCandidates = (_enricherState.value as? EnricherUiState.ReviewTrack)?.candidates.orEmpty()
-        _enricherState.value = EnricherUiState.Loading("Caricamento dettagli da Deezer...")
-        viewModelScope.launch {
-            val res = enricherRepository.enrichFromCandidate(track, candidate, options)
-            res.fold(
-                onSuccess = { enriched ->
-                    _enricherState.value = EnricherUiState.ReviewTrack(
-                        track = track,
-                        enriched = enriched,
-                        candidates = currentCandidates,
-                        options = options
-                    )
-                },
-                onFailure = { error ->
-                    _enricherState.value = EnricherUiState.Error(
-                        error.message ?: "Impossibile recuperare i dettagli del brano selezionato."
-                    )
-                }
-            )
-        }
+        metadataEnricherCoordinator.selectAlternativeCandidate(track, candidate, options)
     }
 
     fun searchCustomTrackEnrichment(
@@ -1768,161 +1589,19 @@ class MusicViewModel(application: Application) : AndroidViewModel(application) {
         customTitle: String,
         customArtist: String
     ) {
-        _enricherState.value = EnricherUiState.Loading("Ricerca personalizzata...")
-        viewModelScope.launch {
-            val candidatesRes = enricherRepository.searchCustom(customTitle, customArtist)
-            candidatesRes.fold(
-                onSuccess = { candidates ->
-                    if (candidates.isEmpty()) {
-                        _enricherState.value = EnricherUiState.Error("Nessun risultato trovato per '$customTitle - $customArtist'")
-                    } else {
-                        val best = candidates.first()
-                        val enriched = enricherRepository.enrichFromCandidate(track, best, EnricherOptions()).getOrNull()
-                        if (enriched != null) {
-                            _enricherState.value = EnricherUiState.ReviewTrack(
-                                track = track,
-                                enriched = enriched,
-                                candidates = candidates,
-                                options = EnricherOptions()
-                            )
-                        } else {
-                            _enricherState.value = EnricherUiState.Error("Impossibile elaborare il risultato Deezer.")
-                        }
-                    }
-                },
-                onFailure = { err ->
-                    _enricherState.value = EnricherUiState.Error(err.message ?: "Errore durante la ricerca personalizzata.")
-                }
-            )
-        }
+        metadataEnricherCoordinator.searchCustomTrackEnrichment(track, customTitle, customArtist)
     }
 
     fun adjustLyricsOffset(offsetDeltaMs: Long) {
-        val track = _currentTrack.value ?: return
-        val updated = lyricsRepository.adjustOffset(track.id, offsetDeltaMs)
-        if (updated != null) {
-            _currentLyrics.value = updated
-        }
+        metadataEnricherCoordinator.adjustLyricsOffset(_currentTrack.value, offsetDeltaMs)
     }
 
     fun startAlbumEnrichment(album: Album, separateAlbums: Boolean? = null) {
-        val shouldSeparate = separateAlbums ?: album.isMixedOrGeneric()
-        _enricherState.value = EnricherUiState.Loading(
-            if (shouldSeparate) "Analisi brani e separazione in album distinti..."
-            else "Analisi album e unificazione tracce..."
-        )
-        viewModelScope.launch {
-            val firstTrack = album.tracks.firstOrNull() ?: run {
-                _enricherState.value = EnricherUiState.Error("L'album selezionato non contiene tracce.")
-                return@launch
-            }
-
-            // 1. Arricchimento in parallelo con coroutine di ciascuna traccia per identificare il disco originale
-            val individualMap = mutableMapOf<Long, EnrichedMetadata>()
-            coroutineScope {
-                val deferreds = album.tracks.map { track ->
-                    async {
-                        val enriched = enricherRepository.enrichTrack(
-                            track,
-                            EnricherOptions(normalizeAlbum = false)
-                        ).getOrNull()
-                        track to enriched
-                    }
-                }
-                deferreds.awaitAll().forEachIndexed { index, (track, res) ->
-                    val inferredNum = QuerySanitizer.extractTrackNumberFromFileName(track.displayName)
-                        ?: track.trackNumber.takeIf { it > 0 }
-                        ?: (index + 1)
-                    val fallback = EnrichedMetadata(
-                        title = track.title,
-                        artist = track.artist,
-                        album = track.album,
-                        albumArtist = track.albumArtist.ifBlank { track.artist },
-                        trackNumber = inferredNum,
-                        discNumber = track.discNumber.coerceAtLeast(1)
-                    )
-                    individualMap[track.id] = res ?: fallback
-                }
-            }
-
-            // 2. Mappa unificata (per raggruppare i brani sotto l'album ufficiale unico)
-            // Identifica l'album e l'artista di riferimento più frequenti o autorevoli
-            val candidateAlbumGroups = individualMap.values
-                .groupBy { it.album.trim().lowercase(java.util.Locale.ROOT) to it.albumArtist.trim().lowercase(java.util.Locale.ROOT) }
-            val bestGroupKey = candidateAlbumGroups.maxByOrNull { it.value.size }?.key
-            val unifiedAlbumRef = candidateAlbumGroups[bestGroupKey]?.firstOrNull()
-                ?: individualMap[firstTrack.id]
-                ?: individualMap.values.first()
-
-            // Cerca la tracklist ufficiale dell'album su Deezer per allineare le posizioni dei brani
-            val albumSearchTitle = unifiedAlbumRef.album.ifBlank { album.title }
-            val albumSearchArtist = unifiedAlbumRef.albumArtist.ifBlank { album.artist }
-            val deezerAlbumId = enricherRepository.searchAlbumId(albumSearchTitle, albumSearchArtist).getOrNull()
-            val officialAlbumDetail = if (deezerAlbumId != null && deezerAlbumId > 0L) {
-                enricherRepository.getAlbumDetail(deezerAlbumId).getOrNull()
-            } else null
-
-            // Allinea le tracce locali con la tracklist ufficiale Deezer (se disponibile)
-            val matchedOfficialTracks = if (officialAlbumDetail != null && officialAlbumDetail.tracks.isNotEmpty()) {
-                enricherRepository.alignAlbumTracks(album.tracks, officialAlbumDetail.tracks)
-            } else {
-                emptyMap()
-            }
-
-            val unifiedMap = mutableMapOf<Long, EnrichedMetadata>()
-            album.tracks.forEachIndexed { index, track ->
-                val ind = individualMap[track.id] ?: unifiedAlbumRef
-                val officialTrackInfo = matchedOfficialTracks[track.id]
-
-                val resolvedTrackNumber = officialTrackInfo?.trackPosition?.takeIf { it > 0 }
-                    ?: ind.trackNumber?.takeIf { it > 0 }
-                    ?: QuerySanitizer.extractTrackNumberFromFileName(track.displayName)
-                    ?: track.trackNumber.takeIf { it > 0 }
-                    ?: (index + 1)
-
-                val resolvedDiscNumber = officialTrackInfo?.diskNumber?.takeIf { it > 0 }
-                    ?: ind.discNumber?.takeIf { it > 0 }
-                    ?: track.discNumber.takeIf { it > 0 }
-                    ?: 1
-
-                val finalCoverUrl = officialAlbumDetail?.coverXl ?: unifiedAlbumRef.coverUrl
-                val finalCoverBytes = unifiedAlbumRef.coverBytes
-                val finalReleaseYear = officialAlbumDetail?.releaseYear ?: unifiedAlbumRef.releaseYear
-                val finalGenre = officialAlbumDetail?.genre?.takeIf { it.isNotBlank() } ?: unifiedAlbumRef.genre
-
-                unifiedMap[track.id] = ind.copy(
-                    album = officialAlbumDetail?.title?.takeIf { it.isNotBlank() } ?: unifiedAlbumRef.album,
-                    albumArtist = officialAlbumDetail?.albumArtist?.takeIf { it.isNotBlank() } ?: unifiedAlbumRef.albumArtist,
-                    coverUrl = finalCoverUrl,
-                    coverBytes = finalCoverBytes,
-                    releaseYear = finalReleaseYear,
-                    genre = finalGenre,
-                    trackNumber = resolvedTrackNumber,
-                    discNumber = resolvedDiscNumber
-                )
-            }
-
-            val activeMap = if (shouldSeparate) individualMap else unifiedMap
-
-            _enricherState.value = EnricherUiState.ReviewAlbum(
-                album = album,
-                tracksEnriched = activeMap,
-                individualTracksEnriched = individualMap,
-                unifiedTracksEnriched = unifiedMap,
-                options = EnricherOptions(normalizeAlbum = !shouldSeparate),
-                isSeparationMode = shouldSeparate
-            )
-        }
+        metadataEnricherCoordinator.startAlbumEnrichment(album, separateAlbums)
     }
 
     fun toggleAlbumEnrichmentMode(separate: Boolean) {
-        val current = _enricherState.value as? EnricherUiState.ReviewAlbum ?: return
-        val newMap = if (separate) current.individualTracksEnriched else current.unifiedTracksEnriched
-        _enricherState.value = current.copy(
-            tracksEnriched = newMap,
-            isSeparationMode = separate,
-            options = current.options.copy(normalizeAlbum = !separate)
-        )
+        metadataEnricherCoordinator.toggleAlbumEnrichmentMode(separate)
     }
 
     fun applyTrackEnrichment(
@@ -1930,24 +1609,7 @@ class MusicViewModel(application: Application) : AndroidViewModel(application) {
         metadata: EnrichedMetadata,
         options: EnricherOptions
     ) {
-        _enricherState.value = EnricherUiState.Writing(1, 1, metadata.title)
-        viewModelScope.launch {
-            val preparedFile = storageWriteManager.prepareTrackInCache(track, metadata, options)
-            if (preparedFile == null) {
-                _enricherState.value = EnricherUiState.Error("Impossibile elaborare i frame audio.")
-                return@launch
-            }
-
-            pendingWrites.clear()
-            pendingWrites[track] = Pair(preparedFile, metadata)
-
-            val intentSender = storageWriteManager.createWriteRequestIntentSender(listOf(track.uri))
-            if (intentSender != null) {
-                _writeRequestIntentSender.value = intentSender
-            } else {
-                executePendingWrites()
-            }
-        }
+        metadataEnricherCoordinator.applyTrackEnrichment(track, metadata, options)
     }
 
     fun applyAlbumEnrichment(
@@ -1955,65 +1617,15 @@ class MusicViewModel(application: Application) : AndroidViewModel(application) {
         tracksEnriched: Map<Long, EnrichedMetadata>,
         options: EnricherOptions
     ) {
-        _enricherState.value = EnricherUiState.Writing(1, album.tracks.size, "Elaborazione file...")
-        viewModelScope.launch {
-            pendingWrites.clear()
-            val urisToAuthorize = mutableListOf<android.net.Uri>()
-
-            album.tracks.forEach { track ->
-                val meta = tracksEnriched[track.id] ?: return@forEach
-                val prepared = storageWriteManager.prepareTrackInCache(track, meta, options)
-                if (prepared != null) {
-                    pendingWrites[track] = Pair(prepared, meta)
-                    urisToAuthorize.add(track.uri)
-                }
-            }
-
-            if (pendingWrites.isEmpty()) {
-                _enricherState.value = EnricherUiState.Error("Nessun file elaborato.")
-                return@launch
-            }
-
-            val intentSender = storageWriteManager.createWriteRequestIntentSender(urisToAuthorize)
-            if (intentSender != null) {
-                _writeRequestIntentSender.value = intentSender
-            } else {
-                executePendingWrites()
-            }
-        }
+        metadataEnricherCoordinator.applyAlbumEnrichment(album, tracksEnriched, options)
     }
 
     fun onWritePermissionResult(isGranted: Boolean) {
-        _writeRequestIntentSender.value = null
-        if (isGranted) {
-            viewModelScope.launch {
-                executePendingWrites()
-            }
-        } else {
-            pendingWrites.values.forEach { (file, _) -> file.delete() }
-            pendingWrites.clear()
-            _enricherState.value = EnricherUiState.Error("Permesso di scrittura negato dall'utente.")
-        }
+        metadataEnricherCoordinator.onWritePermissionResult(isGranted)
     }
 
     @OptIn(coil.annotation.ExperimentalCoilApi::class)
-    private suspend fun executePendingWrites() = withContext(Dispatchers.IO) {
-        val total = pendingWrites.size
-        var current = 0
-        var successCount = 0
-        val appliedMetadataMap = pendingWrites.map { (track, pair) -> track.id to pair.second }.toMap()
-
-        pendingWrites.forEach { (track, pair) ->
-            val (file, metadata) = pair
-            current++
-            _enricherState.value = EnricherUiState.Writing(current, total, metadata.title)
-            val ok = storageWriteManager.commitTrackWrite(track, file, metadata)
-            if (ok) successCount++
-        }
-
-        pendingWrites.clear()
-
-        // 1. Aggiornamento ottimistico immediato in memoria (zero latenza) per riflettere all'istante le modifiche nella UI
+    private suspend fun handleEnricherPostSave(appliedMetadataMap: Map<Long, EnrichedMetadata>) {
         if (appliedMetadataMap.isNotEmpty()) {
             val currentTracks = _tracks.value
             val patchedTracks = currentTracks.map { track ->
@@ -2044,17 +1656,14 @@ class MusicViewModel(application: Application) : AndroidViewModel(application) {
             }
         }
 
-        // 2. Invalida la cache di memoria e disco di Coil per forzare il refresh immediato delle copertine HD
         withContext(Dispatchers.Main) {
             try {
                 val imageLoader = coil.Coil.imageLoader(getApplication<Application>())
                 imageLoader.memoryCache?.clear()
                 imageLoader.diskCache?.clear()
-            } catch (_: Exception) {
-            }
+            } catch (_: Exception) {}
         }
 
-        // 3. Ricarica forzatamente la libreria locale da MediaStore (ora sincronizzato da MediaScanner) e aggiorna playlist/cache
         reloadLibraryInternal(force = true)
         val updatedPlaylists = playlistRepository.loadPlaylists()
         withContext(Dispatchers.Main) {
@@ -2062,17 +1671,12 @@ class MusicViewModel(application: Application) : AndroidViewModel(application) {
         }
 
         _currentTrack.value?.let { current ->
-            _currentLyrics.value = lyricsRepository.getLyricsForTrack(current.id)
+            metadataEnricherCoordinator.updateCurrentLyricsForTrack(current)
         }
-
-        _enricherState.value = EnricherUiState.Success(
-            "Aggiornati con successo $successCount di $total brani!"
-        )
     }
 
     fun closeEnricher() {
-        _enricherState.value = EnricherUiState.Idle
-        _writeRequestIntentSender.value = null
+        metadataEnricherCoordinator.closeEnricher()
     }
 
     /**
@@ -2082,7 +1686,7 @@ class MusicViewModel(application: Application) : AndroidViewModel(application) {
         if (tracks.isEmpty()) return
         pendingTracksToDelete = tracks
         val uris = tracks.map { it.uri }
-        val intentSender = storageWriteManager.createDeleteRequestIntentSender(uris)
+        val intentSender = metadataEnricherCoordinator.createDeleteRequestIntentSender(uris)
         if (intentSender != null) {
             _deleteRequestIntentSender.value = intentSender
         } else {
@@ -2261,101 +1865,15 @@ class MusicViewModel(application: Application) : AndroidViewModel(application) {
 
     // --- Sleep Timer ---
     fun setSleepTimerMinutes(minutes: Int) {
-        sleepTimerJob?.cancel()
-        if (minutes <= 0) {
-            cancelSleepTimer()
-            return
-        }
-        val totalMs = minutes * 60 * 1000L
-        val targetTime = System.currentTimeMillis() + totalMs
-        _sleepTimerState.value = SleepTimerState.Active(
-            remainingMillis = totalMs,
-            totalMillis = totalMs,
-            isEndOfTrack = false
-        )
-
-        sleepTimerJob = viewModelScope.launch(Dispatchers.Main) {
-            while (isActive) {
-                val now = System.currentTimeMillis()
-                val remaining = targetTime - now
-                if (remaining <= 0) {
-                    mediaController?.pause()
-                    mediaController?.setVolume(1.0f)
-                    _sleepTimerState.value = SleepTimerState.Inactive
-                    break
-                }
-
-                // Smooth fade-out nei 15 secondi finali
-                if (remaining <= 15_000L) {
-                    val fadeVolume = (remaining.toFloat() / 15_000f).coerceIn(0f, 1f)
-                    mediaController?.setVolume(fadeVolume)
-                } else {
-                    mediaController?.setVolume(1.0f)
-                }
-
-                _sleepTimerState.value = SleepTimerState.Active(
-                    remainingMillis = remaining,
-                    totalMillis = totalMs,
-                    isEndOfTrack = false
-                )
-                delay(500L)
-            }
-        }
+        sleepTimerCoordinator.setMinutes(minutes)
     }
 
     fun setSleepTimerEndOfTrack() {
-        sleepTimerJob?.cancel()
-        val current = _currentTrack.value
-        if (current == null) {
-            cancelSleepTimer()
-            return
-        }
-        val dur = if (_durationMs.value > 0L) _durationMs.value else current.duration
-        val pos = _currentPositionMs.value
-        val remaining = (dur - pos).coerceAtLeast(0L)
-
-        _sleepTimerState.value = SleepTimerState.Active(
-            remainingMillis = remaining,
-            totalMillis = dur.coerceAtLeast(remaining),
-            isEndOfTrack = true
-        )
-
-        sleepTimerJob = viewModelScope.launch(Dispatchers.Main) {
-            val initialTrackId = current.id
-            while (isActive) {
-                val currTrack = _currentTrack.value
-                val currentPos = _currentPositionMs.value
-                val currentDur = if (_durationMs.value > 0L) _durationMs.value else (currTrack?.duration ?: 0L)
-                val rem = (currentDur - currentPos).coerceAtLeast(0L)
-
-                if (currTrack?.id != initialTrackId || (currentDur > 0L && currentPos >= currentDur - 300L)) {
-                    mediaController?.pause()
-                    cancelSleepTimer()
-                    break
-                }
-
-                if (rem <= 10_000L && currentDur > 15_000L) {
-                    val fadeVolume = (rem.toFloat() / 10_000f).coerceIn(0f, 1f)
-                    mediaController?.setVolume(fadeVolume)
-                } else {
-                    mediaController?.setVolume(1.0f)
-                }
-
-                _sleepTimerState.value = SleepTimerState.Active(
-                    remainingMillis = rem,
-                    totalMillis = currentDur.coerceAtLeast(rem),
-                    isEndOfTrack = true
-                )
-                delay(500L)
-            }
-        }
+        sleepTimerCoordinator.setEndOfTrack()
     }
 
     fun cancelSleepTimer() {
-        sleepTimerJob?.cancel()
-        sleepTimerJob = null
-        mediaController?.setVolume(1.0f)
-        _sleepTimerState.value = SleepTimerState.Inactive
+        sleepTimerCoordinator.cancel()
     }
 
     fun moveTrackInPlaylist(playlistId: String, fromIndex: Int, toIndex: Int) {
@@ -2382,9 +1900,9 @@ class MusicViewModel(application: Application) : AndroidViewModel(application) {
     override fun onCleared() {
         super.onCleared()
         isViewModelCleared = true
-        cancelSleepTimer()
+        sleepTimerCoordinator.cancel()
+        lastFmCoordinator.stop()
         saveCurrentPlaybackState()
-        syncManager.stopMonitoring()
         stopProgressTicker()
         controllerFuture?.let { MediaController.releaseFuture(it) }
         controllerFuture = null

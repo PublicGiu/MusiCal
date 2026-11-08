@@ -33,3 +33,8 @@
 -dontwarn kotlinx.coroutines.**
 -keepnames class kotlinx.coroutines.internal.MainDispatcherFactory {}
 -keepnames class kotlinx.coroutines.CoroutineExceptionHandler {}
+
+# --- Audio Tagging (jaudiotagger) ---
+-dontwarn org.jaudiotagger.**
+-keep class org.jaudiotagger.** { *; }
+-keepclassmembers class org.jaudiotagger.** { *; }

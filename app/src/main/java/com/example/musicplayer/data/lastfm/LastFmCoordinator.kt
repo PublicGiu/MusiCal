@@ -192,11 +192,17 @@ class LastFmCoordinator(
 
     fun syncOfflineScrobbles() {
         scope.launch(Dispatchers.IO) {
+            if (!LastFmConfig.isConfigured) {
+                _lastFmStatusMessage.value = "Chiavi API Last.fm mancanti: disconnettiti e inseriscile o aggiorna l'app"
+                return@launch
+            }
             val count = syncManager.syncPendingScrobbles()
             if (count > 0) {
                 _lastFmStatusMessage.value = "Sincronizzati $count scrobble offline"
             } else if (!syncManager.isNetworkAvailable()) {
                 _lastFmStatusMessage.value = "Connessione assente: scrobble mantenuti in coda"
+            } else if (pendingScrobblesCount.value > 0) {
+                _lastFmStatusMessage.value = "Sincronizzazione non riuscita per ${pendingScrobblesCount.value} scrobble in attesa"
             } else {
                 _lastFmStatusMessage.value = "Nessuno scrobble in attesa"
             }

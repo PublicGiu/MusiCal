@@ -65,6 +65,7 @@ import androidx.compose.ui.unit.dp
 fun LastFmDialog(
     isLoggedIn: Boolean,
     username: String?,
+    avatarPath: String? = null,
     isLoading: Boolean,
     errorMessage: String?,
     lastStatusMessage: String?,
@@ -73,6 +74,7 @@ fun LastFmDialog(
     initialSharedSecret: String = "",
     hasBuiltInKeys: Boolean = LastFmConfig.hasBuildConfigKeys,
     onLogin: (username: String, password: String, apiKey: String?, sharedSecret: String?) -> Unit,
+    onSaveApiCredentials: (apiKey: String, sharedSecret: String) -> Unit = { _, _ -> },
     onLogout: () -> Unit,
     onSyncPending: () -> Unit = {},
     onDismiss: () -> Unit
@@ -83,8 +85,12 @@ fun LastFmDialog(
     var inputApiKey by remember(initialApiKey) { mutableStateOf(initialApiKey) }
     var inputSharedSecret by remember(initialSharedSecret) { mutableStateOf(initialSharedSecret) }
     var secretVisible by remember { mutableStateOf(false) }
+    val isMissingApiKeys = !hasBuiltInKeys && (initialApiKey.isBlank() || initialSharedSecret.isBlank())
     var showCustomApiFields by remember(hasBuiltInKeys, initialApiKey) {
         mutableStateOf(!hasBuiltInKeys || initialApiKey.isNotBlank())
+    }
+    var showLoggedInApiFields by remember(isMissingApiKeys) {
+        mutableStateOf(isMissingApiKeys)
     }
     val hasValidApiKeys = hasBuiltInKeys || (inputApiKey.isNotBlank() && inputSharedSecret.isNotBlank())
 
@@ -137,11 +143,9 @@ fun LastFmDialog(
                                 .padding(14.dp),
                             verticalAlignment = Alignment.CenterVertically
                         ) {
-                            Icon(
-                                imageVector = Icons.Default.AccountCircle,
-                                contentDescription = null,
-                                modifier = Modifier.size(44.dp),
-                                tint = MaterialTheme.colorScheme.primary
+                            LastFmAvatar(
+                                avatarPath = avatarPath,
+                                size = 48.dp
                             )
                             Spacer(modifier = Modifier.width(12.dp))
                             Column {
@@ -155,13 +159,13 @@ fun LastFmDialog(
                                         modifier = Modifier
                                             .size(8.dp)
                                             .clip(CircleShape)
-                                            .background(Color(0xFF4CAF50))
+                                            .background(if (isMissingApiKeys) Color(0xFFF57C00) else Color(0xFF4CAF50))
                                     )
                                     Spacer(modifier = Modifier.width(6.dp))
                                     Text(
-                                        text = "Scrobbling attivo",
+                                        text = if (isMissingApiKeys) "In attesa di chiavi API" else "Scrobbling attivo",
                                         style = MaterialTheme.typography.bodySmall.copy(
-                                            color = Color(0xFF2E7D32),
+                                            color = if (isMissingApiKeys) Color(0xFFE65100) else Color(0xFF2E7D32),
                                             fontWeight = FontWeight.SemiBold
                                         )
                                     )
@@ -224,10 +228,19 @@ fun LastFmDialog(
 
                     // Ultimo messaggio o attività
                     if (!lastStatusMessage.isNullOrBlank()) {
+                        val isErrorOrWarning = lastStatusMessage.contains("mancanti", ignoreCase = true) ||
+                            lastStatusMessage.contains("non riuscita", ignoreCase = true) ||
+                            lastStatusMessage.contains("errore", ignoreCase = true) ||
+                            lastStatusMessage.contains("assente", ignoreCase = true)
+
                         Card(
                             modifier = Modifier.fillMaxWidth(),
                             colors = CardDefaults.cardColors(
-                                containerColor = MaterialTheme.colorScheme.surfaceVariant
+                                containerColor = if (isErrorOrWarning) {
+                                    MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.65f)
+                                } else {
+                                    MaterialTheme.colorScheme.surfaceVariant
+                                }
                             ),
                             shape = RoundedCornerShape(8.dp)
                         ) {
@@ -238,18 +251,128 @@ fun LastFmDialog(
                                 verticalAlignment = Alignment.CenterVertically
                             ) {
                                 Icon(
-                                    imageVector = Icons.Default.CheckCircle,
+                                    imageVector = if (isErrorOrWarning) Icons.Default.ErrorOutline else Icons.Default.CheckCircle,
                                     contentDescription = null,
-                                    tint = Color(0xFF4CAF50),
+                                    tint = if (isErrorOrWarning) MaterialTheme.colorScheme.error else Color(0xFF4CAF50),
                                     modifier = Modifier.size(18.dp)
                                 )
                                 Spacer(modifier = Modifier.width(8.dp))
                                 Text(
                                     text = lastStatusMessage,
                                     style = MaterialTheme.typography.bodySmall,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                    color = if (isErrorOrWarning) {
+                                        MaterialTheme.colorScheme.onErrorContainer
+                                    } else {
+                                        MaterialTheme.colorScheme.onSurfaceVariant
+                                    }
                                 )
                             }
+                        }
+                    }
+
+                    // Configurazione chiavi API direttamente da connesso (senza bisogno di disconnettersi)
+                    if (!showLoggedInApiFields) {
+                        TextButton(
+                            onClick = { showLoggedInApiFields = true }
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.Key,
+                                contentDescription = null,
+                                modifier = Modifier.size(16.dp)
+                            )
+                            Spacer(modifier = Modifier.width(6.dp))
+                            Text("Configura API Key personalizzate")
+                        }
+                    } else {
+                        if (isMissingApiKeys) {
+                            Card(
+                                modifier = Modifier.fillMaxWidth(),
+                                colors = CardDefaults.cardColors(
+                                    containerColor = MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.5f)
+                                ),
+                                shape = RoundedCornerShape(8.dp)
+                            ) {
+                                Row(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .padding(10.dp),
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Default.ErrorOutline,
+                                        contentDescription = null,
+                                        tint = MaterialTheme.colorScheme.error,
+                                        modifier = Modifier.size(20.dp)
+                                    )
+                                    Spacer(modifier = Modifier.width(8.dp))
+                                    Text(
+                                        text = "Chiavi API mancanti in questo APK: inserisci API Key e Shared Secret per riattivare lo scrobbling senza disconnetterti.",
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = MaterialTheme.colorScheme.onErrorContainer
+                                    )
+                                }
+                            }
+                        } else {
+                            Text(
+                                text = "Chiavi API Last.fm personalizzate:",
+                                style = MaterialTheme.typography.labelMedium,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+
+                        OutlinedTextField(
+                            value = inputApiKey,
+                            onValueChange = { inputApiKey = it },
+                            label = { Text("API Key Last.fm") },
+                            leadingIcon = {
+                                Icon(Icons.Default.Key, contentDescription = null)
+                            },
+                            singleLine = true,
+                            keyboardOptions = KeyboardOptions(imeAction = ImeAction.Next),
+                            modifier = Modifier.fillMaxWidth()
+                        )
+
+                        OutlinedTextField(
+                            value = inputSharedSecret,
+                            onValueChange = { inputSharedSecret = it },
+                            label = { Text("Shared Secret Last.fm") },
+                            leadingIcon = {
+                                Icon(Icons.Default.Lock, contentDescription = null)
+                            },
+                            trailingIcon = {
+                                IconButton(onClick = { secretVisible = !secretVisible }) {
+                                    Icon(
+                                        imageVector = if (secretVisible) Icons.Default.VisibilityOff else Icons.Default.Visibility,
+                                        contentDescription = if (secretVisible) "Nascondi secret" else "Mostra secret"
+                                    )
+                                }
+                            },
+                            singleLine = true,
+                            visualTransformation = if (secretVisible) VisualTransformation.None else PasswordVisualTransformation(),
+                            keyboardOptions = KeyboardOptions(
+                                keyboardType = KeyboardType.Password,
+                                imeAction = ImeAction.Done
+                            ),
+                            keyboardActions = KeyboardActions(
+                                onDone = {
+                                    if (inputApiKey.isNotBlank() && inputSharedSecret.isNotBlank()) {
+                                        onSaveApiCredentials(inputApiKey, inputSharedSecret)
+                                        showLoggedInApiFields = false
+                                    }
+                                }
+                            ),
+                            modifier = Modifier.fillMaxWidth()
+                        )
+
+                        Button(
+                            onClick = {
+                                onSaveApiCredentials(inputApiKey, inputSharedSecret)
+                                showLoggedInApiFields = false
+                            },
+                            enabled = inputApiKey.isNotBlank() && inputSharedSecret.isNotBlank(),
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Text("Salva chiavi e sincronizza")
                         }
                     }
                 } else {

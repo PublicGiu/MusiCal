@@ -1,0 +1,169 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">MusiCal</string>
+    <string name="permission_rationale">The application requires permissions to access audio tracks and display playback controls in notifications.</string>
+    <string name="grant_permissions">Grant permissions</string>
+    <string name="no_songs_found">No audio tracks found on this device.</string>
+
+    <!-- Main Navigation Tabs -->
+    <string name="tab_tracks">Songs</string>
+    <string name="tab_albums">Albums</string>
+    <string name="tab_artists">Artists</string>
+    <string name="tab_playlists">Playlists</string>
+    <string name="tab_stats">Statistics</string>
+    <string name="tab_settings">Settings</string>
+
+    <!-- Playback Controls -->
+    <string name="play">Play</string>
+    <string name="pause">Pause</string>
+    <string name="skip_next">Next track</string>
+    <string name="skip_previous">Previous track</string>
+    <string name="shuffle">Shuffle</string>
+    <string name="repeat">Repeat</string>
+    <string name="queue">Playback queue</string>
+    <string name="lyrics">Lyrics</string>
+
+    <!-- Sleep Timer -->
+    <string name="sleep_timer">Sleep timer</string>
+    <string name="sleep_timer_off">Off</string>
+    <string name="sleep_timer_end_of_track">End of track</string>
+    <string name="sleep_timer_minutes">%d minutes</string>
+
+    <!-- Common Actions -->
+    <string name="cancel">Cancel</string>
+    <string name="confirm">Confirm</string>
+    <string name="save">Save</string>
+    <string name="close">Close</string>
+    <string name="apply">Apply</string>
+    <string name="delete">Delete</string>
+    <string name="search">Search</string>
+    <string name="details">Track details</string>
+    <string name="edit_tags">Edit tags</string>
+    <string name="equalizer">Equalizer</string>
+    <string name="scroll_to_top">Scroll to top</string>
+    <string name="refresh_library_tooltip">Reload library</string>
+    <string name="library_refreshed_snackbar">Music library updated</string>
+    <string name="search_hint">Search songs, albums, artists…</string>
+
+    <!-- App Language -->
+    <string name="settings_section_language">App language</string>
+    <string name="settings_language_desc">Choose the app display language or follow system default</string>
+    <string name="lang_system">System default</string>
+    <string name="lang_italian">Italiano</string>
+    <string name="lang_english">English</string>
+
+    <!-- Settings -->
+    <string name="settings_section_appearance">Appearance &amp; Theme</string>
+    <string name="settings_theme_mode">Theme mode</string>
+    <string name="theme_system">System default</string>
+    <string name="theme_light">Light theme</string>
+    <string name="theme_dark">Dark theme</string>
+    <string name="settings_section_playback">Playback &amp; Audio</string>
+    <string name="settings_autoplay_title">Continuous autoplay</string>
+    <string name="settings_autoplay_desc">Keep playing random songs when queue ends</string>
+    <string name="settings_equalizer_title">Audio equalizer</string>
+    <string name="settings_equalizer_desc">Adjust 5 frequency bands, bass boost and virtualizer</string>
+    <string name="settings_sleep_timer_desc">Stop music with a timer or at the end of track with fade-out</string>
+    <string name="settings_stats_title">Listening statistics</string>
+    <string name="settings_stats_desc">View top played songs, artists and total listening time</string>
+    <string name="settings_section_library">Music Library</string>
+    <string name="settings_audio_source_title">Audio track source</string>
+    <string name="settings_audio_source_desc">Choose how to scan music stored on your device</string>
+    <string name="source_mode_intelligent">Intelligent scan</string>
+    <string name="source_mode_intelligent_recommended">Intelligent scan (Recommended)</string>
+    <string name="source_mode_music">Music folder</string>
+    <string name="source_mode_all">All storage</string>
+    <string name="source_mode_custom">Custom folders</string>
+    <string name="settings_custom_folders_title">Selected folders (%d)</string>
+    <string name="settings_custom_folders_empty">No folder added. Tap \'+ Add folder\' to select one or more music directories.</string>
+    <string name="settings_add_folder">Add folder</string>
+    <string name="settings_remove_folder_desc">Remove folder</string>
+    <string name="settings_library_summary">%1$d songs • %2$d albums • %3$d total plays</string>
+    <string name="settings_reload_library">Reload music library</string>
+    <string name="settings_restore_duplicates">Restore ignored duplicates (%d)</string>
+    <string name="settings_section_info">About</string>
+    <string name="settings_check_updates">Check for updates</string>
+    <string name="settings_checking_updates">Checking for updates…</string>
+    <string name="settings_up_to_date">MusiCal is up to date!</string>
+    <string name="settings_version">Version %s</string>
+    <string name="settings_github_repo">GitHub Repository</string>
+
+    <!-- Sort Options -->
+    <string name="sort_ascending_desc">Sort ascending</string>
+    <string name="sort_descending_desc">Sort descending</string>
+    <string name="sort_az">Alphabetical (A-Z)</string>
+    <string name="sort_za">Alphabetical (Z-A)</string>
+    <string name="sort_recently_played">Recently played</string>
+    <string name="sort_most_played">Most played</string>
+    <string name="sort_recently_added">Recently added</string>
+
+    <!-- Duplicate Tracks -->
+    <string name="duplicates_banner_single">1 duplicate track in this album</string>
+    <string name="duplicates_banner_multiple">%d duplicate tracks in this album</string>
+    <string name="duplicates_banner_subtitle">Tap to compare and remove redundant files from storage.</string>
+    <string name="duplicates_sheet_title">Duplicate tracks in album</string>
+    <string name="duplicates_sheet_banner">Tap a version to choose which to keep. Files marked for deletion will be permanently removed from device.</string>
+    <string name="duplicates_ignore_single">Ignore duplicate files</string>
+    <string name="duplicates_ignore_multiple">Ignore all duplicates (%d)</string>
+    <string name="duplicates_delete_single">Delete 1 duplicate file</string>
+    <string name="duplicates_delete_multiple">Delete %d duplicate files</string>
+    <string name="duplicates_no_selection">No file selected</string>
+    <string name="duplicates_keep_badge">Keep</string>
+    <string name="duplicates_delete_badge">Delete</string>
+    <string name="duplicates_versions_count">%d versions</string>
+    <string name="duplicates_ignore_group_desc">Ignore this duplicate group</string>
+    <string name="duplicates_manage_menu">Manage duplicate tracks</string>
+    <string name="duplicates_restore_menu">Restore ignored duplicates</string>
+    <string name="duplicates_snackbar_ignored">Duplicate tracks ignored</string>
+    <string name="duplicates_snackbar_restored">Duplicate detection restored</string>
+
+    <!-- Album & Artist Detail -->
+    <string name="album_tracks_summary">%1$s • %2$s min</string>
+    <string name="album_songs_count_single">1 song</string>
+    <string name="album_songs_count_multiple">%d songs</string>
+    <string name="album_play_all">Play all</string>
+    <string name="album_mixed_banner_title">Mixed album or separate tracks?</string>
+    <string name="album_mixed_banner_desc">Tap to automatically recognize and separate tracks into original albums.</string>
+    <string name="album_separate_option">Separate into distinct albums</string>
+    <string name="album_unify_option">Unify all in this album</string>
+    <string name="album_autotag_option">Unify &amp; auto-tag album</string>
+    <string name="playlist_favorites_title">Favorite songs</string>
+
+    <!-- Synced Lyrics -->
+    <string name="lyrics_no_lyrics_for_track">No lyrics found for this track</string>
+    <string name="lyrics_instrumental">Instrumental track</string>
+    <string name="lyrics_no_lyrics_available">No lyrics available for this track</string>
+    <string name="lyrics_use_auto_tagger">Use Auto-Tagger to fetch from LRCLIB</string>
+    <string name="lyrics_loading">Loading lyrics…</string>
+    <string name="lyrics_no_synced_available">No synced lyrics available</string>
+
+    <!-- Full Screen Player -->
+    <string name="player_header_from_album">PLAYING FROM ALBUM</string>
+    <string name="player_header_from_playlist">PLAYING FROM PLAYLIST</string>
+    <string name="player_header_from_artist">PLAYING FROM ARTIST</string>
+    <string name="player_header_from_library">PLAYING FROM LIBRARY</string>
+    <string name="player_all_tracks">All tracks</string>
+    <string name="player_collapse_desc">Collapse full screen player</string>
+    <string name="player_more_options">More options</string>
+    <string name="player_menu_view_artist">View artist</string>
+    <string name="player_menu_add_to_queue">Add to queue</string>
+    <string name="player_menu_add_to_favorites">Add to favorites</string>
+    <string name="player_menu_added_to_favorites">Added to favorites</string>
+    <string name="player_menu_add_to_playlist">Add to playlist</string>
+    <string name="player_menu_auto_tag">Auto-tag &amp; lyrics</string>
+    <string name="player_menu_sleep_timer">Sleep timer</string>
+
+    <!-- Playback Queue -->
+    <string name="queue_header_now_playing">NOW PLAYING</string>
+    <string name="queue_header_user_queue">In queue (%d)</string>
+    <string name="queue_header_autoplay">Continuous autoplay (%d)</string>
+    <string name="queue_clear_button">Clear queue</string>
+
+    <!-- Update Dialog -->
+    <string name="update_dialog_title">Update available</string>
+    <string name="update_dialog_whats_new">What\'s new in this version:</string>
+    <string name="update_dialog_fallback_text">A new version is available on GitHub with improvements and bug fixes.</string>
+    <string name="update_dialog_download_now">Download now</string>
+    <string name="update_dialog_ignore">Ignore</string>
+    <string name="update_dialog_later">Later</string>
+</resources>

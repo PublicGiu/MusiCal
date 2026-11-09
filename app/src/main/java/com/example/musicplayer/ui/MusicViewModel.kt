@@ -1,7 +1,9 @@
 package com.example.musicplayer.ui
 
 import android.app.Application
+import android.app.LocaleManager
 import android.content.ComponentName
+import android.os.LocaleList
 import android.util.Log
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.AndroidViewModel
@@ -13,11 +15,14 @@ import androidx.media3.common.Timeline
 import androidx.media3.session.MediaController
 import androidx.media3.session.SessionToken
 import com.example.musicplayer.data.Album
+import com.example.musicplayer.data.AppLanguage
 import com.example.musicplayer.data.AppPreferences
 import com.example.musicplayer.data.AudioTrack
+import com.example.musicplayer.data.DuplicateTrackGroup
 import com.example.musicplayer.data.PlaybackContext
 import com.example.musicplayer.data.Playlist
 import com.example.musicplayer.data.PlaylistRepository
+import com.example.musicplayer.data.toPairKeys
 import com.example.musicplayer.playback.SleepTimerState
 import com.example.musicplayer.data.SortOption
 import com.example.musicplayer.data.ThemeMode
@@ -212,6 +217,7 @@ class MusicViewModel(application: Application) : AndroidViewModel(application) {
     )
     val isLastFmLoggedIn: StateFlow<Boolean> = lastFmCoordinator.isLastFmLoggedIn
     val lastFmUsername: StateFlow<String?> = lastFmCoordinator.lastFmUsername
+    val lastFmAvatarPath: StateFlow<String?> = lastFmCoordinator.lastFmAvatarPath
     val lastFmAuthLoading: StateFlow<Boolean> = lastFmCoordinator.lastFmAuthLoading
     val lastFmAuthError: StateFlow<String?> = lastFmCoordinator.lastFmAuthError
     val lastFmStatusMessage: StateFlow<String?> = lastFmCoordinator.lastFmStatusMessage
@@ -224,6 +230,9 @@ class MusicViewModel(application: Application) : AndroidViewModel(application) {
 
     private val _themeMode = MutableStateFlow(appPreferences.getThemeMode())
     val themeMode: StateFlow<ThemeMode> = _themeMode.asStateFlow()
+
+    private val _appLanguage = MutableStateFlow(appPreferences.getAppLanguage())
+    val appLanguage: StateFlow<AppLanguage> = _appLanguage.asStateFlow()
 
     private val _isDynamicColorEnabled = MutableStateFlow(appPreferences.isDynamicColorEnabled())
     val isDynamicColorEnabled: StateFlow<Boolean> = _isDynamicColorEnabled.asStateFlow()
@@ -251,6 +260,10 @@ class MusicViewModel(application: Application) : AndroidViewModel(application) {
 
     private val _isUpdateDialogVisible = MutableStateFlow(false)
     val isUpdateDialogVisible: StateFlow<Boolean> = _isUpdateDialogVisible.asStateFlow()
+
+    // --- 5bis. Duplicati Ignorati ---
+    private val _ignoredDuplicateKeys = MutableStateFlow(appPreferences.getIgnoredDuplicateKeys())
+    val ignoredDuplicateKeys: StateFlow<Set<String>> = _ignoredDuplicateKeys.asStateFlow()
 
     private val recentPlayedTrackIds = ArrayDeque<Long>()
 
@@ -437,11 +450,28 @@ class MusicViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     init {
+        initAppLanguage()
         initMediaController()
         loadInitialCachedLibrary()
         loadPlaylists()
         loadStats()
         initLyricsObserver()
+    }
+
+    private fun initAppLanguage() {
+        try {
+            val localeManager = getApplication<Application>().getSystemService(LocaleManager::class.java)
+            val currentLocales = localeManager?.applicationLocales
+            if (currentLocales != null && !currentLocales.isEmpty) {
+                val tag = currentLocales[0]?.language ?: ""
+                val detected = when {
+                    tag.startsWith("en") -> AppLanguage.ENGLISH
+                    tag.startsWith("it") -> AppLanguage.ITALIAN
+                    else -> AppLanguage.SYSTEM
+                }
+                _appLanguage.value = detected
+            }
+        } catch (_: Exception) {}
     }
 
     private fun loadInitialCachedLibrary() {
@@ -1349,6 +1379,10 @@ class MusicViewModel(application: Application) : AndroidViewModel(application) {
         lastFmCoordinator.clearStatusMessage()
     }
 
+    fun refreshLastFmAvatar() {
+        lastFmCoordinator.refreshUserAvatar()
+    }
+
     // --- Gestione Riproduzione Automatica Continua (Autoplay) ---
     private fun recordRecentTrack(trackId: Long) {
         recentPlayedTrackIds.remove(trackId)
@@ -1496,6 +1530,19 @@ class MusicViewModel(application: Application) : AndroidViewModel(application) {
     fun setThemeMode(mode: ThemeMode) {
         _themeMode.value = mode
         appPreferences.setThemeMode(mode)
+    }
+
+    fun setAppLanguage(language: AppLanguage) {
+        _appLanguage.value = language
+        appPreferences.setAppLanguage(language)
+        try {
+            val localeManager = getApplication<Application>().getSystemService(LocaleManager::class.java)
+            localeManager?.applicationLocales = when (language) {
+                AppLanguage.SYSTEM -> LocaleList.getEmptyLocaleList()
+                AppLanguage.ITALIAN -> LocaleList.forLanguageTags("it")
+                AppLanguage.ENGLISH -> LocaleList.forLanguageTags("en")
+            }
+        } catch (_: Exception) {}
     }
 
     fun setDynamicColorEnabled(enabled: Boolean) {
@@ -1736,6 +1783,60 @@ class MusicViewModel(application: Application) : AndroidViewModel(application) {
 
             onDeletedCount?.invoke(tracks.size)
         }
+    }
+
+    /**
+     * Ignora in modo persistente uno o più gruppi di brani duplicati rilevati.
+     */
+    fun ignoreDuplicateGroups(groups: List<DuplicateTrackGroup>) {
+        val keys = groups.toPairKeys()
+        if (keys.isNotEmpty()) {
+            appPreferences.addIgnoredDuplicateKeys(keys)
+            _ignoredDuplicateKeys.value = appPreferences.getIgnoredDuplicateKeys()
+        }
+    }
+
+    /**
+     * Ignora in modo persistente un singolo gruppo di brani duplicati.
+     */
+    fun ignoreDuplicateGroup(group: DuplicateTrackGroup) {
+        ignoreDuplicateGroups(listOf(group))
+    }
+
+    /**
+     * Ripristina (rimuove dall'elenco degli ignorati) tutte le coppie di duplicati appartenenti all'album specificato.
+     */
+    fun restoreIgnoredDuplicatesForAlbum(album: Album) {
+        val currentIgnored = _ignoredDuplicateKeys.value
+        if (currentIgnored.isEmpty()) return
+
+        val albumTrackIds = album.tracks.map { it.id }.toSet()
+        val albumPaths = album.tracks.map { "${it.relativePath}/${it.displayName}" }.filter { it.isNotBlank() }.toSet()
+
+        val keysToRemove = currentIgnored.filter { key ->
+            if (key.contains(":")) {
+                val parts = key.split(":")
+                parts.size == 2 && (parts[0].toLongOrNull() in albumTrackIds || parts[1].toLongOrNull() in albumTrackIds)
+            } else if (key.contains("|")) {
+                val parts = key.split("|")
+                parts.size == 2 && (parts[0] in albumPaths || parts[1] in albumPaths)
+            } else {
+                false
+            }
+        }
+
+        if (keysToRemove.isNotEmpty()) {
+            appPreferences.removeIgnoredDuplicateKeys(keysToRemove)
+            _ignoredDuplicateKeys.value = appPreferences.getIgnoredDuplicateKeys()
+        }
+    }
+
+    /**
+     * Ripristina tutti i file duplicati ignorati globalmente.
+     */
+    fun clearAllIgnoredDuplicates() {
+        appPreferences.clearIgnoredDuplicateKeys()
+        _ignoredDuplicateKeys.value = emptySet()
     }
 
     fun saveCurrentPlaybackState() {

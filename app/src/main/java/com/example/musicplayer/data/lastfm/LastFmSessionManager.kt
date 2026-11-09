@@ -5,6 +5,7 @@ import android.content.SharedPreferences
 import android.security.keystore.KeyGenParameterSpec
 import android.security.keystore.KeyProperties
 import android.util.Base64
+import java.io.File
 import java.nio.charset.StandardCharsets
 import java.security.KeyStore
 import javax.crypto.Cipher
@@ -25,6 +26,8 @@ class LastFmSessionManager(context: Context) {
     companion object {
         private const val KEY_SESSION_KEY = "session_key"
         private const val KEY_USERNAME = "username"
+        private const val KEY_AVATAR_PATH = "avatar_path"
+        private const val KEY_AVATAR_HASH = "avatar_hash"
         private const val KEY_CUSTOM_API_KEY = "custom_api_key"
         private const val KEY_CUSTOM_SHARED_SECRET = "custom_shared_secret"
 
@@ -74,10 +77,28 @@ class LastFmSessionManager(context: Context) {
             .apply()
     }
 
+    fun saveAvatarInfo(path: String?, hash: String?) {
+        val editor = prefs.edit()
+        if (path != null) editor.putString(KEY_AVATAR_PATH, path) else editor.remove(KEY_AVATAR_PATH)
+        if (hash != null) editor.putString(KEY_AVATAR_HASH, hash) else editor.remove(KEY_AVATAR_HASH)
+        editor.apply()
+    }
+
+    fun getAvatarPath(): String? = prefs.getString(KEY_AVATAR_PATH, null)
+
+    fun getAvatarHash(): String? = prefs.getString(KEY_AVATAR_HASH, null)
+
     fun clearSession() {
+        getAvatarPath()?.let { path ->
+            try {
+                File(path).delete()
+            } catch (_: Exception) {}
+        }
         prefs.edit()
             .remove(KEY_USERNAME)
             .remove(KEY_SESSION_KEY)
+            .remove(KEY_AVATAR_PATH)
+            .remove(KEY_AVATAR_HASH)
             .apply()
     }
 

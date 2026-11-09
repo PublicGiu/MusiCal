@@ -97,6 +97,7 @@ import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshotFlow
 import kotlinx.coroutines.launch
@@ -340,8 +341,9 @@ fun MainScreen(
     val lastFmCustomApiKey by viewModel.lastFmCustomApiKey.collectAsStateWithLifecycle()
     val lastFmCustomSharedSecret by viewModel.lastFmCustomSharedSecret.collectAsStateWithLifecycle()
     val pendingScrobblesCount by viewModel.pendingScrobblesCount.collectAsStateWithLifecycle()
+    val ignoredDuplicateKeys by viewModel.ignoredDuplicateKeys.collectAsStateWithLifecycle()
     var showLastFmDialog by remember { mutableStateOf(false) }
-    var showSettingsDialog by remember { mutableStateOf(false) }
+    var showSettingsDialog by rememberSaveable { mutableStateOf(false) }
     val snackbarHostState = remember { SnackbarHostState() }
     val coroutineScope = rememberCoroutineScope()
 
@@ -775,7 +777,7 @@ fun MainScreen(
                                         ) {
                                             Icon(
                                                 imageVector = Icons.Default.Refresh,
-                                                contentDescription = "Aggiorna libreria",
+                                                contentDescription = stringResource(R.string.refresh_library_tooltip),
                                                 tint = MaterialTheme.colorScheme.onSurfaceVariant,
                                                 modifier = Modifier
                                                     .size(20.dp)
@@ -822,14 +824,14 @@ fun MainScreen(
                                     ) {
                                         Icon(
                                             imageVector = Icons.Default.Search,
-                                            contentDescription = "Cerca"
+                                            contentDescription = stringResource(R.string.search)
                                         )
                                     }
                                 }
                                 IconButton(onClick = { showSettingsDialog = true }) {
                                     Icon(
                                         imageVector = Icons.Default.Settings,
-                                        contentDescription = "Impostazioni"
+                                        contentDescription = stringResource(R.string.tab_settings)
                                     )
                                 }
                             }
@@ -890,7 +892,7 @@ fun MainScreen(
                                         interactionSource = searchInteractionSource,
                                         placeholder = {
                                             Text(
-                                                text = "Cerca",
+                                                text = stringResource(R.string.search_hint),
                                                 style = MaterialTheme.typography.bodyMedium,
                                                 color = MaterialTheme.colorScheme.onSurfaceVariant
                                             )
@@ -911,7 +913,7 @@ fun MainScreen(
                                                 ) {
                                                     Icon(
                                                         imageVector = Icons.Default.Clear,
-                                                        contentDescription = "Cancella ricerca",
+                                                        contentDescription = stringResource(R.string.cancel),
                                                         modifier = Modifier.size(18.dp)
                                                     )
                                                 }
@@ -922,7 +924,7 @@ fun MainScreen(
                                                 ) {
                                                     Icon(
                                                         imageVector = Icons.Default.Clear,
-                                                        contentDescription = "Chiudi ricerca",
+                                                        contentDescription = stringResource(R.string.close),
                                                         modifier = Modifier.size(18.dp)
                                                     )
                                                 }
@@ -933,7 +935,7 @@ fun MainScreen(
                                                 ) {
                                                     Icon(
                                                         imageVector = Icons.Default.Clear,
-                                                        contentDescription = "Chiudi ricerca",
+                                                        contentDescription = stringResource(R.string.close),
                                                         modifier = Modifier.size(18.dp)
                                                     )
                                                 }
@@ -1189,9 +1191,9 @@ fun MainScreen(
                                             Column(modifier = Modifier.fillMaxSize()) {
                                                 val tabItems = remember {
                                                     listOf(
-                                                        Triple(0, "Brani", Icons.Default.MusicNote),
-                                                        Triple(1, "Album", Icons.Default.Album),
-                                                        Triple(2, "Playlist", Icons.AutoMirrored.Filled.QueueMusic)
+                                                        Triple(0, R.string.tab_tracks, Icons.Default.MusicNote),
+                                                        Triple(1, R.string.tab_albums, Icons.Default.Album),
+                                                        Triple(2, R.string.tab_playlists, Icons.AutoMirrored.Filled.QueueMusic)
                                                     )
                                                 }
 
@@ -1199,7 +1201,8 @@ fun MainScreen(
                                                     selectedTabIndex = selectedTabIndex,
                                                     containerColor = MaterialTheme.colorScheme.surface
                                                 ) {
-                                                    tabItems.forEach { (index, title, icon) ->
+                                                    tabItems.forEach { (index, titleRes, icon) ->
+                                                        val title = stringResource(titleRes)
                                                         Tab(
                                                             selected = selectedTabIndex == index,
                                                             onClick = {
@@ -1406,6 +1409,25 @@ fun MainScreen(
                                                         albums.find { alb -> alb.tracks.any { it.id == firstTrack.id } }
                                                     } ?: targetAlbum
 
+                                                val hasIgnoredDuplicates = remember(currentAlbum, ignoredDuplicateKeys) {
+                                                    if (ignoredDuplicateKeys.isEmpty()) false
+                                                    else {
+                                                        val albumTrackIds = currentAlbum.tracks.map { it.id }.toSet()
+                                                        val albumPaths = currentAlbum.tracks.map { "${it.relativePath}/${it.displayName}" }.filter { it.isNotBlank() }.toSet()
+                                                        ignoredDuplicateKeys.any { key ->
+                                                            if (key.contains(":")) {
+                                                                val parts = key.split(":")
+                                                                parts.size == 2 && (parts[0].toLongOrNull() in albumTrackIds || parts[1].toLongOrNull() in albumTrackIds)
+                                                            } else if (key.contains("|")) {
+                                                                val parts = key.split("|")
+                                                                parts.size == 2 && (parts[0] in albumPaths || parts[1] in albumPaths)
+                                                            } else {
+                                                                false
+                                                            }
+                                                        }
+                                                    }
+                                                }
+
                                                 AlbumDetailView(
                                                     album = currentAlbum,
                                                     currentTrack = currentTrack,
@@ -1435,7 +1457,21 @@ fun MainScreen(
                                                     onAutoTagAlbumSeparationClick = { viewModel.startAlbumEnrichment(it, separateAlbums = true) },
                                                     onAutoTagTrackClick = { viewModel.startTrackEnrichment(it) },
                                                     onDeleteTracks = { tracks -> viewModel.deleteTracks(tracks) },
-                                                    onArtistClick = { artist -> selectedArtistForSheet = artist }
+                                                    onArtistClick = { artist -> selectedArtistForSheet = artist },
+                                                    ignoredDuplicateKeys = ignoredDuplicateKeys,
+                                                    hasIgnoredDuplicates = hasIgnoredDuplicates,
+                                                    onIgnoreDuplicates = { groups ->
+                                                        viewModel.ignoreDuplicateGroups(groups)
+                                                        coroutineScope.launch {
+                                                            snackbarHostState.showSnackbar("Brani duplicati ignorati")
+                                                        }
+                                                    },
+                                                    onRestoreIgnoredDuplicates = {
+                                                        viewModel.restoreIgnoredDuplicatesForAlbum(currentAlbum)
+                                                        coroutineScope.launch {
+                                                            snackbarHostState.showSnackbar("Rilevamento duplicati ripristinato")
+                                                        }
+                                                    }
                                                 )
                                             }
                                         }

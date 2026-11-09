@@ -42,12 +42,15 @@ import androidx.compose.material.icons.filled.Folder
 import androidx.compose.material.icons.filled.FolderOpen
 import androidx.compose.material.icons.filled.GraphicEq
 import androidx.compose.material.icons.filled.Info
+import androidx.compose.material.icons.filled.Language
 import androidx.compose.material.icons.filled.MusicNote
 import androidx.compose.material.icons.filled.QueryStats
 import androidx.compose.material.icons.filled.Radio
 import androidx.compose.material.icons.filled.Refresh
+import androidx.compose.material.icons.filled.Restore
 import androidx.compose.material.icons.filled.Timer
 import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
@@ -82,12 +85,14 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 import com.example.musicplayer.R
+import com.example.musicplayer.data.AppLanguage
 import com.example.musicplayer.data.AudioSourceMode
 import com.example.musicplayer.data.ThemeMode
 import com.example.musicplayer.data.update.GithubUpdateChecker
@@ -117,12 +122,15 @@ fun SettingsDialog(
     val stats by viewModel.stats.collectAsState()
     val isLastFmLoggedIn by viewModel.isLastFmLoggedIn.collectAsState()
     val lastFmUsername by viewModel.lastFmUsername.collectAsState()
+    val lastFmAvatarPath by viewModel.lastFmAvatarPath.collectAsState()
     val pendingScrobblesCount by viewModel.pendingScrobblesCount.collectAsState()
     val audioSourceMode by viewModel.audioSourceMode.collectAsState()
     val customFolders by viewModel.customFolders.collectAsState()
     val updateInfo by viewModel.updateInfo.collectAsState()
     val isCheckingUpdate by viewModel.isCheckingUpdate.collectAsState()
     val updateCheckError by viewModel.updateCheckError.collectAsState()
+    val ignoredDuplicateKeys by viewModel.ignoredDuplicateKeys.collectAsState()
+    val appLanguage by viewModel.appLanguage.collectAsState()
 
     val coroutineScope = rememberCoroutineScope()
     val offsetX = remember { Animatable(0f) }
@@ -185,7 +193,7 @@ fun SettingsDialog(
                 TopAppBar(
                     title = {
                         Text(
-                            text = "Impostazioni",
+                            text = stringResource(R.string.tab_settings),
                             style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.Bold)
                         )
                     },
@@ -193,7 +201,7 @@ fun SettingsDialog(
                         IconButton(onClick = onDismiss) {
                             Icon(
                                 imageVector = Icons.AutoMirrored.Filled.ArrowBack,
-                                contentDescription = "Chiudi impostazioni"
+                                contentDescription = stringResource(R.string.close)
                             )
                         }
                     },
@@ -214,10 +222,10 @@ fun SettingsDialog(
                 verticalArrangement = Arrangement.spacedBy(16.dp)
             ) {
 
-                // 1. Aspetto & Tema
+                // 1. Lingua dell'Applicazione
                 SettingsSectionHeader(
-                    icon = Icons.Default.ColorLens,
-                    title = "Aspetto & Tema"
+                    icon = Icons.Default.Language,
+                    title = stringResource(R.string.settings_section_language)
                 )
                 Card(
                     modifier = Modifier.fillMaxWidth(),
@@ -225,22 +233,33 @@ fun SettingsDialog(
                 ) {
                     Column(modifier = Modifier.padding(16.dp)) {
                         Text(
-                            text = "Modalità tema",
+                            text = stringResource(R.string.settings_section_language),
                             style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.SemiBold)
                         )
-                        Spacer(modifier = Modifier.height(8.dp))
+                        Spacer(modifier = Modifier.height(4.dp))
+                        Text(
+                            text = stringResource(R.string.settings_language_desc),
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                        Spacer(modifier = Modifier.height(12.dp))
                         Column(
                             modifier = Modifier.fillMaxWidth(),
                             verticalArrangement = Arrangement.spacedBy(8.dp)
                         ) {
-                            ThemeMode.entries.forEach { mode ->
-                                val selected = themeMode == mode
+                            AppLanguage.entries.forEach { lang ->
+                                val selected = appLanguage == lang
+                                val labelText = when (lang) {
+                                    AppLanguage.SYSTEM -> stringResource(R.string.lang_system)
+                                    AppLanguage.ITALIAN -> stringResource(R.string.lang_italian)
+                                    AppLanguage.ENGLISH -> stringResource(R.string.lang_english)
+                                }
                                 FilterChip(
                                     selected = selected,
-                                    onClick = { viewModel.setThemeMode(mode) },
+                                    onClick = { viewModel.setAppLanguage(lang) },
                                     label = {
                                         Text(
-                                            text = mode.label,
+                                            text = labelText,
                                             modifier = Modifier.fillMaxWidth(),
                                             textAlign = TextAlign.Center,
                                             fontWeight = if (selected) FontWeight.Bold else FontWeight.Medium
@@ -265,10 +284,66 @@ fun SettingsDialog(
                     }
                 }
 
-                // 2. Riproduzione & Audio
+                // 2. Aspetto & Tema
+                SettingsSectionHeader(
+                    icon = Icons.Default.ColorLens,
+                    title = stringResource(R.string.settings_section_appearance)
+                )
+                Card(
+                    modifier = Modifier.fillMaxWidth(),
+                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f))
+                ) {
+                    Column(modifier = Modifier.padding(16.dp)) {
+                        Text(
+                            text = stringResource(R.string.settings_theme_mode),
+                            style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.SemiBold)
+                        )
+                        Spacer(modifier = Modifier.height(8.dp))
+                        Column(
+                            modifier = Modifier.fillMaxWidth(),
+                            verticalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            ThemeMode.entries.forEach { mode ->
+                                val selected = themeMode == mode
+                                val labelText = when (mode) {
+                                    ThemeMode.SYSTEM -> stringResource(R.string.theme_system)
+                                    ThemeMode.LIGHT -> stringResource(R.string.theme_light)
+                                    ThemeMode.DARK -> stringResource(R.string.theme_dark)
+                                }
+                                FilterChip(
+                                    selected = selected,
+                                    onClick = { viewModel.setThemeMode(mode) },
+                                    label = {
+                                        Text(
+                                            text = labelText,
+                                            modifier = Modifier.fillMaxWidth(),
+                                            textAlign = TextAlign.Center,
+                                            fontWeight = if (selected) FontWeight.Bold else FontWeight.Medium
+                                        )
+                                    },
+                                    colors = FilterChipDefaults.filterChipColors(
+                                        selectedContainerColor = MaterialTheme.colorScheme.primaryContainer,
+                                        selectedLabelColor = MaterialTheme.colorScheme.onPrimaryContainer
+                                    ),
+                                    border = FilterChipDefaults.filterChipBorder(
+                                        enabled = true,
+                                        selected = selected,
+                                        borderColor = MaterialTheme.colorScheme.outline,
+                                        selectedBorderColor = MaterialTheme.colorScheme.primary,
+                                        borderWidth = 1.dp,
+                                        selectedBorderWidth = 1.5.dp
+                                    ),
+                                    modifier = Modifier.fillMaxWidth()
+                                )
+                            }
+                        }
+                    }
+                }
+
+                // 3. Riproduzione & Audio
                 SettingsSectionHeader(
                     icon = Icons.Default.Radio,
-                    title = "Riproduzione & Audio"
+                    title = stringResource(R.string.settings_section_playback)
                 )
                 Card(
                     modifier = Modifier.fillMaxWidth(),
@@ -284,11 +359,11 @@ fun SettingsDialog(
                         ) {
                             Column(modifier = Modifier.weight(1f).padding(end = 16.dp)) {
                                 Text(
-                                    text = "Riproduzione automatica continua",
+                                    text = stringResource(R.string.settings_autoplay_title),
                                     style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.SemiBold)
                                 )
                                 Text(
-                                    text = "Continua a riprodurre brani casuali al termine della coda",
+                                    text = stringResource(R.string.settings_autoplay_desc),
                                     style = MaterialTheme.typography.bodySmall,
                                     color = MaterialTheme.colorScheme.onSurfaceVariant
                                 )
@@ -320,11 +395,11 @@ fun SettingsDialog(
                             Spacer(modifier = Modifier.width(14.dp))
                             Column(modifier = Modifier.weight(1f)) {
                                 Text(
-                                    text = "Equalizzatore audio",
+                                    text = stringResource(R.string.settings_equalizer_title),
                                     style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.SemiBold)
                                 )
                                 Text(
-                                    text = "Regola 5 bande di frequenza, bass boost e virtualizzatore",
+                                    text = stringResource(R.string.settings_equalizer_desc),
                                     style = MaterialTheme.typography.bodySmall,
                                     color = MaterialTheme.colorScheme.onSurfaceVariant
                                 )
@@ -352,11 +427,11 @@ fun SettingsDialog(
                             Spacer(modifier = Modifier.width(14.dp))
                             Column(modifier = Modifier.weight(1f)) {
                                 Text(
-                                    text = "Timer di spegnimento",
+                                    text = stringResource(R.string.sleep_timer),
                                     style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.SemiBold)
                                 )
                                 Text(
-                                    text = "Interrompi la musica con timer o a fine brano con dissolvenza",
+                                    text = stringResource(R.string.settings_sleep_timer_desc),
                                     style = MaterialTheme.typography.bodySmall,
                                     color = MaterialTheme.colorScheme.onSurfaceVariant
                                 )
@@ -384,11 +459,11 @@ fun SettingsDialog(
                             Spacer(modifier = Modifier.width(14.dp))
                             Column(modifier = Modifier.weight(1f)) {
                                 Text(
-                                    text = "Statistiche d'ascolto",
+                                    text = stringResource(R.string.settings_stats_title),
                                     style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.SemiBold)
                                 )
                                 Text(
-                                    text = "Visualizza brani e artisti più ascoltati e tempo totale",
+                                    text = stringResource(R.string.settings_stats_desc),
                                     style = MaterialTheme.typography.bodySmall,
                                     color = MaterialTheme.colorScheme.onSurfaceVariant
                                 )
@@ -397,10 +472,10 @@ fun SettingsDialog(
                     }
                 }
 
-                // 3. Libreria Musicale & Fonti
+                // 4. Libreria Musicale & Fonti
                 SettingsSectionHeader(
                     icon = Icons.Default.Folder,
-                    title = "Libreria Musicale"
+                    title = stringResource(R.string.settings_section_library)
                 )
                 Card(
                     modifier = Modifier.fillMaxWidth(),
@@ -408,11 +483,11 @@ fun SettingsDialog(
                 ) {
                     Column(modifier = Modifier.padding(16.dp)) {
                         Text(
-                            text = "Origine delle tracce",
+                            text = stringResource(R.string.settings_audio_source_title),
                             style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.SemiBold)
                         )
                         Text(
-                            text = "Scegli come scansionare la musica presente nella memoria del dispositivo",
+                            text = stringResource(R.string.settings_audio_source_desc),
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
@@ -446,10 +521,11 @@ fun SettingsDialog(
                                         )
                                         Spacer(modifier = Modifier.width(8.dp))
                                         Column(modifier = Modifier.weight(1f)) {
-                                            val labelText = if (mode == AudioSourceMode.INTELLIGENT) {
-                                                "${mode.label} (Consigliata)"
-                                            } else {
-                                                mode.label
+                                            val labelText = when (mode) {
+                                                AudioSourceMode.INTELLIGENT -> stringResource(R.string.source_mode_intelligent_recommended)
+                                                AudioSourceMode.MUSIC_ONLY -> stringResource(R.string.source_mode_music)
+                                                AudioSourceMode.ALL -> stringResource(R.string.source_mode_all)
+                                                AudioSourceMode.CUSTOM_FOLDERS -> stringResource(R.string.source_mode_custom)
                                             }
                                             Text(
                                                 text = labelText,
@@ -474,14 +550,14 @@ fun SettingsDialog(
                             Spacer(modifier = Modifier.height(12.dp))
 
                             Text(
-                                text = "Cartelle selezionate (${customFolders.size})",
+                                text = stringResource(R.string.settings_custom_folders_title, customFolders.size),
                                 style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold)
                             )
                             Spacer(modifier = Modifier.height(8.dp))
 
                             if (customFolders.isEmpty()) {
                                 Text(
-                                    text = "Nessuna cartella aggiunta. Tocca '+ Aggiungi cartella' per selezionare una o più cartelle di musica.",
+                                    text = stringResource(R.string.settings_custom_folders_empty),
                                     style = MaterialTheme.typography.bodySmall,
                                     color = MaterialTheme.colorScheme.error
                                 )
@@ -522,7 +598,7 @@ fun SettingsDialog(
                                                 ) {
                                                     Icon(
                                                         imageVector = Icons.Default.Close,
-                                                        contentDescription = "Rimuovi cartella",
+                                                        contentDescription = stringResource(R.string.settings_remove_folder_desc),
                                                         tint = MaterialTheme.colorScheme.error,
                                                         modifier = Modifier.size(18.dp)
                                                     )
@@ -544,7 +620,7 @@ fun SettingsDialog(
                                     modifier = Modifier.size(18.dp)
                                 )
                                 Spacer(modifier = Modifier.width(6.dp))
-                                Text("Aggiungi cartella")
+                                Text(stringResource(R.string.settings_add_folder))
                             }
                         }
 
@@ -564,7 +640,12 @@ fun SettingsDialog(
                             )
                             Spacer(modifier = Modifier.width(8.dp))
                             Text(
-                                text = "${tracks.size} brani • ${albums.size} album • ${stats.values.sumOf { it.playCount }} ascolti totali",
+                                text = stringResource(
+                                    R.string.settings_library_summary,
+                                    tracks.size,
+                                    albums.size,
+                                    stats.values.sumOf { it.playCount }
+                                ),
                                 style = MaterialTheme.typography.bodySmall,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant
                             )
@@ -585,7 +666,28 @@ fun SettingsDialog(
                                 modifier = Modifier.size(18.dp)
                             )
                             Spacer(modifier = Modifier.width(8.dp))
-                            Text("Ricarica libreria musicale")
+                            Text(stringResource(R.string.settings_reload_library))
+                        }
+
+                        if (ignoredDuplicateKeys.isNotEmpty()) {
+                            Spacer(modifier = Modifier.height(8.dp))
+                            OutlinedButton(
+                                onClick = {
+                                    viewModel.clearAllIgnoredDuplicates()
+                                },
+                                colors = ButtonDefaults.outlinedButtonColors(
+                                    contentColor = MaterialTheme.colorScheme.primary
+                                ),
+                                modifier = Modifier.fillMaxWidth()
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.Restore,
+                                    contentDescription = null,
+                                    modifier = Modifier.size(18.dp)
+                                )
+                                Spacer(modifier = Modifier.width(8.dp))
+                                Text(stringResource(R.string.settings_restore_duplicates, ignoredDuplicateKeys.size))
+                            }
                         }
                     }
                 }
@@ -612,6 +714,13 @@ fun SettingsDialog(
                             modifier = Modifier.fillMaxWidth(),
                             verticalAlignment = Alignment.CenterVertically
                         ) {
+                            if (isLastFmLoggedIn) {
+                                LastFmAvatar(
+                                    avatarPath = lastFmAvatarPath,
+                                    size = 36.dp
+                                )
+                                Spacer(modifier = Modifier.width(10.dp))
+                            }
                             Box(
                                 modifier = Modifier
                                     .size(12.dp)
@@ -658,7 +767,7 @@ fun SettingsDialog(
                 // 5. Informazioni sull'applicazione & Aggiornamenti GitHub
                 SettingsSectionHeader(
                     icon = Icons.Default.Info,
-                    title = "Informazioni"
+                    title = stringResource(R.string.settings_section_info)
                 )
                 Card(
                     modifier = Modifier.fillMaxWidth(),
@@ -670,7 +779,7 @@ fun SettingsDialog(
                             style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold)
                         )
                         Text(
-                            text = "Versione ${com.example.musicplayer.BuildConfig.VERSION_NAME} (Android 16 - API 36)",
+                            text = stringResource(R.string.settings_version, com.example.musicplayer.BuildConfig.VERSION_NAME),
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
@@ -704,7 +813,7 @@ fun SettingsDialog(
                                     )
                                     Spacer(modifier = Modifier.width(10.dp))
                                     Text(
-                                        text = "Verifica versione su GitHub in corso...",
+                                        text = stringResource(R.string.settings_checking_updates),
                                         style = MaterialTheme.typography.bodySmall
                                     )
                                 }
@@ -763,7 +872,7 @@ fun SettingsDialog(
                                         )
                                         Spacer(modifier = Modifier.width(8.dp))
                                         Text(
-                                            text = "Stai usando la versione più recente (v${com.example.musicplayer.BuildConfig.VERSION_NAME})",
+                                            text = stringResource(R.string.settings_up_to_date),
                                             style = MaterialTheme.typography.bodySmall.copy(fontWeight = FontWeight.Medium),
                                             color = Color(0xFF4CAF50)
                                         )
@@ -792,7 +901,7 @@ fun SettingsDialog(
                                 modifier = Modifier.size(18.dp)
                             )
                             Spacer(modifier = Modifier.width(8.dp))
-                            Text("Controlla aggiornamenti su GitHub")
+                            Text(stringResource(R.string.settings_check_updates))
                         }
 
                         Spacer(modifier = Modifier.height(8.dp))
@@ -816,7 +925,7 @@ fun SettingsDialog(
                                 modifier = Modifier.size(18.dp)
                             )
                             Spacer(modifier = Modifier.width(8.dp))
-                            Text("Visita repository su GitHub")
+                            Text(stringResource(R.string.settings_github_repo))
                         }
                     }
                 }

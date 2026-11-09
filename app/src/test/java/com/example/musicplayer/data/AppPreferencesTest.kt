@@ -92,4 +92,43 @@ class AppPreferencesTest {
         appPrefs.setCustomFolders(setOf("Download/"))
         Mockito.verify(mockEditor).putStringSet("custom_folders", setOf("Download/"))
     }
+
+    @Test
+    fun testAppLanguageDefaultAndFallback() {
+        `when`(mockPrefs.getString(eq("app_language"), eq(AppLanguage.SYSTEM.name))).thenReturn(AppLanguage.SYSTEM.name)
+        val appPrefs = AppPreferences(mockContext)
+        assertEquals("La lingua deve essere SYSTEM di default", AppLanguage.SYSTEM, appPrefs.getAppLanguage())
+
+        `when`(mockPrefs.getString(eq("app_language"), anyString())).thenReturn("INVALID_LANG")
+        assertEquals("Un valore sconosciuto deve ricadere su SYSTEM", AppLanguage.SYSTEM, appPrefs.getAppLanguage())
+    }
+
+    @Test
+    fun testSetAppLanguage() {
+        val appPrefs = AppPreferences(mockContext)
+        appPrefs.setAppLanguage(AppLanguage.ENGLISH)
+        Mockito.verify(mockEditor).putString("app_language", AppLanguage.ENGLISH.name)
+
+        appPrefs.setAppLanguage(AppLanguage.ITALIAN)
+        Mockito.verify(mockEditor).putString("app_language", AppLanguage.ITALIAN.name)
+    }
+
+    @Test
+    fun testIgnoredDuplicateKeys() {
+        `when`(mockEditor.putStringSet(anyString(), Mockito.anySet())).thenReturn(mockEditor)
+        `when`(mockEditor.remove(anyString())).thenReturn(mockEditor)
+        `when`(mockPrefs.getStringSet(eq("ignored_duplicate_keys"), eq(emptySet()))).thenReturn(setOf("1:2"))
+
+        val appPrefs = AppPreferences(mockContext)
+        assertEquals(setOf("1:2"), appPrefs.getIgnoredDuplicateKeys())
+
+        appPrefs.addIgnoredDuplicateKeys(listOf("3:4"))
+        Mockito.verify(mockEditor).putStringSet("ignored_duplicate_keys", setOf("1:2", "3:4"))
+
+        appPrefs.removeIgnoredDuplicateKeys(listOf("1:2"))
+        Mockito.verify(mockEditor).putStringSet("ignored_duplicate_keys", emptySet())
+
+        appPrefs.clearIgnoredDuplicateKeys()
+        Mockito.verify(mockEditor).remove("ignored_duplicate_keys")
+    }
 }

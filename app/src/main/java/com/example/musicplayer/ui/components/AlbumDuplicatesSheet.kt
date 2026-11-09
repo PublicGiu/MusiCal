@@ -37,6 +37,7 @@ import androidx.compose.material.icons.filled.Folder
 import androidx.compose.material.icons.filled.MusicNote
 import androidx.compose.material.icons.filled.Pause
 import androidx.compose.material.icons.filled.PlayArrow
+import androidx.compose.material.icons.filled.VisibilityOff
 import androidx.compose.material3.BottomSheetDefaults
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
@@ -47,6 +48,7 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.IconButtonDefaults
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.rememberModalBottomSheetState
@@ -56,10 +58,12 @@ import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import com.example.musicplayer.R
 import com.example.musicplayer.data.Album
 import com.example.musicplayer.data.AudioTrack
 import com.example.musicplayer.data.DuplicateTrackGroup
@@ -77,6 +81,8 @@ fun AlbumDuplicatesSheet(
     isPlaying: Boolean,
     onPlayTrack: (AudioTrack) -> Unit,
     onDeleteTracks: (List<AudioTrack>) -> Unit,
+    onIgnoreDuplicates: ((List<DuplicateTrackGroup>) -> Unit)? = null,
+    onIgnoreGroup: ((DuplicateTrackGroup) -> Unit)? = null,
     onDismissRequest: () -> Unit,
     modifier: Modifier = Modifier
 ) {
@@ -128,7 +134,7 @@ fun AlbumDuplicatesSheet(
 
                 Column(modifier = Modifier.weight(1f)) {
                     Text(
-                        text = "Brani duplicati nell'album",
+                        text = stringResource(R.string.duplicates_sheet_title),
                         style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.Bold),
                         color = MaterialTheme.colorScheme.onSurface
                     )
@@ -145,7 +151,7 @@ fun AlbumDuplicatesSheet(
                 IconButton(onClick = onDismissRequest) {
                     Icon(
                         imageVector = Icons.Default.Close,
-                        contentDescription = "Chiudi",
+                        contentDescription = stringResource(R.string.close),
                         tint = MaterialTheme.colorScheme.onSurfaceVariant
                     )
                 }
@@ -171,7 +177,7 @@ fun AlbumDuplicatesSheet(
                     )
                     Spacer(modifier = Modifier.width(10.dp))
                     Text(
-                        text = "Tocca una versione per scegliere quale conservare. I file contrassegnati da eliminare verranno rimossi definitivamente dal dispositivo.",
+                        text = stringResource(R.string.duplicates_sheet_banner),
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
@@ -196,6 +202,8 @@ fun AlbumDuplicatesSheet(
                         currentTrack = currentTrack,
                         isPlaying = isPlaying,
                         onPlayTrack = onPlayTrack,
+                        onIgnoreGroup = onIgnoreGroup,
+                        showGroupIgnore = duplicateGroups.size > 1,
                         onToggleTrackKeep = { chosenTrack ->
                             // Seleziona chosenTrack come unica da conservare in questo gruppo
                             group.tracks.forEach { tr ->
@@ -212,7 +220,7 @@ fun AlbumDuplicatesSheet(
                 }
             }
 
-            // Barra inferiore con pulsante di eliminazione
+            // Barra inferiore con opzione per ignorare e pulsante di eliminazione
             val totalToDelete = tracksToDeleteIds.size
             Surface(
                 color = MaterialTheme.colorScheme.surfaceContainer,
@@ -221,44 +229,84 @@ fun AlbumDuplicatesSheet(
                     .navigationBarsPadding()
                     .padding(vertical = 12.dp)
             ) {
-                Button(
-                    onClick = {
-                        val tracksToDelete = duplicateGroups
-                            .flatMap { it.tracks }
-                            .filter { it.id in tracksToDeleteIds }
-                        if (tracksToDelete.isNotEmpty()) {
-                            onDeleteTracks(tracksToDelete)
-                        }
-                    },
-                    enabled = totalToDelete > 0,
-                    shape = RoundedCornerShape(14.dp),
-                    colors = ButtonDefaults.buttonColors(
-                        containerColor = MaterialTheme.colorScheme.error,
-                        contentColor = MaterialTheme.colorScheme.onError
-                    ),
-                    contentPadding = PaddingValues(horizontal = 16.dp, vertical = 12.dp),
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .heightIn(min = 52.dp)
+                Column(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalArrangement = Arrangement.spacedBy(10.dp)
                 ) {
-                    Icon(
-                        imageVector = Icons.Default.Delete,
-                        contentDescription = null,
-                        modifier = Modifier.size(22.dp)
-                    )
-                    Spacer(modifier = Modifier.width(10.dp))
-                    Text(
-                        text = when (totalToDelete) {
-                            0 -> "Nessun file selezionato"
-                            1 -> "Elimina 1 file duplicato"
-                            else -> "Elimina $totalToDelete file duplicati"
+                    // Opzione per ignorare i file duplicati (posizionata sopra il pulsante di eliminazione)
+                    if (onIgnoreDuplicates != null) {
+                        OutlinedButton(
+                            onClick = {
+                                onIgnoreDuplicates(duplicateGroups)
+                            },
+                            shape = RoundedCornerShape(14.dp),
+                            border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
+                            colors = ButtonDefaults.outlinedButtonColors(
+                                contentColor = MaterialTheme.colorScheme.primary
+                            ),
+                            contentPadding = PaddingValues(horizontal = 16.dp, vertical = 12.dp),
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .heightIn(min = 50.dp)
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.VisibilityOff,
+                                contentDescription = null,
+                                modifier = Modifier.size(20.dp)
+                            )
+                            Spacer(modifier = Modifier.width(10.dp))
+                            Text(
+                                text = if (duplicateGroups.size == 1) {
+                                    stringResource(R.string.duplicates_ignore_single)
+                                } else {
+                                    stringResource(R.string.duplicates_ignore_multiple, duplicateGroups.size)
+                                },
+                                style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.SemiBold),
+                                textAlign = TextAlign.Center
+                            )
+                        }
+                    }
+
+                    // Pulsante di eliminazione fisica
+                    Button(
+                        onClick = {
+                            val tracksToDelete = duplicateGroups
+                                .flatMap { it.tracks }
+                                .filter { it.id in tracksToDeleteIds }
+                            if (tracksToDelete.isNotEmpty()) {
+                                onDeleteTracks(tracksToDelete)
+                            }
                         },
-                        style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
-                        textAlign = TextAlign.Center,
-                        maxLines = 2,
-                        overflow = TextOverflow.Ellipsis,
-                        modifier = Modifier.weight(1f, fill = false)
-                    )
+                        enabled = totalToDelete > 0,
+                        shape = RoundedCornerShape(14.dp),
+                        colors = ButtonDefaults.buttonColors(
+                            containerColor = MaterialTheme.colorScheme.error,
+                            contentColor = MaterialTheme.colorScheme.onError
+                        ),
+                        contentPadding = PaddingValues(horizontal = 16.dp, vertical = 12.dp),
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .heightIn(min = 52.dp)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Delete,
+                            contentDescription = null,
+                            modifier = Modifier.size(22.dp)
+                        )
+                        Spacer(modifier = Modifier.width(10.dp))
+                        Text(
+                            text = when (totalToDelete) {
+                                0 -> stringResource(R.string.duplicates_no_selection)
+                                1 -> stringResource(R.string.duplicates_delete_single)
+                                else -> stringResource(R.string.duplicates_delete_multiple, totalToDelete)
+                            },
+                            style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
+                            textAlign = TextAlign.Center,
+                            maxLines = 2,
+                            overflow = TextOverflow.Ellipsis,
+                            modifier = Modifier.weight(1f, fill = false)
+                        )
+                    }
                 }
             }
         }
@@ -276,7 +324,9 @@ private fun DuplicateGroupCard(
     isPlaying: Boolean,
     onPlayTrack: (AudioTrack) -> Unit,
     onToggleTrackKeep: (AudioTrack) -> Unit,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    onIgnoreGroup: ((DuplicateTrackGroup) -> Unit)? = null,
+    showGroupIgnore: Boolean = false
 ) {
     Surface(
         shape = RoundedCornerShape(16.dp),
@@ -315,11 +365,25 @@ private fun DuplicateGroupCard(
                     color = MaterialTheme.colorScheme.surfaceContainerHighest
                 ) {
                     Text(
-                        text = "${group.tracks.size} versioni",
+                        text = stringResource(R.string.duplicates_versions_count, group.tracks.size),
                         style = MaterialTheme.typography.labelSmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                         modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
                     )
+                }
+                if (showGroupIgnore && onIgnoreGroup != null) {
+                    Spacer(modifier = Modifier.width(4.dp))
+                    IconButton(
+                        onClick = { onIgnoreGroup(group) },
+                        modifier = Modifier.size(32.dp)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.VisibilityOff,
+                            contentDescription = stringResource(R.string.duplicates_ignore_group_desc),
+                            tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                            modifier = Modifier.size(18.dp)
+                        )
+                    }
                 }
             }
 
@@ -387,7 +451,7 @@ private fun DuplicateTrackItem(
             // Icona di stato: Conserva (CheckCircle) o Da eliminare (DeleteOutline)
             Icon(
                 imageVector = if (isMarkedToDelete) Icons.Default.DeleteOutline else Icons.Default.CheckCircle,
-                contentDescription = if (isMarkedToDelete) "Da eliminare" else "Conserva",
+                contentDescription = if (isMarkedToDelete) stringResource(R.string.duplicates_delete_badge) else stringResource(R.string.duplicates_keep_badge),
                 tint = if (isMarkedToDelete) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.primary,
                 modifier = Modifier.size(24.dp)
             )
@@ -409,7 +473,7 @@ private fun DuplicateTrackItem(
                         }
                     ) {
                         Text(
-                            text = if (isMarkedToDelete) "Da eliminare" else "Conserva",
+                            text = if (isMarkedToDelete) stringResource(R.string.duplicates_delete_badge) else stringResource(R.string.duplicates_keep_badge),
                             style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold),
                             color = if (isMarkedToDelete) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.primary,
                             modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)

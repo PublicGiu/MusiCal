@@ -4,11 +4,18 @@ import com.example.musicplayer.data.AudioTrack
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import okhttp3.FormBody
+import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import org.json.JSONObject
 import java.io.IOException
 import java.util.concurrent.TimeUnit
+
+sealed class UserAvatarResult {
+    data object NoAvatar : UserAvatarResult()
+    data class Unchanged(val hash: String) : UserAvatarResult()
+    data class Downloaded(val hash: String, val bytes: ByteArray, val isGif: Boolean) : UserAvatarResult()
+}
 
 /**
  * Client HTTP per interagire con le API REST di Last.fm.
@@ -205,6 +212,146 @@ class LastFmClient(
             sessionKey = sessionKey,
             durationSeconds = durSec
         )
+    }
+
+    /**
+     * Recupera l'immagine profilo (avatar) dell'utente tramite `user.getInfo`.
+     * Gestisce automaticamente gli avatar animati GIF sulla CDN Fastly di Last.fm
+     * interrogando l'endpoint senza estensione (`avatar170s/<hash>`) per preservare i frame GIF
+     * che altrimenti verrebbero convertiti in PNG statici dall'URL standard `300x300/<hash>.png`.
+     */
+    suspend fun fetchUserAvatar(
+        username: String,
+        knownHash: String? = null
+    ): Result<UserAvatarResult> = withContext(Dispatchers.IO) {
+        try {
+            val cleanUser = username.trim()
+            if (cleanUser.isBlank() || LastFmConfig.API_KEY.isBlank()) {
+                return@withContext Result.failure(IllegalArgumentException("Username o API Key mancanti"))
+            }
+
+            val url = LastFmConfig.BASE_URL.toHttpUrlOrNull()
+                ?.newBuilder()
+                ?.addQueryParameter("method", "user.getInfo")
+                ?.addQueryParameter("user", cleanUser)
+                ?.addQueryParameter("api_key", LastFmConfig.API_KEY)
+                ?.addQueryParameter("format", "json")
+                ?.build()
+                ?: return@withContext Result.failure(IllegalStateException("URL Last.fm non valido"))
+
+            val infoRequest = Request.Builder().url(url).get().build()
+            val rawImageUrl = client.newCall(infoRequest).execute().use { response ->
+                val body = response.body?.string() ?: ""
+                if (!response.isSuccessful) {
+                    return@withContext Result.failure(IOException(parseErrorMessage(body, response.code)))
+                }
+                val json = JSONObject(body)
+                if (json.has("error")) {
+                    return@withContext Result.failure(Exception(json.optString("message", "Errore user.getInfo")))
+                }
+                val images = json.optJSONObject("user")?.optJSONArray("image")
+                extractBestImageUrl(images)
+            }
+
+            // Hash di default di Last.fm per utenti senza immagine profilo ("mystery man")
+            val defaultAvatarHash = "2a96cbd8b46e442fc41c2b86b821562f"
+            if (rawImageUrl.isNullOrBlank() || rawImageUrl.contains(defaultAvatarHash, ignoreCase = true)) {
+                return@withContext Result.success(UserAvatarResult.NoAvatar)
+            }
+
+            val fastlyHashRegex = Regex("""/i/u/[^/]+/([a-fA-F0-9]{32})""")
+            val fastlyHash = fastlyHashRegex.find(rawImageUrl)?.groupValues?.getOrNull(1)?.lowercase()
+            val effectiveHash = fastlyHash ?: rawImageUrl.hashCode().toUInt().toString(16)
+
+            if (knownHash != null && knownHash == effectiveHash) {
+                return@withContext Result.success(UserAvatarResult.Unchanged(effectiveHash))
+            }
+
+            if (fastlyHash != null) {
+                // La CDN di Last.fm serve la GIF animata originale sull'endpoint privo di estensione .png
+                val gifCandidateUrl = "https://lastfm.freetls.fastly.net/i/u/avatar170s/$fastlyHash"
+                val candidateBytes = downloadBytes(gifCandidateUrl)
+                if (candidateBytes != null && isGifBytes(candidateBytes)) {
+                    return@withContext Result.success(
+                        UserAvatarResult.Downloaded(
+                            hash = effectiveHash,
+                            bytes = candidateBytes,
+                            isGif = true
+                        )
+                    )
+                }
+
+                // Se non è una GIF, scarica la versione ad alta risoluzione 300x300 (o usa il fallback già scaricato)
+                val hiResBytes = downloadBytes(rawImageUrl) ?: candidateBytes
+                if (hiResBytes != null && hiResBytes.isNotEmpty()) {
+                    return@withContext Result.success(
+                        UserAvatarResult.Downloaded(
+                            hash = effectiveHash,
+                            bytes = hiResBytes,
+                            isGif = isGifBytes(hiResBytes)
+                        )
+                    )
+                }
+            } else {
+                val bytes = downloadBytes(rawImageUrl)
+                if (bytes != null && bytes.isNotEmpty()) {
+                    return@withContext Result.success(
+                        UserAvatarResult.Downloaded(
+                            hash = effectiveHash,
+                            bytes = bytes,
+                            isGif = isGifBytes(bytes)
+                        )
+                    )
+                }
+            }
+
+            Result.failure(IOException("Impossibile scaricare l'immagine profilo Last.fm"))
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
+    }
+
+    private fun extractBestImageUrl(images: org.json.JSONArray?): String? {
+        if (images == null || images.length() == 0) return null
+        val bySize = mutableMapOf<String, String>()
+        var lastNonEmpty: String? = null
+        for (i in 0 until images.length()) {
+            val obj = images.optJSONObject(i) ?: continue
+            val text = obj.optString("#text", "").trim()
+            val size = obj.optString("size", "").trim().lowercase()
+            if (text.isNotEmpty()) {
+                bySize[size] = text
+                lastNonEmpty = text
+            }
+        }
+        return bySize["extralarge"]
+            ?: bySize["large"]
+            ?: bySize["medium"]
+            ?: bySize["small"]
+            ?: lastNonEmpty
+    }
+
+    private fun downloadBytes(url: String): ByteArray? {
+        return try {
+            val req = Request.Builder().url(url).get().build()
+            client.newCall(req).execute().use { resp ->
+                if (!resp.isSuccessful) return null
+                resp.body?.bytes()?.takeIf { it.isNotEmpty() }
+            }
+        } catch (_: Exception) {
+            null
+        }
+    }
+
+    private fun isGifBytes(bytes: ByteArray): Boolean {
+        if (bytes.size < 6) return false
+        // Magic bytes GIF87a oppure GIF89a
+        return bytes[0] == 'G'.code.toByte() &&
+            bytes[1] == 'I'.code.toByte() &&
+            bytes[2] == 'F'.code.toByte() &&
+            bytes[3] == '8'.code.toByte() &&
+            (bytes[4] == '7'.code.toByte() || bytes[4] == '9'.code.toByte()) &&
+            bytes[5] == 'a'.code.toByte()
     }
 
     private fun buildSignedPostRequest(params: Map<String, String>): Request {

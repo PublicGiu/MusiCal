@@ -3,6 +3,7 @@ package com.example.musicplayer.ui.components
 import androidx.compose.material3.SnackbarDuration
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
@@ -85,6 +86,7 @@ fun MainModalsHost(
     // Stati Last.fm
     val isLastFmLoggedIn by viewModel.isLastFmLoggedIn.collectAsStateWithLifecycle()
     val lastFmUsername by viewModel.lastFmUsername.collectAsStateWithLifecycle()
+    val lastFmAvatarPath by viewModel.lastFmAvatarPath.collectAsStateWithLifecycle()
     val lastFmAuthLoading by viewModel.lastFmAuthLoading.collectAsStateWithLifecycle()
     val lastFmAuthError by viewModel.lastFmAuthError.collectAsStateWithLifecycle()
     val lastFmStatusMessage by viewModel.lastFmStatusMessage.collectAsStateWithLifecycle()
@@ -221,9 +223,15 @@ fun MainModalsHost(
 
     // 4. Dialog Last.fm Scrobbler
     if (showLastFmDialog) {
+        LaunchedEffect(isLastFmLoggedIn) {
+            if (isLastFmLoggedIn) {
+                viewModel.refreshLastFmAvatar()
+            }
+        }
         LastFmDialog(
             isLoggedIn = isLastFmLoggedIn,
             username = lastFmUsername,
+            avatarPath = lastFmAvatarPath,
             isLoading = lastFmAuthLoading,
             errorMessage = lastFmAuthError,
             lastStatusMessage = lastFmStatusMessage,
@@ -232,6 +240,9 @@ fun MainModalsHost(
             initialSharedSecret = lastFmCustomSharedSecret,
             onLogin = { user, pass, apiKey, secret ->
                 viewModel.loginLastFm(user, pass, apiKey, secret)
+            },
+            onSaveApiCredentials = { apiKey, secret ->
+                viewModel.saveLastFmApiCredentials(apiKey, secret)
             },
             onLogout = { viewModel.logoutLastFm() },
             onSyncPending = { viewModel.syncOfflineScrobbles() },

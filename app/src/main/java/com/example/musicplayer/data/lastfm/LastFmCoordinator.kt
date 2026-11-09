@@ -13,6 +13,7 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
+import java.io.File
 
 /**
  * Coordinatore dell'integrazione con Last.fm per MusiCal.
@@ -25,15 +26,21 @@ class LastFmCoordinator(
     private val getCurrentTrack: () -> AudioTrack?,
     private val isPlayingProvider: () -> Boolean
 ) {
-    private val lastFmSessionManager = LastFmSessionManager(context)
+    private val appContext = context.applicationContext
+    private val lastFmSessionManager = LastFmSessionManager(appContext)
     private val lastFmClient = LastFmClient()
-    private val syncManager = ScrobbleSyncManager(context, lastFmClient, lastFmSessionManager)
+    private val syncManager = ScrobbleSyncManager(appContext, lastFmClient, lastFmSessionManager)
 
     private val _isLastFmLoggedIn = MutableStateFlow(lastFmSessionManager.isLoggedIn())
     val isLastFmLoggedIn: StateFlow<Boolean> = _isLastFmLoggedIn.asStateFlow()
 
     private val _lastFmUsername = MutableStateFlow(lastFmSessionManager.getUsername())
     val lastFmUsername: StateFlow<String?> = _lastFmUsername.asStateFlow()
+
+    private val _lastFmAvatarPath = MutableStateFlow(
+        lastFmSessionManager.getAvatarPath()?.takeIf { File(it).exists() }
+    )
+    val lastFmAvatarPath: StateFlow<String?> = _lastFmAvatarPath.asStateFlow()
 
     private val _lastFmAuthLoading = MutableStateFlow(false)
     val lastFmAuthLoading: StateFlow<Boolean> = _lastFmAuthLoading.asStateFlow()
@@ -65,7 +72,50 @@ class LastFmCoordinator(
         }
         scope.launch(Dispatchers.IO) {
             delay(3000L) // Differito di 3 secondi dall'avvio per non intasare il cold start
+            if (_isLastFmLoggedIn.value) {
+                refreshUserAvatar()
+            }
             syncManager.syncPendingScrobbles()
+        }
+    }
+
+    fun refreshUserAvatar(usernameOverride: String? = null) {
+        val username = (usernameOverride ?: _lastFmUsername.value ?: lastFmSessionManager.getUsername())?.trim()
+        if (username.isNullOrBlank() || !LastFmConfig.isConfigured) return
+        scope.launch(Dispatchers.IO) {
+            val existingPath = lastFmSessionManager.getAvatarPath()
+            val existingFileValid = existingPath != null && File(existingPath).exists()
+            val knownHash = if (existingFileValid) lastFmSessionManager.getAvatarHash() else null
+
+            val result = lastFmClient.fetchUserAvatar(username, knownHash)
+            result.onSuccess { avatarResult ->
+                when (avatarResult) {
+                    is UserAvatarResult.NoAvatar -> {
+                        existingPath?.let { runCatching { File(it).delete() } }
+                        lastFmSessionManager.saveAvatarInfo(null, null)
+                        _lastFmAvatarPath.value = null
+                    }
+                    is UserAvatarResult.Unchanged -> {
+                        if (existingFileValid) {
+                            _lastFmAvatarPath.value = existingPath
+                        }
+                    }
+                    is UserAvatarResult.Downloaded -> {
+                        val ext = if (avatarResult.isGif) "gif" else "png"
+                        val avatarFile = File(appContext.filesDir, "lastfm_avatar_${avatarResult.hash}.$ext")
+                        avatarFile.writeBytes(avatarResult.bytes)
+                        appContext.filesDir.listFiles { file ->
+                            file.name.startsWith("lastfm_avatar_") && file.absolutePath != avatarFile.absolutePath
+                        }?.forEach { oldFile ->
+                            runCatching { oldFile.delete() }
+                        }
+                        lastFmSessionManager.saveAvatarInfo(avatarFile.absolutePath, avatarResult.hash)
+                        _lastFmAvatarPath.value = avatarFile.absolutePath
+                    }
+                }
+            }.onFailure { e ->
+                Log.d("LastFm", "Impossibile aggiornare avatar Last.fm: ${e.message}")
+            }
         }
     }
 
@@ -134,6 +184,16 @@ class LastFmCoordinator(
             lastFmSessionManager.saveCustomApiCredentials(cleanKey, cleanSecret)
             _lastFmCustomApiKey.value = cleanKey
             _lastFmCustomSharedSecret.value = cleanSecret
+            if (_isLastFmLoggedIn.value && LastFmConfig.isConfigured) {
+                _lastFmStatusMessage.value = "Chiavi API salvate con successo"
+                refreshUserAvatar()
+                getCurrentTrack()?.let { current ->
+                    if (isPlayingProvider()) {
+                        handleTrackStarted(current)
+                    }
+                }
+                syncOfflineScrobbles()
+            }
         }
     }
 
@@ -164,6 +224,7 @@ class LastFmCoordinator(
                 _lastFmUsername.value = user
                 _lastFmAuthLoading.value = false
                 _lastFmStatusMessage.value = "Connesso a Last.fm come $user"
+                refreshUserAvatar(user)
 
                 getCurrentTrack()?.let { current ->
                     if (isPlayingProvider()) {
@@ -186,6 +247,7 @@ class LastFmCoordinator(
         lastFmSessionManager.clearSession()
         _isLastFmLoggedIn.value = false
         _lastFmUsername.value = null
+        _lastFmAvatarPath.value = null
         _lastFmAuthError.value = null
         _lastFmStatusMessage.value = "Disconnesso da Last.fm"
     }
@@ -193,7 +255,7 @@ class LastFmCoordinator(
     fun syncOfflineScrobbles() {
         scope.launch(Dispatchers.IO) {
             if (!LastFmConfig.isConfigured) {
-                _lastFmStatusMessage.value = "Chiavi API Last.fm mancanti: disconnettiti e inseriscile o aggiorna l'app"
+                _lastFmStatusMessage.value = "Chiavi API Last.fm mancanti: inseriscile qui sotto per sincronizzare"
                 return@launch
             }
             val count = syncManager.syncPendingScrobbles()

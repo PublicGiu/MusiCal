@@ -40,6 +40,94 @@
     <string name="details">Dettagli brano</string>
     <string name="edit_tags">Modifica tag</string>
     <string name="equalizer">Equalizzatore</string>
+    <string name="scroll_to_top">Torna in alto</string>
+    <string name="refresh_library_tooltip">Ricarica libreria</string>
+    <string name="library_refreshed_snackbar">Libreria musicale aggiornata</string>
+    <string name="search_hint">Cerca brani, album, artisti…</string>
+
+    <!-- Lingua dell'Applicazione -->
+    <string name="settings_section_language">Lingua dell\'applicazione</string>
+    <string name="settings_language_desc">Scegli la lingua dell\'interfaccia o segui quella di sistema</string>
+    <string name="lang_system">Segui il sistema</string>
+    <string name="lang_italian">Italiano</string>
+    <string name="lang_english">English</string>
+
+    <!-- Impostazioni -->
+    <string name="settings_section_appearance">Aspetto &amp; Tema</string>
+    <string name="settings_theme_mode">Modalità tema</string>
+    <string name="theme_system">Segui il sistema</string>
+    <string name="theme_light">Tema chiaro</string>
+    <string name="theme_dark">Tema scuro</string>
+    <string name="settings_section_playback">Riproduzione &amp; Audio</string>
+    <string name="settings_autoplay_title">Riproduzione automatica continua</string>
+    <string name="settings_autoplay_desc">Continua a riprodurre brani casuali al termine della coda</string>
+    <string name="settings_equalizer_title">Equalizzatore audio</string>
+    <string name="settings_equalizer_desc">Regola 5 bande di frequenza, bass boost e virtualizzatore</string>
+    <string name="settings_sleep_timer_desc">Interrompi la musica con timer o a fine brano con dissolvenza</string>
+    <string name="settings_stats_title">Statistiche d\'ascolto</string>
+    <string name="settings_stats_desc">Visualizza brani e artisti più ascoltati e tempo totale</string>
+    <string name="settings_section_library">Libreria Musicale</string>
+    <string name="settings_audio_source_title">Origine delle tracce</string>
+    <string name="settings_audio_source_desc">Scegli come scansionare la musica presente nella memoria del dispositivo</string>
+    <string name="source_mode_intelligent">Scansione intelligente</string>
+    <string name="source_mode_intelligent_recommended">Scansione intelligente (Consigliata)</string>
+    <string name="source_mode_music">Cartella Music</string>
+    <string name="source_mode_all">Tutto</string>
+    <string name="source_mode_custom">Cartelle a scelta</string>
+    <string name="settings_custom_folders_title">Cartelle selezionate (%d)</string>
+    <string name="settings_custom_folders_empty">Nessuna cartella aggiunta. Tocca \'+ Aggiungi cartella\' per selezionare una o più cartelle di musica.</string>
+    <string name="settings_add_folder">Aggiungi cartella</string>
+    <string name="settings_remove_folder_desc">Rimuovi cartella</string>
+    <string name="settings_library_summary">%1$d brani • %2$d album • %3$d ascolti totali</string>
+    <string name="settings_reload_library">Ricarica libreria musicale</string>
+    <string name="settings_restore_duplicates">Ripristina duplicati ignorati (%d)</string>
+    <string name="settings_section_info">Informazioni</string>
+    <string name="settings_check_updates">Verifica aggiornamenti</string>
+    <string name="settings_checking_updates">Verifica in corso…</string>
+    <string name="settings_up_to_date">MusiCal è aggiornato all\'ultima versione!</string>
+    <string name="settings_version">Versione %s</string>
+    <string name="settings_github_repo">Repository GitHub</string>
+
+    <!-- Criteri di Ordinamento (Sort Options) -->
+    <string name="sort_ascending_desc">Ordinamento crescente</string>
+    <string name="sort_descending_desc">Ordinamento decrescente</string>
+    <string name="sort_az">Alfabetico (A-Z)</string>
+    <string name="sort_za">Alfabetico (Z-A)</string>
+    <string name="sort_recently_played">Ascoltati di recente</string>
+    <string name="sort_most_played">Più ascoltati</string>
+    <string name="sort_recently_added">Aggiunti di recente</string>
+
+    <!-- Brani Duplicati -->
+    <string name="duplicates_banner_single">1 brano duplicato in questo album</string>
+    <string name="duplicates_banner_multiple">%d brani duplicati in questo album</string>
+    <string name="duplicates_banner_subtitle">Tocca per confrontare e rimuovere i file ridondanti dallo storage.</string>
+    <string name="duplicates_sheet_title">Brani duplicati nell\'album</string>
+    <string name="duplicates_sheet_banner">Tocca una versione per scegliere quale conservare. I file contrassegnati da eliminare verranno rimossi definitivamente dal dispositivo.</string>
+    <string name="duplicates_ignore_single">Ignora file duplicati</string>
+    <string name="duplicates_ignore_multiple">Ignora tutti i duplicati (%d)</string>
+    <string name="duplicates_delete_single">Elimina 1 file duplicato</string>
+    <string name="duplicates_delete_multiple">Elimina %d file duplicati</string>
+    <string name="duplicates_no_selection">Nessun file selezionato</string>
+    <string name="duplicates_keep_badge">Conserva</string>
+    <string name="duplicates_delete_badge">Da eliminare</string>
+    <string name="duplicates_versions_count">%d versioni</string>
+    <string name="duplicates_ignore_group_desc">Ignora questo gruppo di duplicati</string>
+    <string name="duplicates_manage_menu">Gestisci brani duplicati</string>
+    <string name="duplicates_restore_menu">Ripristina duplicati ignorati</string>
+    <string name="duplicates_snackbar_ignored">Brani duplicati ignorati</string>
+    <string name="duplicates_snackbar_restored">Rilevamento duplicati ripristinato</string>
+
+    <!-- Dettaglio Album & Artista -->
+    <string name="album_tracks_summary">%1$s • %2$s min</string>
+    <string name="album_songs_count_single">1 brano</string>
+    <string name="album_songs_count_multiple">%d brani</string>
+    <string name="album_play_all">Riproduci tutti</string>
+    <string name="album_mixed_banner_title">Album misto o brani separati?</string>
+    <string name="album_mixed_banner_desc">Tocca per riconoscere e separare automaticamente i brani nei rispettivi album originali.</string>
+    <string name="album_separate_option">Separa in album distinti</string>
+    <string name="album_unify_option">Uniforma tutto in questo album</string>
+    <string name="album_autotag_option">Uniforma &amp; auto-tagga album</string>
+    <string name="playlist_favorites_title">Brani preferiti</string>
 
     <!-- Testi sincronizzati (Lyrics) -->
     <string name="lyrics_no_lyrics_for_track">Testo non presente per questa traccia</string>

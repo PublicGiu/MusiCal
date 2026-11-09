@@ -22,7 +22,9 @@ import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
+import com.example.musicplayer.R
 import com.example.musicplayer.data.SortOption
 
 @Composable
@@ -52,7 +54,9 @@ fun SortSelectorRow(
         ) {
             Icon(
                 imageVector = Icons.AutoMirrored.Filled.Sort,
-                contentDescription = if (isAscending) "Ordinamento crescente" else "Ordinamento decrescente",
+                contentDescription = stringResource(
+                    if (isAscending) R.string.sort_ascending_desc else R.string.sort_descending_desc
+                ),
                 tint = MaterialTheme.colorScheme.onSurfaceVariant,
                 modifier = Modifier.graphicsLayer {
                     this.scaleY = scaleY
@@ -65,7 +69,7 @@ fun SortSelectorRow(
             FilterChip(
                 selected = isSelected,
                 onClick = { onOptionSelected(option) },
-                label = { Text(option.getLabel(isAscending)) },
+                label = { Text(stringResource(option.getLabelResId(isAscending))) },
                 colors = FilterChipDefaults.filterChipColors(
                     selectedContainerColor = MaterialTheme.colorScheme.primaryContainer,
                     selectedLabelColor = MaterialTheme.colorScheme.onPrimaryContainer

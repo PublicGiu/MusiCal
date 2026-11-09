@@ -45,6 +45,7 @@ import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.MusicNote
 import androidx.compose.material.icons.filled.Pause
 import androidx.compose.material.icons.filled.PlayArrow
+import androidx.compose.material.icons.filled.Restore
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.FilledIconButton
@@ -73,6 +74,7 @@ import androidx.compose.ui.layout.layout
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
@@ -86,6 +88,7 @@ import coil.size.Precision
 import com.example.musicplayer.R
 import com.example.musicplayer.data.Album
 import com.example.musicplayer.data.AudioTrack
+import com.example.musicplayer.data.DuplicateTrackGroup
 import com.example.musicplayer.data.findDuplicateTrackGroups
 import com.example.musicplayer.data.isMixedOrGeneric
 import kotlinx.coroutines.launch
@@ -110,7 +113,11 @@ fun AlbumDetailView(
     onAutoTagAlbumSeparationClick: ((Album) -> Unit)? = null,
     onAutoTagTrackClick: ((AudioTrack) -> Unit)? = null,
     onDeleteTracks: ((List<AudioTrack>) -> Unit)? = null,
-    onArtistClick: ((String) -> Unit)? = null
+    onArtistClick: ((String) -> Unit)? = null,
+    ignoredDuplicateKeys: Set<String> = emptySet(),
+    onIgnoreDuplicates: ((List<DuplicateTrackGroup>) -> Unit)? = null,
+    onRestoreIgnoredDuplicates: (() -> Unit)? = null,
+    hasIgnoredDuplicates: Boolean = false
 ) {
     val isCurrentAlbumActive = currentTrack != null &&
         (currentTrack.albumId == album.id || album.tracks.any { it.id == currentTrack.id })
@@ -129,7 +136,9 @@ fun AlbumDetailView(
         (totalMs / 60000).coerceAtLeast(0)
     }
 
-    val duplicateGroups = remember(album.tracks) { album.findDuplicateTrackGroups() }
+    val duplicateGroups = remember(album.tracks, ignoredDuplicateKeys) {
+        album.findDuplicateTrackGroups(ignoredDuplicateKeys)
+    }
     var showDuplicatesSheet by remember { mutableStateOf(false) }
 
     val listState = rememberLazyListState()
@@ -307,7 +316,7 @@ fun AlbumDetailView(
                 ) { playing ->
                     Icon(
                         imageVector = if (playing) Icons.Default.Pause else Icons.Default.PlayArrow,
-                        contentDescription = if (playing) "Pausa" else "Riproduci",
+                        contentDescription = if (playing) stringResource(R.string.pause) else stringResource(R.string.play),
                         modifier = Modifier.size(26.dp)
                     )
                 }
@@ -324,7 +333,7 @@ fun AlbumDetailView(
                 ) {
                     Icon(
                         imageVector = Icons.Default.MoreVert,
-                        contentDescription = "Altre opzioni per ${album.title}"
+                        contentDescription = stringResource(R.string.player_more_options)
                     )
                 }
                 DropdownMenu(
@@ -332,7 +341,7 @@ fun AlbumDetailView(
                     onDismissRequest = { menuExpanded = false }
                 ) {
                     DropdownMenuItem(
-                        text = { Text("Aggiungi alla coda") },
+                        text = { Text(stringResource(R.string.player_menu_add_to_queue)) },
                         leadingIcon = {
                             Icon(
                                 painter = painterResource(R.drawable.ic_queue_music_custom),
@@ -346,7 +355,7 @@ fun AlbumDetailView(
                     )
                     if (duplicateGroups.isNotEmpty()) {
                         DropdownMenuItem(
-                            text = { Text("Gestisci brani duplicati") },
+                            text = { Text(stringResource(R.string.duplicates_manage_menu)) },
                             leadingIcon = {
                                 Icon(
                                     imageVector = Icons.Default.ContentCopy,
@@ -360,9 +369,25 @@ fun AlbumDetailView(
                             }
                         )
                     }
+                    if (hasIgnoredDuplicates && onRestoreIgnoredDuplicates != null) {
+                        DropdownMenuItem(
+                            text = { Text(stringResource(R.string.duplicates_restore_menu)) },
+                            leadingIcon = {
+                                Icon(
+                                    imageVector = Icons.Default.Restore,
+                                    contentDescription = null,
+                                    tint = MaterialTheme.colorScheme.primary
+                                )
+                            },
+                            onClick = {
+                                menuExpanded = false
+                                onRestoreIgnoredDuplicates()
+                            }
+                        )
+                    }
                     if (album.isMixedOrGeneric()) {
                         DropdownMenuItem(
-                            text = { Text("Separa in album distinti") },
+                            text = { Text(stringResource(R.string.album_separate_option)) },
                             leadingIcon = {
                                 Icon(
                                     imageVector = Icons.Default.AutoFixHigh,
@@ -376,7 +401,7 @@ fun AlbumDetailView(
                             }
                         )
                         DropdownMenuItem(
-                            text = { Text("Uniforma tutto in questo album") },
+                            text = { Text(stringResource(R.string.album_unify_option)) },
                             leadingIcon = {
                                 Icon(
                                     imageVector = Icons.Default.MusicNote,
@@ -391,7 +416,7 @@ fun AlbumDetailView(
                         )
                     } else if (onAutoTagAlbumClick != null) {
                         DropdownMenuItem(
-                            text = { Text("Uniforma & auto-tagga album") },
+                            text = { Text(stringResource(R.string.album_autotag_option)) },
                             leadingIcon = {
                                 Icon(
                                     imageVector = Icons.Default.AutoFixHigh,
@@ -436,12 +461,12 @@ fun AlbumDetailView(
                     Spacer(modifier = Modifier.width(10.dp))
                     Column(modifier = Modifier.weight(1f)) {
                         Text(
-                            text = "Album misto o brani separati?",
+                            text = stringResource(R.string.album_mixed_banner_title),
                             style = MaterialTheme.typography.labelLarge.copy(fontWeight = FontWeight.Bold),
                             color = MaterialTheme.colorScheme.onSecondaryContainer
                         )
                         Text(
-                            text = "Tocca per riconoscere e separare automaticamente i brani nei rispettivi album originali.",
+                            text = stringResource(R.string.album_mixed_banner_desc),
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSecondaryContainer.copy(alpha = 0.85f)
                         )
@@ -476,12 +501,16 @@ fun AlbumDetailView(
                     Column(modifier = Modifier.weight(1f)) {
                         val totalDuplicates = duplicateGroups.sumOf { it.tracks.size - 1 }
                         Text(
-                            text = if (totalDuplicates == 1) "1 brano duplicato in questo album" else "$totalDuplicates brani duplicati in questo album",
+                            text = if (totalDuplicates == 1) {
+                                stringResource(R.string.duplicates_banner_single)
+                            } else {
+                                stringResource(R.string.duplicates_banner_multiple, totalDuplicates)
+                            },
                             style = MaterialTheme.typography.labelLarge.copy(fontWeight = FontWeight.Bold),
                             color = MaterialTheme.colorScheme.onTertiaryContainer
                         )
                         Text(
-                            text = "Tocca per confrontare e rimuovere i file ridondanti dallo storage.",
+                            text = stringResource(R.string.duplicates_banner_subtitle),
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onTertiaryContainer.copy(alpha = 0.85f)
                         )
@@ -523,8 +552,11 @@ fun AlbumDetailView(
 
             // Riepilogo in fondo all'album: numero di brani e durata totale in minuti (es. "14 brani • 40 min")
             item(key = "album_footer_summary") {
-                val trackCountText = "${albumSongs.size} ${if (albumSongs.size == 1) "brano" else "brani"}"
-                val durationText = "$totalDurationMinutes min"
+                val trackCountText = if (albumSongs.size == 1) {
+                    stringResource(R.string.album_songs_count_single)
+                } else {
+                    stringResource(R.string.album_songs_count_multiple, albumSongs.size)
+                }
                 Box(
                     modifier = Modifier
                         .fillMaxWidth()
@@ -532,7 +564,7 @@ fun AlbumDetailView(
                     contentAlignment = Alignment.CenterStart
                 ) {
                     Text(
-                        text = "$trackCountText • $durationText",
+                        text = stringResource(R.string.album_tracks_summary, trackCountText, totalDurationMinutes),
                         style = MaterialTheme.typography.bodyMedium,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                         textAlign = TextAlign.Start
@@ -555,6 +587,16 @@ fun AlbumDetailView(
                 onDeleteTracks = { tracksToDelete ->
                     showDuplicatesSheet = false
                     onDeleteTracks?.invoke(tracksToDelete)
+                },
+                onIgnoreDuplicates = { groups ->
+                    showDuplicatesSheet = false
+                    onIgnoreDuplicates?.invoke(groups)
+                },
+                onIgnoreGroup = { group ->
+                    if (duplicateGroups.size <= 1) {
+                        showDuplicatesSheet = false
+                    }
+                    onIgnoreDuplicates?.invoke(listOf(group))
                 },
                 onDismissRequest = { showDuplicatesSheet = false }
             )

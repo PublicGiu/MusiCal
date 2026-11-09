@@ -1,5 +1,7 @@
 package com.example.musicplayer.data
 
+import com.example.musicplayer.R
+
 /**
  * Criteri di ordinamento disponibili per la libreria musicale.
  */
@@ -17,6 +19,13 @@ enum class SortOption {
         MOST_PLAYED -> "Più ascoltati"
         RECENTLY_ADDED -> "Aggiunti di recente"
         ALPHABETICAL -> if (isAscending) "Alfabetico (A-Z)" else "Alfabetico (Z-A)"
+    }
+
+    fun getLabelResId(isAscending: Boolean): Int = when (this) {
+        RECENTLY_PLAYED -> R.string.sort_recently_played
+        MOST_PLAYED -> R.string.sort_most_played
+        RECENTLY_ADDED -> R.string.sort_recently_added
+        ALPHABETICAL -> if (isAscending) R.string.sort_az else R.string.sort_za
     }
 }
 

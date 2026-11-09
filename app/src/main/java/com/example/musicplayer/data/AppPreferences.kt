@@ -45,6 +45,12 @@ class AppPreferences(context: Context) {
         private const val KEY_EQUALIZER_BANDS = "equalizer_bands"
         private const val KEY_BASS_BOOST = "bass_boost"
         private const val KEY_VIRTUALIZER = "virtualizer"
+
+        // File duplicati ignorati dall'utente
+        private const val KEY_IGNORED_DUPLICATE_KEYS = "ignored_duplicate_keys"
+
+        // Lingua dell'applicazione (per-app language)
+        private const val KEY_APP_LANGUAGE = "app_language"
     }
 
     /**
@@ -72,6 +78,22 @@ class AppPreferences(context: Context) {
 
     fun setThemeMode(mode: ThemeMode) {
         prefs.edit().putString(KEY_THEME_MODE, mode.name).apply()
+    }
+
+    /**
+     * Lingua dell'applicazione (default SYSTEM).
+     */
+    fun getAppLanguage(): AppLanguage {
+        val name = prefs.getString(KEY_APP_LANGUAGE, AppLanguage.SYSTEM.name) ?: AppLanguage.SYSTEM.name
+        return try {
+            AppLanguage.valueOf(name)
+        } catch (_: Exception) {
+            AppLanguage.SYSTEM
+        }
+    }
+
+    fun setAppLanguage(language: AppLanguage) {
+        prefs.edit().putString(KEY_APP_LANGUAGE, language.name).apply()
     }
 
     /**
@@ -195,4 +217,33 @@ class AppPreferences(context: Context) {
 
     fun getVirtualizerStrength(): Int = prefs.getInt(KEY_VIRTUALIZER, 0)
     fun setVirtualizerStrength(strength: Int) = prefs.edit().putInt(KEY_VIRTUALIZER, strength).apply()
+
+    /**
+     * Preferenze per i file duplicati ignorati dall'utente (coppie id:id o path|path).
+     */
+    fun getIgnoredDuplicateKeys(): Set<String> {
+        return prefs.getStringSet(KEY_IGNORED_DUPLICATE_KEYS, emptySet())?.toSet() ?: emptySet()
+    }
+
+    fun setIgnoredDuplicateKeys(keys: Set<String>) {
+        prefs.edit().putStringSet(KEY_IGNORED_DUPLICATE_KEYS, keys.toSet()).apply()
+    }
+
+    fun addIgnoredDuplicateKeys(keys: Collection<String>) {
+        if (keys.isEmpty()) return
+        val current = getIgnoredDuplicateKeys().toMutableSet()
+        current.addAll(keys)
+        setIgnoredDuplicateKeys(current)
+    }
+
+    fun removeIgnoredDuplicateKeys(keys: Collection<String>) {
+        if (keys.isEmpty()) return
+        val current = getIgnoredDuplicateKeys().toMutableSet()
+        current.removeAll(keys.toSet())
+        setIgnoredDuplicateKeys(current)
+    }
+
+    fun clearIgnoredDuplicateKeys() {
+        prefs.edit().remove(KEY_IGNORED_DUPLICATE_KEYS).apply()
+    }
 }

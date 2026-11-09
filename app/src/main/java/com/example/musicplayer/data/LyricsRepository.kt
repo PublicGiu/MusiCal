@@ -12,7 +12,8 @@ data class LyricsData(
     val trackId: Long,
     val lines: List<LyricLine>,
     val rawLyrics: String,
-    val isSynced: Boolean
+    val isSynced: Boolean,
+    val isInstrumental: Boolean = false
 )
 
 /**
@@ -21,6 +22,7 @@ data class LyricsData(
 class LyricsRepository(private val context: Context) {
 
     private val timeTagRegex = Regex("""\[(\d{1,2}):(\d{2})(?:\.(\d{1,3}))?]""")
+    private val headerTagRegex = Regex("""^\[[a-zA-Z_-]+:.*]$""")
 
     /**
      * Carica i testi salvati localmente per una data traccia.
@@ -46,6 +48,16 @@ class LyricsRepository(private val context: Context) {
         var foundTimestamp = false
 
         raw.lines().forEach { line ->
+            val trimmed = line.trim()
+            if (trimmed.isBlank() || headerTagRegex.matches(trimmed) ||
+                trimmed.equals("(strumentale)", ignoreCase = true) ||
+                trimmed.equals("(instrumental)", ignoreCase = true) ||
+                trimmed.equals("[instrumental]", ignoreCase = true) ||
+                trimmed.equals("[strumentale]", ignoreCase = true)
+            ) {
+                return@forEach
+            }
+
             val match = timeTagRegex.find(line)
             if (match != null) {
                 foundTimestamp = true
@@ -64,18 +76,30 @@ class LyricsRepository(private val context: Context) {
                 if (textContent.isNotBlank()) {
                     lines.add(LyricLine(totalTimeMs, textContent))
                 }
-            } else if (line.trim().isNotBlank()) {
-                lines.add(LyricLine(-1L, line.trim()))
+            } else if (trimmed.isNotBlank()) {
+                lines.add(LyricLine(-1L, trimmed))
             }
         }
 
         lines.sortBy { if (it.timeMs >= 0) it.timeMs else Long.MAX_VALUE }
 
+        val isInstrumentalTag = raw.contains("[instrumental:true]", ignoreCase = true) ||
+                raw.contains("[au: Instrumental]", ignoreCase = true) ||
+                raw.contains("[ti: Instrumental]", ignoreCase = true) ||
+                raw.lines().any { line ->
+                    val trimmed = line.trim()
+                    trimmed.equals("(strumentale)", ignoreCase = true) ||
+                    trimmed.equals("(instrumental)", ignoreCase = true) ||
+                    trimmed.equals("[instrumental]", ignoreCase = true) ||
+                    trimmed.equals("[strumentale]", ignoreCase = true)
+                }
+
         return LyricsData(
             trackId = trackId,
             lines = lines,
             rawLyrics = raw,
-            isSynced = foundTimestamp
+            isSynced = foundTimestamp,
+            isInstrumental = isInstrumentalTag
         )
     }
 

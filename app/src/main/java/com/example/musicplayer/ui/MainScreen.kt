@@ -140,6 +140,7 @@ import com.example.musicplayer.ui.components.EqualizerDialog
 import com.example.musicplayer.ui.components.FullScreenPlayerSheet
 import com.example.musicplayer.ui.components.GlobalSearchResultsView
 import com.example.musicplayer.ui.components.LastFmDialog
+import com.example.musicplayer.ui.components.MainModalsHost
 import com.example.musicplayer.ui.components.PlaybackStatsDialog
 import com.example.musicplayer.ui.components.PlayerBottomBar
 import com.example.musicplayer.ui.components.PlaylistDetailView
@@ -1448,145 +1449,6 @@ fun MainScreen(
         }
     }
 
-    // ModalBottomSheet Coda di Riproduzione
-    if (showQueueSheet) {
-        QueueBottomSheet(
-            currentTrack = currentTrack,
-            userQueue = userQueue,
-            autoplayQueue = autoplayQueue,
-            isPlaying = isPlaying,
-            onDismissRequest = { showQueueSheet = false },
-            onSkipToUserQueueItem = { index -> viewModel.skipToUserQueueItem(index) },
-            onRemoveUserQueueItem = { index -> viewModel.removeUserQueueItem(index) },
-            onMoveUserQueueItem = { fromIndex, toIndex -> viewModel.moveUserQueueItem(fromIndex, toIndex) },
-            onMoveUserQueueItemToTop = { index -> viewModel.moveUserQueueItemToTop(index) },
-            onClearUserQueue = { viewModel.clearUserQueue() },
-            onSkipToAutoplayItem = { index -> viewModel.skipToAutoplayItem(index) },
-            onRemoveAutoplayItem = { index -> viewModel.removeAutoplayItem(index) },
-            onMoveAutoplayItem = { fromIndex, toIndex -> viewModel.moveAutoplayItem(fromIndex, toIndex) },
-            onMoveAutoplayItemToTop = { index -> viewModel.moveAutoplayItemToTop(index) },
-            onAddAutoplayItemToUserQueue = { index -> viewModel.moveAutoplayItemToUserQueue(index) }
-        )
-    }
-
-    // ModalBottomSheet Player a tutto schermo (Full Screen Player)
-    if (showFullScreenPlayer && currentTrack != null) {
-        FullScreenPlayerSheet(
-            currentTrack = currentTrack,
-            isPlaying = isPlaying,
-            currentPositionProvider = currentPositionProvider,
-            durationMs = durationMs,
-            isShuffleEnabled = isShuffleEnabled,
-            repeatMode = repeatMode,
-            isAutoplayEnabled = isAutoplayEnabled,
-            queue = queue,
-            currentQueueIndex = currentQueueIndex,
-            onDismissRequest = { showFullScreenPlayer = false },
-            onPlayPauseClick = { viewModel.togglePlayPause() },
-            onPreviousClick = { viewModel.playPrevious() },
-            onNextClick = { viewModel.playNext() },
-            onShuffleClick = { viewModel.toggleShuffle() },
-            onRepeatClick = { viewModel.toggleRepeatMode() },
-            onToggleAutoplay = { viewModel.toggleAutoplay() },
-            onQueueClick = { showQueueSheet = true },
-            onSeekTo = { seekMs -> viewModel.seekTo(seekMs) },
-            onSkipToQueueItem = { index -> viewModel.skipToQueueItem(index) },
-            currentLyrics = currentLyrics,
-            onAdjustLyricsOffset = { deltaMs -> viewModel.adjustLyricsOffset(deltaMs) },
-            onAddToQueueClick = handleAddTrackToQueue,
-            onAddToPlaylistClick = { trackToAddToPlaylist = it },
-            onAddToFavoritesClick = handleAddToFavorites,
-            isFavorite = currentTrack?.id in favoriteTrackIds,
-            onAutoTagClick = { viewModel.startTrackEnrichment(it) },
-            playbackContext = playbackContext,
-            onContextClick = {
-                when (val ctx = playbackContext) {
-                    is PlaybackContext.Album -> {
-                        val matchingAlbum = albums.find { it.id == ctx.id }
-                            ?: albums.find { it.title.equals(ctx.title, ignoreCase = true) }
-                        if (matchingAlbum != null) {
-                            if (searchQuery.isNotBlank()) viewModel.onSearchQueryChanged("")
-                            isSearchExpandedInDetail = false
-                            selectedArtistForSheet = null
-                            selectedAlbum = matchingAlbum
-                            selectedPlaylist = null
-                            showFullScreenPlayer = false
-                        }
-                    }
-                    is PlaybackContext.Playlist -> {
-                        val matchingPlaylist = playlists.find { it.id == ctx.id }
-                        if (matchingPlaylist != null) {
-                            if (searchQuery.isNotBlank()) viewModel.onSearchQueryChanged("")
-                            isSearchExpandedInDetail = false
-                            selectedArtistForSheet = null
-                            selectedPlaylist = matchingPlaylist
-                            selectedAlbum = null
-                            showFullScreenPlayer = false
-                        }
-                    }
-                    is PlaybackContext.Artist -> {
-                        selectedArtistForSheet = ctx.name
-                        showFullScreenPlayer = false
-                    }
-                    is PlaybackContext.Library -> {
-                        if (searchQuery.isNotBlank()) viewModel.onSearchQueryChanged("")
-                        isSearchExpandedInDetail = false
-                        selectedArtistForSheet = null
-                        selectedAlbum = null
-                        selectedPlaylist = null
-                        showFullScreenPlayer = false
-                    }
-                }
-            },
-            onArtistClick = { artist ->
-                selectedArtistForSheet = artist
-                showFullScreenPlayer = false
-            },
-            onOpenEqualizer = { showEqualizerDialog = true },
-            onOpenSleepTimer = { showSleepTimerDialog = true },
-            onOpenStats = { showStatsDialog = true },
-            onAlbumClick = {
-                val track = currentTrack
-                if (track != null) {
-                    val matchingAlbum = albums.find { it.id == track.albumId }
-                        ?: albums.find { it.title.equals(track.album, ignoreCase = true) }
-                        ?: if (track.album.isNotBlank()) {
-                            val albumTracks = tracks.filter {
-                                it.albumId == track.albumId || it.album.equals(track.album, ignoreCase = true)
-                            }.ifEmpty { listOf(track) }
-                            Album(
-                                id = track.albumId,
-                                title = track.album,
-                                artist = track.artist,
-                                albumArtUri = track.albumArtUri,
-                                tracks = albumTracks
-                            )
-                        } else null
-
-                    if (matchingAlbum != null) {
-                        if (searchQuery.isNotBlank()) viewModel.onSearchQueryChanged("")
-                        isSearchExpandedInDetail = false
-                        selectedArtistForSheet = null
-                        selectedAlbum = matchingAlbum
-                        selectedPlaylist = null
-                        showFullScreenPlayer = false
-                    }
-                }
-            }
-        )
-    }
-
-    // Dialog Nuova Playlist
-    if (showCreatePlaylistDialog) {
-        CreatePlaylistDialog(
-            onDismiss = { showCreatePlaylistDialog = false },
-            onConfirm = { name, coverUri ->
-                viewModel.createPlaylist(name, coverUri)
-                showCreatePlaylistDialog = false
-            }
-        )
-    }
-
     // Dialog Aggiungi a Playlist
     trackToAddToPlaylist?.let { track ->
         AddToPlaylistDialog(
@@ -1613,164 +1475,65 @@ fun MainScreen(
         )
     }
 
-    // Dialog Last.fm Scrobbler
-    if (showLastFmDialog) {
-        LastFmDialog(
-            isLoggedIn = isLastFmLoggedIn,
-            username = lastFmUsername,
-            isLoading = lastFmAuthLoading,
-            errorMessage = lastFmAuthError,
-            lastStatusMessage = lastFmStatusMessage,
-            pendingCount = pendingScrobblesCount,
-            initialApiKey = lastFmCustomApiKey,
-            initialSharedSecret = lastFmCustomSharedSecret,
-            onLogin = { user, pass, apiKey, secret ->
-                viewModel.loginLastFm(user, pass, apiKey, secret)
-            },
-            onLogout = { viewModel.logoutLastFm() },
-            onSyncPending = { viewModel.syncOfflineScrobbles() },
-            onDismiss = { showLastFmDialog = false }
-        )
-    }
-
-    // Finestra Impostazioni a schermo intero
-    if (showSettingsDialog) {
-        SettingsDialog(
-            viewModel = viewModel,
-            onDismiss = { showSettingsDialog = false },
-            onOpenLastFmDialog = {
-                showLastFmDialog = true
-            },
-            onPickCustomFolder = {
-                folderPickerLauncher.launch(null)
-            },
-            onOpenEqualizer = { showEqualizerDialog = true },
-            onOpenSleepTimer = { showSleepTimerDialog = true },
-            onOpenStats = { showStatsDialog = true }
-        )
-    }
-
-    // Dialog Equalizzatore Audio ed Effetti Sonori
-    if (showEqualizerDialog) {
-        EqualizerDialog(
-            onDismissRequest = { showEqualizerDialog = false }
-        )
-    }
-
-    // Dialog Timer di Spegnimento con dissolvenza progressiva
-    if (showSleepTimerDialog) {
-        SleepTimerDialog(
-            sleepTimerState = sleepTimerState,
-            onSetMinutes = { minutes -> viewModel.setSleepTimerMinutes(minutes) },
-            onSetEndOfTrack = { viewModel.setSleepTimerEndOfTrack() },
-            onCancelTimer = { viewModel.cancelSleepTimer() },
-            onDismissRequest = { showSleepTimerDialog = false }
-        )
-    }
-
-    // Dialog Statistiche d'ascolto
-    if (showStatsDialog) {
-        PlaybackStatsDialog(
-            tracks = tracks,
-            stats = stats,
-            onDismissRequest = { showStatsDialog = false },
-            onResetStats = { viewModel.clearListeningStats() },
-            onTrackClick = { track ->
-                showStatsDialog = false
-                viewModel.playTrack(track)
-            },
-            onArtistClick = { artist ->
-                showStatsDialog = false
-                selectedArtistForSheet = artist
-            },
-            onAlbumClick = { albumTitle ->
-                val matchingAlbum = albums.find { it.title.equals(albumTitle, ignoreCase = true) }
-                if (matchingAlbum != null) {
-                    if (searchQuery.isNotBlank()) viewModel.onSearchQueryChanged("")
-                    isSearchExpandedInDetail = false
-                    selectedArtistForSheet = null
-                    selectedPlaylist = null
-                    selectedAlbum = matchingAlbum
-                    showStatsDialog = false
-                }
-            }
-        )
-    }
-
-    // ModalBottomSheet Vista Dettaglio Artista
-    selectedArtistForSheet?.let { artistName ->
-        val artistTracks = remember(artistName, tracks) {
-            tracks.filter { it.matchesArtist(artistName) }
-        }
-        ArtistDetailSheet(
-            artistName = artistName,
-            tracks = tracks,
-            albums = albums,
-            currentTrack = currentTrack,
-            isPlaying = isPlaying,
-            onDismissRequest = { selectedArtistForSheet = null },
-            onPlayTrackIndex = { index ->
-                viewModel.playArtist(artistName, index)
-            },
-            onPlayAllClick = {
-                viewModel.playArtist(artistName, 0)
-            },
-            onAddAllToQueueClick = {
-                viewModel.addTracksToQueue(artistTracks)
-                coroutineScope.launch {
-                    snackbarHostState.showSnackbar(
-                        message = "${artistTracks.size} brani di $artistName aggiunti alla coda",
-                        duration = SnackbarDuration.Short
-                    )
-                }
-            },
-            onAlbumClick = { album ->
-                selectedArtistForSheet = null
-                selectedAlbum = album
-            },
-            onAddToQueueClick = handleAddTrackToQueue,
-            onAddToPlaylistClick = { trackToAddToPlaylist = it },
-            onAddToFavoritesClick = handleAddToFavorites,
-            favoriteTrackIds = favoriteTrackIds,
-            onAutoTagTrackClick = { viewModel.startTrackEnrichment(it) }
-        )
-    }
-
-    // Dialog Notifica Aggiornamento GitHub all'avvio
-    if (isUpdateDialogVisible) {
-        updateInfo?.let { info ->
-            UpdateAvailableDialog(
-                updateInfo = info,
-                onDismiss = { viewModel.dismissUpdateDialog(neverShowAgainForThisVersion = false) },
-                onNeverShowAgain = { viewModel.dismissUpdateDialog(neverShowAgainForThisVersion = true) }
-            )
-        }
-    }
-
-    // Foglio modale Smart Auto-Tagger & Metadata Enricher
-    MetadataEnricherSheet(
-        state = enricherState,
-        onDismissRequest = { viewModel.closeEnricher() },
-        onApplyTrack = { track, metadata, options ->
-            viewModel.applyTrackEnrichment(track, metadata, options)
+    // Host centralizzato per la presentazione modale (Bottom Sheets e Dialogs)
+    MainModalsHost(
+        viewModel = viewModel,
+        showQueueSheet = showQueueSheet,
+        onDismissQueueSheet = { showQueueSheet = false },
+        showFullScreenPlayer = showFullScreenPlayer,
+        onDismissFullScreenPlayer = { showFullScreenPlayer = false },
+        onOpenQueueSheet = { showQueueSheet = true },
+        currentPositionProvider = currentPositionProvider,
+        showCreatePlaylistDialog = showCreatePlaylistDialog,
+        onDismissCreatePlaylistDialog = { showCreatePlaylistDialog = false },
+        onOpenCreatePlaylistDialog = { showCreatePlaylistDialog = true },
+        showLastFmDialog = showLastFmDialog,
+        onDismissLastFmDialog = { showLastFmDialog = false },
+        onOpenLastFmDialog = { showLastFmDialog = true },
+        showSettingsDialog = showSettingsDialog,
+        onDismissSettingsDialog = { showSettingsDialog = false },
+        onPickCustomFolder = { folderPickerLauncher.launch(null) },
+        showEqualizerDialog = showEqualizerDialog,
+        onDismissEqualizerDialog = { showEqualizerDialog = false },
+        onOpenEqualizer = { showEqualizerDialog = true },
+        showSleepTimerDialog = showSleepTimerDialog,
+        onDismissSleepTimerDialog = { showSleepTimerDialog = false },
+        onOpenSleepTimer = { showSleepTimerDialog = true },
+        showStatsDialog = showStatsDialog,
+        onDismissStatsDialog = { showStatsDialog = false },
+        onOpenStats = { showStatsDialog = true },
+        selectedArtistForSheet = selectedArtistForSheet,
+        onDismissArtistDetailSheet = { selectedArtistForSheet = null },
+        onSelectArtistForSheet = { selectedArtistForSheet = it },
+        tracks = tracks,
+        albums = albums,
+        playlists = playlists,
+        favoriteTrackIds = favoriteTrackIds,
+        onNavigateToAlbum = { album ->
+            if (searchQuery.isNotBlank()) viewModel.onSearchQueryChanged("")
+            isSearchExpandedInDetail = false
+            selectedArtistForSheet = null
+            selectedAlbum = album
+            selectedPlaylist = null
         },
-        onApplyAlbum = { album, tracksMap, options ->
-            viewModel.applyAlbumEnrichment(album, tracksMap, options)
+        onNavigateToPlaylist = { playlist ->
+            if (searchQuery.isNotBlank()) viewModel.onSearchQueryChanged("")
+            isSearchExpandedInDetail = false
+            selectedArtistForSheet = null
+            selectedPlaylist = playlist
+            selectedAlbum = null
         },
-        onSelectCandidate = { track, candidate, options ->
-            viewModel.selectAlternativeCandidate(track, candidate, options)
+        onNavigateToLibrary = {
+            if (searchQuery.isNotBlank()) viewModel.onSearchQueryChanged("")
+            isSearchExpandedInDetail = false
+            selectedArtistForSheet = null
+            selectedAlbum = null
+            selectedPlaylist = null
         },
-        onCustomSearch = { track, title, artist ->
-            viewModel.searchCustomTrackEnrichment(track, title, artist)
-        },
-        onToggleAlbumSeparationMode = { viewModel.toggleAlbumEnrichmentMode(it) },
-        onRetry = {
-            when (val s = enricherState) {
-                is com.example.musicplayer.ui.tagger.EnricherUiState.ReviewTrack -> viewModel.startTrackEnrichment(s.track)
-                is com.example.musicplayer.ui.tagger.EnricherUiState.ReviewAlbum -> viewModel.startAlbumEnrichment(s.album)
-                else -> viewModel.closeEnricher()
-            }
-        }
+        onAddToFavorites = handleAddToFavorites,
+        onAddToQueue = handleAddTrackToQueue,
+        onAddToPlaylistRequest = { trackToAddToPlaylist = it },
+        snackbarHostState = snackbarHostState
     )
 }
 

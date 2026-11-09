@@ -71,6 +71,7 @@ class MetadataEnricherRepository(
                     coverBytes = null,
                     plainLyrics = lrclibRes?.plainLyrics,
                     syncedLyrics = lrclibRes?.syncedLyrics,
+                    isInstrumental = lrclibRes?.instrumental == true || track.isInstrumental(),
                     source = if (lrclibRes != null) "LRCLIB (Fallback)" else "Sanitizzazione locale"
                 )
                 return@withContext Result.success(Pair(fallbackMetadata, emptyList()))
@@ -79,7 +80,14 @@ class MetadataEnricherRepository(
             // 2. Selezione del miglior candidato Deezer (durata coerente ed euristica)
             val bestCandidate = selectBestCandidate(track, deezerSearchRes)
 
-            val enriched = buildEnrichedFromCandidate(track, bestCandidate, lrclibRes?.plainLyrics, lrclibRes?.syncedLyrics, options)
+            val enriched = buildEnrichedFromCandidate(
+                track = track,
+                candidate = bestCandidate,
+                plainLyrics = lrclibRes?.plainLyrics,
+                syncedLyrics = lrclibRes?.syncedLyrics,
+                isInstrumental = lrclibRes?.instrumental == true || track.isInstrumental(),
+                options = options
+            )
 
             Result.success(Pair(enriched, deezerSearchRes))
         } catch (e: Exception) {
@@ -120,6 +128,7 @@ class MetadataEnricherRepository(
                 candidate = candidate,
                 plainLyrics = lrclibRes?.plainLyrics,
                 syncedLyrics = lrclibRes?.syncedLyrics,
+                isInstrumental = lrclibRes?.instrumental == true || track.isInstrumental(),
                 options = options
             )
             Result.success(enriched)
@@ -195,6 +204,7 @@ class MetadataEnricherRepository(
         candidate: DeezerSearchTrack,
         plainLyrics: String?,
         syncedLyrics: String?,
+        isInstrumental: Boolean = false,
         options: EnricherOptions
     ): EnrichedMetadata {
         val albumDetailRes = deezerClient.getAlbumDetail(candidate.albumId).getOrNull()
@@ -267,6 +277,7 @@ class MetadataEnricherRepository(
             coverBytes = coverBytes,
             plainLyrics = plainLyrics,
             syncedLyrics = syncedLyrics,
+            isInstrumental = isInstrumental,
             recordType = albumDetailRes?.recordType,
             source = "Deezer + LRCLIB"
         )

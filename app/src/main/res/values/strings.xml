@@ -40,4 +40,42 @@
     <string name="details">Dettagli brano</string>
     <string name="edit_tags">Modifica tag</string>
     <string name="equalizer">Equalizzatore</string>
+
+    <!-- Testi sincronizzati (Lyrics) -->
+    <string name="lyrics_no_lyrics_for_track">Testo non presente per questa traccia</string>
+    <string name="lyrics_instrumental">Brano strumentale</string>
+    <string name="lyrics_no_lyrics_available">Nessun testo disponibile per questo brano</string>
+    <string name="lyrics_use_auto_tagger">Usa l\'Auto-Tagger per cercarlo su LRCLIB</string>
+    <string name="lyrics_loading">Caricamento testo in corso…</string>
+    <string name="lyrics_no_synced_available">Nessun testo sincronizzato disponibile</string>
+
+    <!-- Player a tutto schermo (Full Screen Player) -->
+    <string name="player_header_from_album">IN RIPRODUZIONE DALL\'ALBUM</string>
+    <string name="player_header_from_playlist">IN RIPRODUZIONE DALLA PLAYLIST</string>
+    <string name="player_header_from_artist">IN RIPRODUZIONE DALL\'ARTISTA</string>
+    <string name="player_header_from_library">IN RIPRODUZIONE DALLA LIBRERIA</string>
+    <string name="player_all_tracks">Tutti i brani</string>
+    <string name="player_collapse_desc">Riduci player a schermo intero</string>
+    <string name="player_more_options">Altre opzioni</string>
+    <string name="player_menu_view_artist">Visualizza artista</string>
+    <string name="player_menu_add_to_queue">Aggiungi alla coda</string>
+    <string name="player_menu_add_to_favorites">Aggiungi ai brani preferiti</string>
+    <string name="player_menu_added_to_favorites">Aggiunto ai brani preferiti</string>
+    <string name="player_menu_add_to_playlist">Aggiungi a playlist</string>
+    <string name="player_menu_auto_tag">Auto-tagga &amp; testi</string>
+    <string name="player_menu_sleep_timer">Timer di spegnimento</string>
+
+    <!-- Coda di riproduzione (Queue) -->
+    <string name="queue_header_now_playing">IN RIPRODUZIONE</string>
+    <string name="queue_header_user_queue">In coda (%d)</string>
+    <string name="queue_header_autoplay">Riproduzione automatica (%d)</string>
+    <string name="queue_clear_button">Svuota coda</string>
+
+    <!-- Notifica Aggiornamenti (Update Dialog) -->
+    <string name="update_dialog_title">Aggiornamento disponibile</string>
+    <string name="update_dialog_whats_new">Novità di questa versione:</string>
+    <string name="update_dialog_fallback_text">È disponibile una nuova versione su GitHub con miglioramenti e correzioni.</string>
+    <string name="update_dialog_download_now">Scarica ora</string>
+    <string name="update_dialog_ignore">Ignora</string>
+    <string name="update_dialog_later">Più tardi</string>
 </resources>

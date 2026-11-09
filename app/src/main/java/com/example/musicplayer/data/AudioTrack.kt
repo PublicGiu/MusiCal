@@ -27,6 +27,26 @@ data class AudioTrack(
      * Formatta la durata del brano in formato mm:ss o hh:mm:ss.
      */
     fun formattedDuration(): String = formatDurationMs(duration)
+
+    /**
+     * Determina euristicamente se il brano è strumentale in base a titolo, nome file o genere.
+     */
+    fun isInstrumental(): Boolean {
+        val lowerTitle = title.lowercase(Locale.ROOT)
+        val lowerName = displayName.lowercase(Locale.ROOT)
+        return lowerTitle.contains("(instrumental)") ||
+                lowerTitle.contains("[instrumental]") ||
+                lowerTitle.contains("- instrumental") ||
+                lowerTitle.contains("(strumentale)") ||
+                lowerTitle.contains("[strumentale]") ||
+                lowerTitle.contains("- strumentale") ||
+                lowerName.contains("(instrumental)") ||
+                lowerName.contains("[instrumental]") ||
+                lowerName.contains("(strumentale)") ||
+                lowerName.contains("[strumentale]") ||
+                genre.equals("Instrumental", ignoreCase = true) ||
+                genre.equals("Strumentale", ignoreCase = true)
+    }
 }
 
 /**

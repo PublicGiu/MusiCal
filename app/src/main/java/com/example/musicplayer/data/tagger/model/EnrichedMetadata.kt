@@ -16,6 +16,7 @@ data class EnrichedMetadata(
     val coverBytes: ByteArray? = null, // Byte JPEG scaricati per l'incorporamento
     val plainLyrics: String? = null,   // Testo semplice non sincronizzato
     val syncedLyrics: String? = null,  // Testo sincronizzato con timestamp [mm:ss.xx]
+    val isInstrumental: Boolean = false, // Traccia puramente strumentale priva di parte vocale
     val recordType: String? = null,    // Tipo di rilascio ("album", "ep", "single", "compile")
     val source: String = "Deezer + LRCLIB"
 ) {
@@ -44,6 +45,7 @@ data class EnrichedMetadata(
         } else if (other.coverBytes != null) return false
         if (plainLyrics != other.plainLyrics) return false
         if (syncedLyrics != other.syncedLyrics) return false
+        if (isInstrumental != other.isInstrumental) return false
         if (recordType != other.recordType) return false
         if (source != other.source) return false
 

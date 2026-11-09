@@ -31,9 +31,12 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import com.example.musicplayer.R
 import com.example.musicplayer.data.update.AppUpdateInfo
+import com.example.musicplayer.ui.components.markdown.MarkdownContent
 
 /**
  * Dialog modale Material 3 che notifica all'utente la disponibilità di una nuova versione di MusiCal.
@@ -60,7 +63,7 @@ fun UpdateAvailableDialog(
         title = {
             Column(horizontalAlignment = Alignment.CenterHorizontally) {
                 Text(
-                    text = "Aggiornamento disponibile",
+                    text = stringResource(R.string.update_dialog_title),
                     style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.Bold)
                 )
                 Spacer(modifier = Modifier.height(4.dp))
@@ -78,7 +81,7 @@ fun UpdateAvailableDialog(
             ) {
                 if (updateInfo.releaseNotes.isNotBlank()) {
                     Text(
-                        text = "Novità di questa versione:",
+                        text = stringResource(R.string.update_dialog_whats_new),
                         style = MaterialTheme.typography.labelLarge.copy(fontWeight = FontWeight.SemiBold)
                     )
 
@@ -87,23 +90,22 @@ fun UpdateAvailableDialog(
                         color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
                         modifier = Modifier
                             .fillMaxWidth()
-                            .heightIn(max = 200.dp)
+                            .heightIn(min = 60.dp, max = 240.dp)
                     ) {
                         Column(
                             modifier = Modifier
                                 .padding(12.dp)
                                 .verticalScroll(rememberScrollState())
                         ) {
-                            Text(
-                                text = updateInfo.releaseNotes,
-                                style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            MarkdownContent(
+                                markdown = updateInfo.releaseNotes,
+                                modifier = Modifier.fillMaxWidth()
                             )
                         }
                     }
                 } else {
                     Text(
-                        text = "È disponibile una nuova versione su GitHub con miglioramenti e correzioni.",
+                        text = stringResource(R.string.update_dialog_fallback_text),
                         style = MaterialTheme.typography.bodyMedium
                     )
                 }
@@ -129,17 +131,17 @@ fun UpdateAvailableDialog(
                     modifier = Modifier.size(18.dp)
                 )
                 Spacer(modifier = Modifier.width(6.dp))
-                Text("Scarica ora")
+                Text(stringResource(R.string.update_dialog_download_now))
             }
         },
         dismissButton = {
             Row {
                 TextButton(onClick = onNeverShowAgain) {
-                    Text("Ignora")
+                    Text(stringResource(R.string.update_dialog_ignore))
                 }
                 Spacer(modifier = Modifier.width(4.dp))
                 OutlinedButton(onClick = onDismiss) {
-                    Text("Più tardi")
+                    Text(stringResource(R.string.update_dialog_later))
                 }
             }
         }

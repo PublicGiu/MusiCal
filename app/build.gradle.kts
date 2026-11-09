@@ -36,8 +36,8 @@ android {
         applicationId = "com.example.musicplayer"
         minSdk = 36
         targetSdk = 36
-        versionCode = 15
-        versionName = "0.1.14"
+        versionCode = 16
+        versionName = "0.1.15"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
 
@@ -112,6 +112,7 @@ dependencies {
 
     // Audio Tagging (MP3, FLAC, M4A, OGG)
     implementation(libs.jaudiotagger)
+    implementation(libs.androidx.exifinterface)
 
     // Room Database
     implementation(libs.androidx.room.runtime)

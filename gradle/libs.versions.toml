@@ -17,6 +17,7 @@ room = "2.6.1"
 ksp = "2.1.0-1.0.29"
 json = "20240303"
 jaudiotagger = "2.2.3"
+exifinterface = "1.4.2"
 
 [libraries]
 junit = { group = "junit", name = "junit", version.ref = "junit" }
@@ -51,6 +52,7 @@ okhttp = { group = "com.squareup.okhttp3", name = "okhttp", version.ref = "okhtt
 
 # Audio Tagging
 jaudiotagger = { group = "com.github.AdrienPoupa", name = "jaudiotagger", version.ref = "jaudiotagger" }
+androidx-exifinterface = { group = "androidx.exifinterface", name = "exifinterface", version.ref = "exifinterface" }
 
 # Room Database
 androidx-room-runtime = { group = "androidx.room", name = "room-runtime", version.ref = "room" }

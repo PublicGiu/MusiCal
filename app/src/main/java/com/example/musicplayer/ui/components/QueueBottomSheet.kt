@@ -27,6 +27,7 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.res.stringResource
 import com.example.musicplayer.R
 import androidx.compose.material.icons.filled.ArrowUpward
 import androidx.compose.material.icons.filled.AutoAwesome
@@ -131,7 +132,7 @@ fun QueueBottomSheet(
                 )
                 Spacer(modifier = Modifier.width(10.dp))
                 Text(
-                    text = "Coda di riproduzione",
+                    text = stringResource(R.string.queue),
                     style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.Bold)
                 )
             }
@@ -145,7 +146,7 @@ fun QueueBottomSheet(
                 if (currentTrack != null) {
                     item(key = "current_playing_header") {
                         Text(
-                            text = "IN RIPRODUZIONE",
+                            text = stringResource(R.string.queue_header_now_playing),
                             style = MaterialTheme.typography.labelSmall.copy(
                                 fontWeight = FontWeight.Bold,
                                 letterSpacing = 1.2.sp
@@ -254,12 +255,12 @@ fun QueueBottomSheet(
                             horizontalArrangement = Arrangement.SpaceBetween
                         ) {
                             Text(
-                                text = "In coda (${userQueue.size})",
+                                text = stringResource(R.string.queue_header_user_queue, userQueue.size),
                                 style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
                                 color = MaterialTheme.colorScheme.onSurface
                             )
                             TextButton(onClick = onClearUserQueue) {
-                                Text("Svuota coda", color = MaterialTheme.colorScheme.error)
+                                Text(stringResource(R.string.queue_clear_button), color = MaterialTheme.colorScheme.error)
                             }
                         }
                     }
@@ -293,7 +294,7 @@ fun QueueBottomSheet(
                             )
                             Spacer(modifier = Modifier.width(8.dp))
                             Text(
-                                text = "Riproduzione automatica (${autoplayQueue.size})",
+                                text = stringResource(R.string.queue_header_autoplay, autoplayQueue.size),
                                 style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
                                 color = MaterialTheme.colorScheme.onSurface
                             )

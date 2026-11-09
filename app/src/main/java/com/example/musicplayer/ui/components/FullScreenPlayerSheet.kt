@@ -2,6 +2,7 @@ package com.example.musicplayer.ui.components
 
 import android.graphics.drawable.BitmapDrawable
 import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.Crossfade
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.Spring
@@ -39,12 +40,12 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.res.stringResource
 import com.example.musicplayer.R
 import androidx.compose.material.icons.automirrored.filled.QueueMusic
 import androidx.compose.material.icons.filled.AutoFixHigh
 import androidx.compose.material.icons.filled.Favorite
 import androidx.compose.material.icons.filled.FavoriteBorder
-import androidx.compose.material.icons.filled.GraphicEq
 import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.material.icons.filled.Lyrics
 import androidx.compose.material.icons.filled.MoreVert
@@ -52,7 +53,6 @@ import androidx.compose.material.icons.filled.MusicNote
 import androidx.compose.material.icons.filled.Pause
 import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.PlayArrow
-import androidx.compose.material.icons.filled.QueryStats
 import androidx.compose.material.icons.filled.Repeat
 import androidx.compose.material.icons.filled.RepeatOne
 import androidx.compose.material.icons.filled.Shuffle
@@ -137,7 +137,6 @@ fun FullScreenPlayerSheet(
     onSkipToQueueItem: (Int) -> Unit = {},
     onAlbumClick: (() -> Unit)? = null,
     currentLyrics: LyricsData? = null,
-    onAdjustLyricsOffset: (Long) -> Unit = {},
     onAddToQueueClick: ((AudioTrack) -> Unit)? = null,
     onAddToPlaylistClick: ((AudioTrack) -> Unit)? = null,
     onAddToFavoritesClick: ((AudioTrack) -> Unit)? = null,
@@ -146,9 +145,7 @@ fun FullScreenPlayerSheet(
     playbackContext: PlaybackContext = PlaybackContext.Library,
     onContextClick: (() -> Unit)? = null,
     onArtistClick: ((String) -> Unit)? = null,
-    onOpenSleepTimer: () -> Unit = {},
-    onOpenEqualizer: () -> Unit = {},
-    onOpenStats: () -> Unit = {}
+    onOpenSleepTimer: () -> Unit = {}
 ) {
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
     val context = LocalContext.current
@@ -321,17 +318,17 @@ fun FullScreenPlayerSheet(
                 IconButton(onClick = onDismissRequest) {
                     Icon(
                         imageVector = Icons.Default.KeyboardArrowDown,
-                        contentDescription = "Riduci player a schermo intero",
+                        contentDescription = stringResource(R.string.player_collapse_desc),
                         modifier = Modifier.size(32.dp),
                         tint = Color.White
                     )
                 }
 
                 val (headerCategory, headerTitle) = when (playbackContext) {
-                    is PlaybackContext.Album -> "IN RIPRODUZIONE DALL'ALBUM" to playbackContext.title
-                    is PlaybackContext.Playlist -> "IN RIPRODUZIONE DALLA PLAYLIST" to playbackContext.name
-                    is PlaybackContext.Artist -> "IN RIPRODUZIONE DALL'ARTISTA" to playbackContext.name
-                    is PlaybackContext.Library -> "IN RIPRODUZIONE DALLA LIBRERIA" to (currentTrack?.album?.takeIf { it.isNotBlank() } ?: "Tutti i brani")
+                    is PlaybackContext.Album -> stringResource(R.string.player_header_from_album) to playbackContext.title
+                    is PlaybackContext.Playlist -> stringResource(R.string.player_header_from_playlist) to playbackContext.name
+                    is PlaybackContext.Artist -> stringResource(R.string.player_header_from_artist) to playbackContext.name
+                    is PlaybackContext.Library -> stringResource(R.string.player_header_from_library) to (currentTrack?.album?.takeIf { it.isNotBlank() } ?: stringResource(R.string.player_all_tracks))
                 }
                 val canClickHeader = onContextClick != null || onAlbumClick != null
 
@@ -367,7 +364,7 @@ fun FullScreenPlayerSheet(
                     IconButton(onClick = { menuExpanded = true }) {
                         Icon(
                             imageVector = Icons.Default.MoreVert,
-                            contentDescription = "Altre opzioni",
+                            contentDescription = stringResource(R.string.player_more_options),
                             modifier = Modifier.size(28.dp),
                             tint = Color.White
                         )
@@ -380,7 +377,7 @@ fun FullScreenPlayerSheet(
                         if (currentTrack != null) {
                             if (onArtistClick != null && currentTrack.artist.isNotBlank()) {
                                 DropdownMenuItem(
-                                    text = { Text("Visualizza artista") },
+                                    text = { Text(stringResource(R.string.player_menu_view_artist)) },
                                     leadingIcon = {
                                         Icon(
                                             imageVector = Icons.Default.Person,
@@ -396,7 +393,7 @@ fun FullScreenPlayerSheet(
                             }
                             if (onAddToQueueClick != null) {
                                 DropdownMenuItem(
-                                    text = { Text("Aggiungi alla coda") },
+                                    text = { Text(stringResource(R.string.player_menu_add_to_queue)) },
                                     leadingIcon = {
                                         Icon(
                                             painter = painterResource(R.drawable.ic_queue_music_custom),
@@ -413,7 +410,7 @@ fun FullScreenPlayerSheet(
                                 DropdownMenuItem(
                                     text = {
                                         Text(
-                                            text = if (isFavorite) "Aggiunto ai brani preferiti" else "Aggiungi ai brani preferiti"
+                                            text = if (isFavorite) stringResource(R.string.player_menu_added_to_favorites) else stringResource(R.string.player_menu_add_to_favorites)
                                         )
                                     },
                                     leadingIcon = {
@@ -438,7 +435,7 @@ fun FullScreenPlayerSheet(
                             }
                             if (onAddToPlaylistClick != null) {
                                 DropdownMenuItem(
-                                    text = { Text("Aggiungi a playlist") },
+                                    text = { Text(stringResource(R.string.player_menu_add_to_playlist)) },
                                     leadingIcon = {
                                         Icon(Icons.AutoMirrored.Filled.QueueMusic, contentDescription = null)
                                     },
@@ -450,7 +447,7 @@ fun FullScreenPlayerSheet(
                             }
                             if (onAutoTagClick != null) {
                                 DropdownMenuItem(
-                                    text = { Text("Auto-tagga & testi") },
+                                    text = { Text(stringResource(R.string.player_menu_auto_tag)) },
                                     leadingIcon = {
                                         Icon(
                                             imageVector = Icons.Default.AutoFixHigh,
@@ -466,21 +463,7 @@ fun FullScreenPlayerSheet(
                             }
                         }
                         DropdownMenuItem(
-                            text = { Text("Equalizzatore audio") },
-                            leadingIcon = {
-                                Icon(
-                                    imageVector = Icons.Default.GraphicEq,
-                                    contentDescription = null,
-                                    tint = MaterialTheme.colorScheme.primary
-                                )
-                            },
-                            onClick = {
-                                menuExpanded = false
-                                onOpenEqualizer()
-                            }
-                        )
-                        DropdownMenuItem(
-                            text = { Text("Timer di spegnimento") },
+                            text = { Text(stringResource(R.string.player_menu_sleep_timer)) },
                             leadingIcon = {
                                 Icon(
                                     imageVector = Icons.Default.Timer,
@@ -493,42 +476,28 @@ fun FullScreenPlayerSheet(
                                 onOpenSleepTimer()
                             }
                         )
-                        DropdownMenuItem(
-                            text = { Text("Statistiche d'ascolto") },
-                            leadingIcon = {
-                                Icon(
-                                    imageVector = Icons.Default.QueryStats,
-                                    contentDescription = null,
-                                    tint = MaterialTheme.colorScheme.primary
-                                )
-                            },
-                            onClick = {
-                                menuExpanded = false
-                                onOpenStats()
-                            }
-                        )
                     }
                 }
             }
 
             Spacer(modifier = Modifier.weight(0.8f))
 
-            if (isLyricsViewActive) {
-                Box(
-                    modifier = Modifier
-                        .fillMaxWidth(0.92f)
-                        .aspectRatio(1f)
-                        .clip(RoundedCornerShape(24.dp))
-                        .background(Color.Black.copy(alpha = 0.35f))
-                ) {
+            Crossfade(
+                targetState = isLyricsViewActive,
+                animationSpec = tween(durationMillis = 220),
+                label = "lyricsCoverCrossfade"
+            ) { showLyrics ->
+                if (showLyrics) {
                     SyncedLyricsView(
                         lyricsData = currentLyrics,
                         currentPositionMs = currentPositionProvider(),
                         onSeekTo = onSeekTo,
-                        onAdjustOffset = onAdjustLyricsOffset
+                        isInstrumental = currentLyrics?.isInstrumental == true || currentTrack?.isInstrumental() == true,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .aspectRatio(1f)
                     )
-                }
-            } else {
+                } else {
                 // 2. Copertina grande con HorizontalPager (finger-following fluido, animazione a molla e sincronizzazione reattiva)
                 HorizontalPager(
                     state = pagerState,
@@ -586,6 +555,7 @@ fun FullScreenPlayerSheet(
                         }
                     }
                 }
+            }
             }
 
             Spacer(modifier = Modifier.weight(1f))

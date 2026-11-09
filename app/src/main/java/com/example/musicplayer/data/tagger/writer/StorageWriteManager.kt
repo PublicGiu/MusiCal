@@ -8,8 +8,8 @@ import android.graphics.Bitmap
 import android.graphics.BitmapFactory
 import android.media.MediaScannerConnection
 import android.net.Uri
-import android.os.Build
 import android.provider.MediaStore
+import androidx.exifinterface.media.ExifInterface
 import com.example.musicplayer.data.AudioTrack
 import com.example.musicplayer.data.tagger.model.EnrichedMetadata
 import com.example.musicplayer.data.tagger.repository.EnricherOptions
@@ -104,6 +104,8 @@ class StorageWriteManager(private val context: Context) {
             // 2. Salvataggio locale del file .lrc sincronizzato nella memoria privata dell'app
             if (!metadata.syncedLyrics.isNullOrBlank()) {
                 saveLyricsLocally(track.id, metadata.syncedLyrics)
+            } else if (metadata.isInstrumental) {
+                saveLyricsLocally(track.id, "[instrumental:true]\n")
             }
 
             // 3. Aggiornamento esplicito delle colonne nel database MediaStore
@@ -199,32 +201,32 @@ fun loadResizedJpegBytesFromUri(context: Context, uri: Uri, maxDimension: Int = 
     return try {
         val orientation = try {
             context.contentResolver.openInputStream(uri)?.use { s ->
-                val exif = android.media.ExifInterface(s)
+                val exif = ExifInterface(s)
                 exif.getAttributeInt(
-                    android.media.ExifInterface.TAG_ORIENTATION,
-                    android.media.ExifInterface.ORIENTATION_NORMAL
+                    ExifInterface.TAG_ORIENTATION,
+                    ExifInterface.ORIENTATION_NORMAL
                 )
-            } ?: android.media.ExifInterface.ORIENTATION_NORMAL
+            } ?: ExifInterface.ORIENTATION_NORMAL
         } catch (_: Exception) {
-            android.media.ExifInterface.ORIENTATION_NORMAL
+            ExifInterface.ORIENTATION_NORMAL
         }
 
         context.contentResolver.openInputStream(uri)?.use { stream ->
             val original = BitmapFactory.decodeStream(stream) ?: return null
             val rotated = when (orientation) {
-                android.media.ExifInterface.ORIENTATION_ROTATE_90 -> {
+                ExifInterface.ORIENTATION_ROTATE_90 -> {
                     val m = android.graphics.Matrix().apply { postRotate(90f) }
                     Bitmap.createBitmap(original, 0, 0, original.width, original.height, m, true).also {
                         if (it != original) original.recycle()
                     }
                 }
-                android.media.ExifInterface.ORIENTATION_ROTATE_180 -> {
+                ExifInterface.ORIENTATION_ROTATE_180 -> {
                     val m = android.graphics.Matrix().apply { postRotate(180f) }
                     Bitmap.createBitmap(original, 0, 0, original.width, original.height, m, true).also {
                         if (it != original) original.recycle()
                     }
                 }
-                android.media.ExifInterface.ORIENTATION_ROTATE_270 -> {
+                ExifInterface.ORIENTATION_ROTATE_270 -> {
                     val m = android.graphics.Matrix().apply { postRotate(270f) }
                     Bitmap.createBitmap(original, 0, 0, original.width, original.height, m, true).also {
                         if (it != original) original.recycle()

@@ -196,7 +196,7 @@ fun AlbumDetailView(
             ) {
                 Icon(
                     imageVector = Icons.AutoMirrored.Filled.ArrowBack,
-                    contentDescription = "Torna agli album"
+                    contentDescription = stringResource(R.string.back_to_albums)
                 )
             }
 
@@ -754,7 +754,7 @@ internal fun SwipeToQueueTrackItem(
             ) {
                 Icon(
                     painter = painterResource(R.drawable.ic_queue_music_custom),
-                    contentDescription = "Aggiungi alla coda",
+                    contentDescription = stringResource(R.string.player_menu_add_to_queue),
                     tint = iconTint,
                     modifier = Modifier
                         .size(24.dp)

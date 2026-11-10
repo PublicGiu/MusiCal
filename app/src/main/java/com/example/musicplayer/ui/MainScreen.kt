@@ -356,7 +356,7 @@ fun MainScreen(
         viewModel.onDeletePermissionResult(success) { count ->
             coroutineScope.launch {
                 snackbarHostState.showSnackbar(
-                    message = if (count == 1) "1 file duplicato eliminato dallo storage" else "$count file duplicati eliminati dallo storage",
+                    message = if (count == 1) context.getString(R.string.duplicates_deleted_single) else context.getString(R.string.duplicates_deleted_multiple, count),
                     duration = SnackbarDuration.Short
                 )
             }
@@ -390,7 +390,7 @@ fun MainScreen(
             viewModel.updatePlaylistCover(targetPlaylist.id, uri)
             coroutineScope.launch {
                 snackbarHostState.showSnackbar(
-                    message = "Copertina aggiornata per \"${targetPlaylist.name}\"",
+                    message = context.getString(R.string.snackbar_cover_updated, targetPlaylist.name),
                     duration = SnackbarDuration.Short
                 )
             }
@@ -408,13 +408,13 @@ fun MainScreen(
         }
     }
 
-    val handleRemovePlaylistCover: (Playlist) -> Unit = remember(viewModel, coroutineScope, snackbarHostState) {
+    val handleRemovePlaylistCover: (Playlist) -> Unit = remember(viewModel, coroutineScope, snackbarHostState, context) {
         { playlist ->
             if (!playlist.isFavorites) {
                 viewModel.updatePlaylistCover(playlist.id, null)
                 coroutineScope.launch {
                     snackbarHostState.showSnackbar(
-                        message = "Copertina rimossa da \"${playlist.name}\"",
+                        message = context.getString(R.string.snackbar_cover_removed, playlist.name),
                         duration = SnackbarDuration.Short
                     )
                 }
@@ -422,49 +422,49 @@ fun MainScreen(
         }
     }
 
-    val handleAddTrackToQueue: (AudioTrack) -> Unit = remember(viewModel, coroutineScope, snackbarHostState) {
+    val handleAddTrackToQueue: (AudioTrack) -> Unit = remember(viewModel, coroutineScope, snackbarHostState, context) {
         { track ->
             viewModel.addToQueue(track)
             coroutineScope.launch {
                 snackbarHostState.showSnackbar(
-                    message = "\"${track.title}\" aggiunto come successivo",
+                    message = context.getString(R.string.snackbar_track_added_next, track.title),
                     duration = SnackbarDuration.Short
                 )
             }
         }
     }
 
-    val handleAddAlbumToQueue: (Album) -> Unit = remember(viewModel, coroutineScope, snackbarHostState) {
+    val handleAddAlbumToQueue: (Album) -> Unit = remember(viewModel, coroutineScope, snackbarHostState, context) {
         { album ->
             viewModel.addAlbumToQueue(album)
             coroutineScope.launch {
                 snackbarHostState.showSnackbar(
-                    message = "Album \"${album.title}\" (${album.trackCount} brani) aggiunto come successivo",
+                    message = context.getString(R.string.snackbar_album_added_next, album.title, album.trackCount),
                     duration = SnackbarDuration.Short
                 )
             }
         }
     }
 
-    val handleAddPlaylistToQueue: (Playlist) -> Unit = remember(viewModel, coroutineScope, snackbarHostState) {
+    val handleAddPlaylistToQueue: (Playlist) -> Unit = remember(viewModel, coroutineScope, snackbarHostState, context) {
         { playlist ->
             viewModel.addPlaylistToQueue(playlist)
             coroutineScope.launch {
                 snackbarHostState.showSnackbar(
-                    message = "Playlist \"${playlist.name}\" (${playlist.trackCount} brani) aggiunta come successiva",
+                    message = context.getString(R.string.snackbar_playlist_added_next, playlist.name, playlist.trackCount),
                     duration = SnackbarDuration.Short
                 )
             }
         }
     }
 
-    val handleAddToFavorites: (AudioTrack) -> Unit = remember(viewModel, coroutineScope, snackbarHostState, favoriteTrackIds) {
+    val handleAddToFavorites: (AudioTrack) -> Unit = remember(viewModel, coroutineScope, snackbarHostState, favoriteTrackIds, context) {
         { track ->
             if (track.id in favoriteTrackIds) {
                 viewModel.removeTrackFromPlaylist(Playlist.FAVORITES_PLAYLIST_ID, track.id)
                 coroutineScope.launch {
                     snackbarHostState.showSnackbar(
-                        message = "\"${track.title}\" rimosso dai preferiti",
+                        message = context.getString(R.string.snackbar_removed_from_favorites, track.title),
                         duration = SnackbarDuration.Short
                     )
                 }
@@ -472,7 +472,7 @@ fun MainScreen(
                 viewModel.addTrackToPlaylist(Playlist.FAVORITES_PLAYLIST_ID, track.id)
                 coroutineScope.launch {
                     snackbarHostState.showSnackbar(
-                        message = "\"${track.title}\" aggiunto ai preferiti",
+                        message = context.getString(R.string.snackbar_added_to_favorites, track.title),
                         duration = SnackbarDuration.Short
                     )
                 }
@@ -768,7 +768,7 @@ fun MainScreen(
                                                 viewModel.loadPlaylists()
                                                 coroutineScope.launch {
                                                     snackbarHostState.showSnackbar(
-                                                        message = "Aggiornamento libreria in corso...",
+                                                        message = context.getString(R.string.updating_library_message),
                                                         duration = SnackbarDuration.Short
                                                     )
                                                 }
@@ -792,7 +792,7 @@ fun MainScreen(
                                 }
                                 if (hasPermissions && tracks.isNotEmpty()) {
                                     Text(
-                                        text = "${tracks.size} brani in libreria",
+                                        text = stringResource(R.string.library_tracks_count, tracks.size),
                                         style = MaterialTheme.typography.bodySmall,
                                         color = MaterialTheme.colorScheme.onSurfaceVariant
                                     )
@@ -1390,7 +1390,7 @@ fun MainScreen(
                                                             ) {
                                                                 Icon(
                                                                     imageVector = Icons.Default.ArrowUpward,
-                                                                    contentDescription = "Torna in alto",
+                                                                    contentDescription = stringResource(R.string.scroll_to_top),
                                                                     tint = MaterialTheme.colorScheme.primary,
                                                                     modifier = Modifier.size(24.dp)
                                                                 )
@@ -1463,13 +1463,13 @@ fun MainScreen(
                                                     onIgnoreDuplicates = { groups ->
                                                         viewModel.ignoreDuplicateGroups(groups)
                                                         coroutineScope.launch {
-                                                            snackbarHostState.showSnackbar("Brani duplicati ignorati")
+                                                            snackbarHostState.showSnackbar(context.getString(R.string.duplicates_snackbar_ignored))
                                                         }
                                                     },
                                                     onRestoreIgnoredDuplicates = {
                                                         viewModel.restoreIgnoredDuplicatesForAlbum(currentAlbum)
                                                         coroutineScope.launch {
-                                                            snackbarHostState.showSnackbar("Rilevamento duplicati ripristinato")
+                                                            snackbarHostState.showSnackbar(context.getString(R.string.duplicates_snackbar_restored))
                                                         }
                                                     }
                                                 )
@@ -1498,7 +1498,7 @@ fun MainScreen(
                     viewModel.addTrackToPlaylist(playlist.id, track.id)
                     coroutineScope.launch {
                         snackbarHostState.showSnackbar(
-                            message = "\"${track.title}\" aggiunto a \"${playlist.name}\"",
+                            message = context.getString(R.string.snackbar_track_added_to_playlist, track.title, playlist.name),
                             duration = SnackbarDuration.Short
                         )
                     }
@@ -1621,7 +1621,7 @@ private fun PermissionRequestView(
             )
             Spacer(modifier = Modifier.height(16.dp))
             Text(
-                text = "Permessi Richiesti",
+                text = stringResource(R.string.permissions_required_title),
                 style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
@@ -1667,7 +1667,7 @@ private fun EmptyTracksView(
         )
         Spacer(modifier = Modifier.height(16.dp))
         Button(onClick = onRefreshClicked) {
-            Text(text = "Riprova")
+            Text(text = stringResource(R.string.retry))
         }
     }
 }

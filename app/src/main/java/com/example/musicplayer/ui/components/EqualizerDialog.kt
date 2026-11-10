@@ -34,6 +34,8 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.res.stringResource
+import com.example.musicplayer.R
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.example.musicplayer.playback.EqualizerManager
 
@@ -61,7 +63,7 @@ fun EqualizerDialog(
                     )
                     Spacer(modifier = Modifier.width(10.dp))
                     Text(
-                        text = "Equalizzatore",
+                        text = stringResource(R.string.equalizer),
                         style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.Bold)
                     )
                 }
@@ -84,7 +86,7 @@ fun EqualizerDialog(
             ) {
                 if (!eqState.isAvailable) {
                     Text(
-                        text = "L'equalizzatore audio hardware non è supportato su questo dispositivo.",
+                        text = stringResource(R.string.equalizer_not_supported),
                         style = MaterialTheme.typography.bodyMedium,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                         modifier = Modifier.padding(vertical = 12.dp)
@@ -93,7 +95,7 @@ fun EqualizerDialog(
                     // Presets
                     if (eqState.presets.isNotEmpty()) {
                         Text(
-                            text = "PRESET AUDIO",
+                            text = stringResource(R.string.equalizer_presets_header),
                             style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold),
                             color = MaterialTheme.colorScheme.primary,
                             modifier = Modifier.padding(top = 4.dp, bottom = 4.dp)
@@ -125,7 +127,7 @@ fun EqualizerDialog(
 
                     // Bande di frequenza
                     Text(
-                        text = "BANDE DI FREQUENZA",
+                        text = stringResource(R.string.equalizer_bands_header),
                         style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold),
                         color = MaterialTheme.colorScheme.primary,
                         modifier = Modifier.padding(bottom = 4.dp)
@@ -182,7 +184,7 @@ fun EqualizerDialog(
                     if (eqState.isBassBoostSupported) {
                         Spacer(modifier = Modifier.height(14.dp))
                         Text(
-                            text = "BASS BOOST",
+                            text = stringResource(R.string.equalizer_bass_boost_header),
                             style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold),
                             color = MaterialTheme.colorScheme.primary,
                             modifier = Modifier.padding(bottom = 2.dp)
@@ -219,7 +221,7 @@ fun EqualizerDialog(
                     if (eqState.isVirtualizerSupported) {
                         Spacer(modifier = Modifier.height(8.dp))
                         Text(
-                            text = "AUDIO SURROUND (VIRTUALIZZATORE)",
+                            text = stringResource(R.string.equalizer_virtualizer_header),
                             style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold),
                             color = MaterialTheme.colorScheme.primary,
                             modifier = Modifier.padding(bottom = 2.dp)
@@ -256,7 +258,7 @@ fun EqualizerDialog(
         },
         confirmButton = {
             TextButton(onClick = onDismiss) {
-                Text("Chiudi")
+                Text(stringResource(R.string.close))
             }
         },
         dismissButton = {
@@ -270,7 +272,7 @@ fun EqualizerDialog(
                         contentDescription = null,
                         modifier = Modifier.padding(end = 4.dp)
                     )
-                    Text("Reimposta")
+                    Text(stringResource(R.string.reset))
                 }
             }
         },

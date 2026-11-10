@@ -88,6 +88,8 @@ import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.layout.layout
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.res.stringResource
+import com.example.musicplayer.R
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
@@ -97,7 +99,6 @@ import androidx.compose.ui.unit.lerp
 import coil.compose.AsyncImage
 import coil.request.ImageRequest
 import coil.size.Precision
-import com.example.musicplayer.R
 import com.example.musicplayer.data.AudioTrack
 import com.example.musicplayer.data.Playlist
 
@@ -122,7 +123,7 @@ private fun CustomPlaylistCoverOrFallback(
         }
         AsyncImage(
             model = imageRequest,
-            contentDescription = "Copertina ${playlist.name}",
+            contentDescription = stringResource(R.string.cover_content_desc, playlist.name),
             contentScale = ContentScale.Crop,
             modifier = Modifier.fillMaxSize(),
             onError = { isImageError = true }
@@ -160,7 +161,7 @@ fun PlaylistsView(
                         tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f)
                     )
                     Text(
-                        text = "Nessuna playlist creata",
+                        text = stringResource(R.string.no_playlists_created),
                         style = MaterialTheme.typography.titleMedium,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
@@ -168,7 +169,7 @@ fun PlaylistsView(
                     Button(onClick = onCreatePlaylistClick) {
                         Icon(Icons.Default.Add, contentDescription = null)
                         Spacer(modifier = Modifier.width(6.dp))
-                        Text("Crea la tua prima playlist")
+                        Text(stringResource(R.string.create_first_playlist))
                     }
                 }
             }
@@ -210,7 +211,7 @@ fun PlaylistsView(
             containerColor = MaterialTheme.colorScheme.primary,
             contentColor = MaterialTheme.colorScheme.onPrimary
         ) {
-            Icon(Icons.Default.Add, contentDescription = "Nuova playlist")
+            Icon(Icons.Default.Add, contentDescription = stringResource(R.string.new_playlist))
         }
     }
 }
@@ -251,7 +252,7 @@ fun PlaylistItem(
                 if (playlist.isFavorites) {
                     Image(
                         painter = painterResource(R.drawable.cover_favorites),
-                        contentDescription = "Copertina ${playlist.name}",
+                        contentDescription = stringResource(R.string.cover_content_desc, playlist.name),
                         contentScale = ContentScale.Crop,
                         modifier = Modifier.fillMaxSize()
                     )
@@ -274,14 +275,14 @@ fun PlaylistItem(
 
             Column(modifier = Modifier.weight(1f)) {
                 Text(
-                    text = playlist.name,
+                    text = if (playlist.isFavorites) stringResource(R.string.playlist_favorites_title) else playlist.name,
                     style = MaterialTheme.typography.bodyLarge.copy(fontWeight = FontWeight.Bold),
                     color = MaterialTheme.colorScheme.onSurface,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis
                 )
                 Text(
-                    text = "${playlist.trackCount} ${if (playlist.trackCount == 1) "brano" else "brani"}",
+                    text = if (playlist.trackCount == 1) stringResource(R.string.album_songs_count_single) else stringResource(R.string.album_songs_count_multiple, playlist.trackCount),
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
@@ -291,10 +292,11 @@ fun PlaylistItem(
             val showMenu = !playlist.isFavorites || onAddToQueueClick != null
             if (showMenu) {
                 Box {
+                    val displayName = if (playlist.isFavorites) stringResource(R.string.playlist_favorites_title) else playlist.name
                     IconButton(onClick = { menuExpanded = true }) {
                         Icon(
                             imageVector = Icons.Default.MoreVert,
-                            contentDescription = "Altre opzioni per ${playlist.name}",
+                            contentDescription = stringResource(R.string.options_for_item, displayName),
                             tint = MaterialTheme.colorScheme.onSurfaceVariant
                         )
                     }
@@ -304,7 +306,7 @@ fun PlaylistItem(
                     ) {
                         if (onAddToQueueClick != null) {
                             DropdownMenuItem(
-                                text = { Text("Aggiungi alla coda") },
+                                text = { Text(stringResource(R.string.player_menu_add_to_queue)) },
                                 leadingIcon = {
                                     Icon(
                                         painter = painterResource(R.drawable.ic_queue_music_custom),
@@ -320,7 +322,7 @@ fun PlaylistItem(
                         if (!playlist.isFavorites && onChangeCoverClick != null) {
                             DropdownMenuItem(
                                 text = {
-                                    Text(if (playlist.effectiveCoverUri != null) "Cambia copertina" else "Imposta copertina")
+                                    Text(if (playlist.effectiveCoverUri != null) stringResource(R.string.change_cover) else stringResource(R.string.set_cover))
                                 },
                                 leadingIcon = {
                                     Icon(
@@ -336,7 +338,7 @@ fun PlaylistItem(
                         }
                         if (!playlist.isFavorites && playlist.effectiveCoverUri != null && onRemoveCoverClick != null) {
                             DropdownMenuItem(
-                                text = { Text("Rimuovi copertina") },
+                                text = { Text(stringResource(R.string.remove_cover)) },
                                 leadingIcon = {
                                     Icon(
                                         imageVector = Icons.Default.DeleteOutline,
@@ -353,7 +355,7 @@ fun PlaylistItem(
                             DropdownMenuItem(
                                 text = {
                                     Text(
-                                        text = "Elimina playlist",
+                                        text = stringResource(R.string.delete_playlist_action),
                                         color = MaterialTheme.colorScheme.error
                                     )
                                 },
@@ -458,7 +460,7 @@ fun PlaylistDetailView(
             ) {
                 Icon(
                     imageVector = Icons.AutoMirrored.Filled.ArrowBack,
-                    contentDescription = "Torna alle playlist"
+                    contentDescription = stringResource(R.string.back_to_playlists)
                 )
             }
 
@@ -488,7 +490,7 @@ fun PlaylistDetailView(
                 if (playlist.isFavorites) {
                     Image(
                         painter = painterResource(R.drawable.cover_favorites),
-                        contentDescription = "Copertina ${playlist.name}",
+                        contentDescription = stringResource(R.string.playlist_favorites_title),
                         contentScale = ContentScale.Crop,
                         modifier = Modifier.fillMaxSize()
                     )
@@ -516,8 +518,9 @@ fun PlaylistDetailView(
                     .padding(end = 8.dp),
                 verticalArrangement = Arrangement.Center
             ) {
+                val displayName = if (playlist.isFavorites) stringResource(R.string.playlist_favorites_title) else playlist.name
                 Text(
-                    text = playlist.name,
+                    text = displayName,
                     style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
                     color = MaterialTheme.colorScheme.onSurface,
                     maxLines = 1,
@@ -527,7 +530,7 @@ fun PlaylistDetailView(
                         .basicMarquee()
                 )
                 Text(
-                    text = "${playlistTracks.size} ${if (playlistTracks.size == 1) "brano" else "brani"}",
+                    text = if (playlistTracks.size == 1) stringResource(R.string.album_songs_count_single) else stringResource(R.string.album_songs_count_multiple, playlistTracks.size),
                     style = MaterialTheme.typography.labelSmall,
                     color = MaterialTheme.colorScheme.primary,
                     maxLines = 1
@@ -565,7 +568,7 @@ fun PlaylistDetailView(
                 ) { playing ->
                     Icon(
                         imageVector = if (playing) Icons.Default.Pause else Icons.Default.PlayArrow,
-                        contentDescription = if (playing) "Pausa" else "Riproduci",
+                        contentDescription = if (playing) stringResource(R.string.pause) else stringResource(R.string.play),
                         modifier = Modifier.size(26.dp)
                     )
                 }
@@ -577,6 +580,7 @@ fun PlaylistDetailView(
             val showHeaderMenu = onAddPlaylistToQueueClick != null || (!playlist.isFavorites && onChangeCoverClick != null)
             if (showHeaderMenu) {
                 var menuExpanded by remember { mutableStateOf(false) }
+                val headerDisplayName = if (playlist.isFavorites) stringResource(R.string.playlist_favorites_title) else playlist.name
                 Box {
                     IconButton(
                         onClick = { menuExpanded = true },
@@ -584,7 +588,7 @@ fun PlaylistDetailView(
                     ) {
                         Icon(
                             imageVector = Icons.Default.MoreVert,
-                            contentDescription = "Altre opzioni per ${playlist.name}"
+                            contentDescription = stringResource(R.string.options_for_item, headerDisplayName)
                         )
                     }
                     DropdownMenu(
@@ -593,7 +597,7 @@ fun PlaylistDetailView(
                     ) {
                         if (onAddPlaylistToQueueClick != null) {
                             DropdownMenuItem(
-                                text = { Text("Aggiungi alla coda") },
+                                text = { Text(stringResource(R.string.player_menu_add_to_queue)) },
                                 leadingIcon = {
                                     Icon(
                                         painter = painterResource(R.drawable.ic_queue_music_custom),
@@ -609,7 +613,7 @@ fun PlaylistDetailView(
                         if (!playlist.isFavorites && onChangeCoverClick != null) {
                             DropdownMenuItem(
                                 text = {
-                                    Text(if (playlist.effectiveCoverUri != null) "Cambia copertina" else "Imposta copertina")
+                                    Text(if (playlist.effectiveCoverUri != null) stringResource(R.string.change_cover) else stringResource(R.string.set_cover))
                                 },
                                 leadingIcon = {
                                     Icon(
@@ -625,7 +629,7 @@ fun PlaylistDetailView(
                         }
                         if (!playlist.isFavorites && playlist.effectiveCoverUri != null && onRemoveCoverClick != null) {
                             DropdownMenuItem(
-                                text = { Text("Rimuovi copertina") },
+                                text = { Text(stringResource(R.string.remove_cover)) },
                                 leadingIcon = {
                                     Icon(
                                         imageVector = Icons.Default.DeleteOutline,
@@ -671,9 +675,9 @@ fun PlaylistDetailView(
                     )
                     Text(
                         text = if (playlist.isFavorites) {
-                            "Nessun brano preferito"
+                            stringResource(R.string.empty_favorites_title)
                         } else {
-                            "Questa playlist è vuota"
+                            stringResource(R.string.empty_playlist_title)
                         },
                         style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.SemiBold),
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
@@ -682,9 +686,9 @@ fun PlaylistDetailView(
                     Spacer(modifier = Modifier.height(6.dp))
                     Text(
                         text = if (playlist.isFavorites) {
-                            "Tocca i tre puntini (⋮) accanto a un brano per aggiungerlo ai tuoi brani preferiti."
+                            stringResource(R.string.empty_favorites_desc)
                         } else {
-                            "Aggiungi i tuoi brani toccando il pulsante + del player o i tre puntini (⋮) accanto a una canzone."
+                            stringResource(R.string.empty_playlist_desc)
                         },
                         style = MaterialTheme.typography.bodyMedium,
                         color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.8f),
@@ -788,7 +792,7 @@ fun PlaylistDetailView(
                             ) {
                                 Icon(
                                     imageVector = Icons.Default.DragHandle,
-                                    contentDescription = "Trascina per riordinare",
+                                    contentDescription = stringResource(R.string.drag_to_reorder),
                                     tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f),
                                     modifier = Modifier.size(20.dp)
                                 )
@@ -864,7 +868,7 @@ fun CreatePlaylistDialog(
 
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text("Nuova Playlist") },
+        title = { Text(stringResource(R.string.new_playlist)) },
         text = {
             Column(
                 modifier = Modifier.fillMaxWidth(),
@@ -885,7 +889,7 @@ fun CreatePlaylistDialog(
                     if (selectedCoverUri != null) {
                         AsyncImage(
                             model = selectedCoverUri,
-                            contentDescription = "Anteprima copertina playlist",
+                            contentDescription = stringResource(R.string.change_cover),
                             contentScale = ContentScale.Crop,
                             modifier = Modifier.fillMaxSize()
                         )
@@ -896,7 +900,7 @@ fun CreatePlaylistDialog(
                         ) {
                             Icon(
                                 imageVector = Icons.Default.Image,
-                                contentDescription = "Scegli copertina",
+                                contentDescription = stringResource(R.string.set_cover),
                                 tint = MaterialTheme.colorScheme.onPrimaryContainer,
                                 modifier = Modifier.size(32.dp)
                             )
@@ -912,7 +916,7 @@ fun CreatePlaylistDialog(
                     }
                 ) {
                     Text(
-                        text = if (selectedCoverUri != null) "Cambia copertina" else "Aggiungi copertina (opzionale)",
+                        text = if (selectedCoverUri != null) stringResource(R.string.change_cover) else stringResource(R.string.add_cover_optional),
                         style = MaterialTheme.typography.labelMedium
                     )
                 }
@@ -922,7 +926,7 @@ fun CreatePlaylistDialog(
                 OutlinedTextField(
                     value = name,
                     onValueChange = { name = it },
-                    label = { Text("Nome playlist") },
+                    label = { Text(stringResource(R.string.playlist_name_label)) },
                     singleLine = true,
                     modifier = Modifier.fillMaxWidth()
                 )
@@ -937,12 +941,12 @@ fun CreatePlaylistDialog(
                 },
                 enabled = name.isNotBlank()
             ) {
-                Text("Crea")
+                Text(stringResource(R.string.create_playlist_button))
             }
         },
         dismissButton = {
             TextButton(onClick = onDismiss) {
-                Text("Annulla")
+                Text(stringResource(R.string.cancel))
             }
         }
     )
@@ -961,11 +965,11 @@ fun AddToPlaylistDialog(
 ) {
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text("Aggiungi a playlist") },
+        title = { Text(stringResource(R.string.add_to_playlist_dialog_title)) },
         text = {
             Column(modifier = Modifier.fillMaxWidth()) {
                 Text(
-                    text = "Seleziona la playlist per \"${track.title}\":",
+                    text = stringResource(R.string.select_playlist_for_track, track.title),
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
@@ -973,7 +977,7 @@ fun AddToPlaylistDialog(
 
                 if (playlists.isEmpty()) {
                     Text(
-                        text = "Non ci sono playlist disponibili.",
+                        text = stringResource(R.string.no_playlists_available),
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
@@ -1047,13 +1051,13 @@ fun AddToPlaylistDialog(
                                     Spacer(modifier = Modifier.width(12.dp))
                                     Column(modifier = Modifier.weight(1f)) {
                                         Text(
-                                            text = playlist.name,
+                                            text = if (isFav) stringResource(R.string.playlist_favorites_title) else playlist.name,
                                             style = MaterialTheme.typography.bodyMedium.copy(
                                                 fontWeight = if (isFav) FontWeight.Bold else FontWeight.Medium
                                             )
                                         )
                                         Text(
-                                            text = "${playlist.trackCount} ${if (playlist.trackCount == 1) "brano" else "brani"}",
+                                            text = if (playlist.trackCount == 1) stringResource(R.string.album_songs_count_single) else stringResource(R.string.album_songs_count_multiple, playlist.trackCount),
                                             style = MaterialTheme.typography.labelSmall,
                                             color = MaterialTheme.colorScheme.onSurfaceVariant
                                         )
@@ -1077,12 +1081,12 @@ fun AddToPlaylistDialog(
             Button(onClick = onCreateNewPlaylistClick) {
                 Icon(Icons.Default.Add, contentDescription = null, modifier = Modifier.size(16.dp))
                 Spacer(modifier = Modifier.width(4.dp))
-                Text("Nuova Playlist")
+                Text(stringResource(R.string.new_playlist))
             }
         },
         dismissButton = {
             TextButton(onClick = onDismiss) {
-                Text("Chiudi")
+                Text(stringResource(R.string.close))
             }
         }
     )

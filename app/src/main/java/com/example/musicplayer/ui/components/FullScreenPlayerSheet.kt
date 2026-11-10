@@ -326,7 +326,14 @@ fun FullScreenPlayerSheet(
 
                 val (headerCategory, headerTitle) = when (playbackContext) {
                     is PlaybackContext.Album -> stringResource(R.string.player_header_from_album) to playbackContext.title
-                    is PlaybackContext.Playlist -> stringResource(R.string.player_header_from_playlist) to playbackContext.name
+                    is PlaybackContext.Playlist -> {
+                        val playlistDisplayName = if (playbackContext.id == com.example.musicplayer.data.FAVORITES_PLAYLIST_ID || playbackContext.name == com.example.musicplayer.data.FAVORITES_PLAYLIST_NAME) {
+                            stringResource(R.string.playlist_favorites_title)
+                        } else {
+                            playbackContext.name
+                        }
+                        stringResource(R.string.player_header_from_playlist) to playlistDisplayName
+                    }
                     is PlaybackContext.Artist -> stringResource(R.string.player_header_from_artist) to playbackContext.name
                     is PlaybackContext.Library -> stringResource(R.string.player_header_from_library) to (currentTrack?.album?.takeIf { it.isNotBlank() } ?: stringResource(R.string.player_all_tracks))
                 }
@@ -535,7 +542,7 @@ fun FullScreenPlayerSheet(
                         if (coverImageRequest != null && !isImageError) {
                             AsyncImage(
                                 model = coverImageRequest,
-                                contentDescription = "Copertina album ${trackForPage?.title ?: ""}",
+                                contentDescription = stringResource(R.string.album_cover_content_desc, trackForPage?.title ?: ""),
                                 contentScale = ContentScale.Crop,
                                 modifier = Modifier.fillMaxSize(),
                                 onError = { isImageError = true }
@@ -567,7 +574,7 @@ fun FullScreenPlayerSheet(
                     .padding(horizontal = 8.dp)
             ) {
                 Text(
-                    text = currentTrack?.title ?: "Nessun brano in riproduzione",
+                    text = currentTrack?.title ?: stringResource(R.string.no_track_playing),
                     style = MaterialTheme.typography.headlineSmall.copy(fontWeight = FontWeight.Bold),
                     color = Color.White,
                     maxLines = 2,
@@ -575,7 +582,7 @@ fun FullScreenPlayerSheet(
                 )
                 Spacer(modifier = Modifier.height(4.dp))
                 Text(
-                    text = currentTrack?.artist ?: "Artista sconosciuto",
+                    text = currentTrack?.artist ?: stringResource(R.string.unknown_artist),
                     style = MaterialTheme.typography.titleMedium,
                     color = Color.White.copy(alpha = 0.75f),
                     maxLines = 1,
@@ -620,7 +627,7 @@ fun FullScreenPlayerSheet(
                     ) {
                         Icon(
                             imageVector = Icons.Default.Shuffle,
-                            contentDescription = "Shuffle attivo"
+                            contentDescription = stringResource(R.string.shuffle_active)
                         )
                     }
                 } else {
@@ -630,7 +637,7 @@ fun FullScreenPlayerSheet(
                     ) {
                         Icon(
                             imageVector = Icons.Default.Shuffle,
-                            contentDescription = "Attiva shuffle",
+                            contentDescription = stringResource(R.string.enable_shuffle),
                             tint = Color.White.copy(alpha = 0.55f)
                         )
                     }
@@ -644,7 +651,7 @@ fun FullScreenPlayerSheet(
                 ) {
                     Icon(
                         imageVector = Icons.Default.SkipPrevious,
-                        contentDescription = "Brano precedente",
+                        contentDescription = stringResource(R.string.skip_previous),
                         modifier = Modifier.size(36.dp),
                         tint = if (currentTrack != null) Color.White else Color.White.copy(alpha = 0.38f)
                     )
@@ -674,7 +681,7 @@ fun FullScreenPlayerSheet(
                     ) { playing ->
                         Icon(
                             imageVector = if (playing) Icons.Default.Pause else Icons.Default.PlayArrow,
-                            contentDescription = if (playing) "Pausa" else "Riproduci",
+                            contentDescription = if (playing) stringResource(R.string.pause) else stringResource(R.string.play),
                             modifier = Modifier.size(40.dp)
                         )
                     }
@@ -688,7 +695,7 @@ fun FullScreenPlayerSheet(
                 ) {
                     Icon(
                         imageVector = Icons.Default.SkipNext,
-                        contentDescription = "Brano successivo",
+                        contentDescription = stringResource(R.string.skip_next),
                         modifier = Modifier.size(36.dp),
                         tint = if (currentTrack != null) Color.White else Color.White.copy(alpha = 0.38f)
                     )
@@ -710,9 +717,9 @@ fun FullScreenPlayerSheet(
                         Icon(
                             imageVector = repeatIcon,
                             contentDescription = when (repeatMode) {
-                                Player.REPEAT_MODE_ONE -> "Ripeti traccia corrente"
-                                Player.REPEAT_MODE_ALL -> "Ripeti playlist"
-                                else -> "Ripeti"
+                                Player.REPEAT_MODE_ONE -> stringResource(R.string.repeat_track_current)
+                                Player.REPEAT_MODE_ALL -> stringResource(R.string.repeat_playlist)
+                                else -> stringResource(R.string.repeat)
                             }
                         )
                     }
@@ -723,7 +730,7 @@ fun FullScreenPlayerSheet(
                     ) {
                         Icon(
                             imageVector = Icons.Default.Repeat,
-                            contentDescription = "Attiva ripetizione",
+                            contentDescription = stringResource(R.string.enable_repeat),
                             tint = Color.White.copy(alpha = 0.55f)
                         )
                     }
@@ -744,7 +751,7 @@ fun FullScreenPlayerSheet(
                 IconButton(onClick = { isLyricsViewActive = !isLyricsViewActive }) {
                     Icon(
                         imageVector = Icons.Default.Lyrics,
-                        contentDescription = "Testi sincronizzati",
+                        contentDescription = stringResource(R.string.synced_lyrics_desc),
                         modifier = Modifier.size(28.dp),
                         tint = if (isLyricsViewActive) MaterialTheme.colorScheme.primary else Color.White.copy(alpha = 0.85f)
                     )
@@ -754,7 +761,7 @@ fun FullScreenPlayerSheet(
                 IconButton(onClick = onQueueClick) {
                     Icon(
                         painter = painterResource(R.drawable.ic_queue_music_custom),
-                        contentDescription = "Visualizza coda di riproduzione",
+                        contentDescription = stringResource(R.string.view_queue),
                         tint = Color.White
                     )
                 }

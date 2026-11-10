@@ -51,12 +51,14 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.unit.dp
+import com.example.musicplayer.R
 
 /**
  * Dialog per la gestione dell'account Last.fm e lo stato dello Scrobbling.
@@ -116,7 +118,7 @@ fun LastFmDialog(
                     )
                 }
                 Text(
-                    text = "Last.fm Scrobbler",
+                    text = stringResource(R.string.lastfm_dialog_title),
                     style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.Bold)
                 )
             }
@@ -150,7 +152,7 @@ fun LastFmDialog(
                             Spacer(modifier = Modifier.width(12.dp))
                             Column {
                                 Text(
-                                    text = username ?: "Utente Connesso",
+                                    text = username ?: stringResource(R.string.lastfm_default_user),
                                     style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold)
                                 )
                                 Spacer(modifier = Modifier.height(2.dp))
@@ -163,7 +165,7 @@ fun LastFmDialog(
                                     )
                                     Spacer(modifier = Modifier.width(6.dp))
                                     Text(
-                                        text = if (isMissingApiKeys) "In attesa di chiavi API" else "Scrobbling attivo",
+                                        text = if (isMissingApiKeys) stringResource(R.string.lastfm_waiting_api_keys) else stringResource(R.string.lastfm_scrobbling_active),
                                         style = MaterialTheme.typography.bodySmall.copy(
                                             color = if (isMissingApiKeys) Color(0xFFE65100) else Color(0xFF2E7D32),
                                             fontWeight = FontWeight.SemiBold
@@ -175,7 +177,7 @@ fun LastFmDialog(
                     }
 
                     Text(
-                        text = "I brani riprodotti vengono automaticamente registrati sul tuo profilo dopo il 50% della durata o 4 minuti.",
+                        text = stringResource(R.string.lastfm_description),
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
@@ -209,18 +211,18 @@ fun LastFmDialog(
                                     Spacer(modifier = Modifier.width(10.dp))
                                     Column {
                                         Text(
-                                            text = "Cache offline: $pendingCount in attesa",
+                                            text = stringResource(R.string.lastfm_offline_cache_count, pendingCount),
                                             style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold)
                                         )
                                         Text(
-                                            text = "Verranno inviati al ripristino della rete",
+                                            text = stringResource(R.string.lastfm_offline_cache_subtitle),
                                             style = MaterialTheme.typography.bodySmall,
                                             color = MaterialTheme.colorScheme.onSurfaceVariant
                                         )
                                     }
                                 }
                                 TextButton(onClick = onSyncPending) {
-                                    Text("Sincronizza")
+                                    Text(stringResource(R.string.lastfm_sync_action))
                                 }
                             }
                         }
@@ -281,7 +283,7 @@ fun LastFmDialog(
                                 modifier = Modifier.size(16.dp)
                             )
                             Spacer(modifier = Modifier.width(6.dp))
-                            Text("Configura API Key personalizzate")
+                            Text(stringResource(R.string.lastfm_config_custom_keys))
                         }
                     } else {
                         if (isMissingApiKeys) {
@@ -306,7 +308,7 @@ fun LastFmDialog(
                                     )
                                     Spacer(modifier = Modifier.width(8.dp))
                                     Text(
-                                        text = "Chiavi API mancanti in questo APK: inserisci API Key e Shared Secret per riattivare lo scrobbling senza disconnetterti.",
+                                        text = stringResource(R.string.lastfm_missing_keys_warning),
                                         style = MaterialTheme.typography.bodySmall,
                                         color = MaterialTheme.colorScheme.onErrorContainer
                                     )
@@ -314,7 +316,7 @@ fun LastFmDialog(
                             }
                         } else {
                             Text(
-                                text = "Chiavi API Last.fm personalizzate:",
+                                text = stringResource(R.string.lastfm_custom_keys_header),
                                 style = MaterialTheme.typography.labelMedium,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant
                             )
@@ -323,7 +325,7 @@ fun LastFmDialog(
                         OutlinedTextField(
                             value = inputApiKey,
                             onValueChange = { inputApiKey = it },
-                            label = { Text("API Key Last.fm") },
+                            label = { Text(stringResource(R.string.lastfm_api_key_label)) },
                             leadingIcon = {
                                 Icon(Icons.Default.Key, contentDescription = null)
                             },
@@ -335,7 +337,7 @@ fun LastFmDialog(
                         OutlinedTextField(
                             value = inputSharedSecret,
                             onValueChange = { inputSharedSecret = it },
-                            label = { Text("Shared Secret Last.fm") },
+                            label = { Text(stringResource(R.string.lastfm_shared_secret_label)) },
                             leadingIcon = {
                                 Icon(Icons.Default.Lock, contentDescription = null)
                             },
@@ -343,7 +345,7 @@ fun LastFmDialog(
                                 IconButton(onClick = { secretVisible = !secretVisible }) {
                                     Icon(
                                         imageVector = if (secretVisible) Icons.Default.VisibilityOff else Icons.Default.Visibility,
-                                        contentDescription = if (secretVisible) "Nascondi secret" else "Mostra secret"
+                                        contentDescription = if (secretVisible) stringResource(R.string.hide_password) else stringResource(R.string.show_password)
                                     )
                                 }
                             },
@@ -372,13 +374,13 @@ fun LastFmDialog(
                             enabled = inputApiKey.isNotBlank() && inputSharedSecret.isNotBlank(),
                             modifier = Modifier.fillMaxWidth()
                         ) {
-                            Text("Salva chiavi e sincronizza")
+                            Text(stringResource(R.string.lastfm_save_keys_and_sync))
                         }
                     }
                 } else {
                     // Stato Non Connesso - Modulo Login
                     Text(
-                        text = "Accedi con il tuo account Last.fm per registrare automaticamente i tuoi ascolti e mostrare lo stato 'In riproduzione'.",
+                        text = stringResource(R.string.lastfm_login_prompt),
                         style = MaterialTheme.typography.bodyMedium,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
@@ -386,7 +388,7 @@ fun LastFmDialog(
                     OutlinedTextField(
                         value = inputUsername,
                         onValueChange = { inputUsername = it },
-                        label = { Text("Nome utente Last.fm") },
+                        label = { Text(stringResource(R.string.lastfm_username_label)) },
                         leadingIcon = {
                             Icon(Icons.Default.Person, contentDescription = null)
                         },
@@ -399,7 +401,7 @@ fun LastFmDialog(
                     OutlinedTextField(
                         value = inputPassword,
                         onValueChange = { inputPassword = it },
-                        label = { Text("Password") },
+                        label = { Text(stringResource(R.string.lastfm_password_label)) },
                         leadingIcon = {
                             Icon(Icons.Default.Lock, contentDescription = null)
                         },
@@ -407,7 +409,7 @@ fun LastFmDialog(
                             IconButton(onClick = { passwordVisible = !passwordVisible }) {
                                 Icon(
                                     imageVector = if (passwordVisible) Icons.Default.VisibilityOff else Icons.Default.Visibility,
-                                    contentDescription = if (passwordVisible) "Nascondi password" else "Mostra password"
+                                    contentDescription = if (passwordVisible) stringResource(R.string.hide_password) else stringResource(R.string.show_password)
                                 )
                             }
                         },
@@ -444,13 +446,13 @@ fun LastFmDialog(
                                 modifier = Modifier.size(16.dp)
                             )
                             Spacer(modifier = Modifier.width(6.dp))
-                            Text("Configura API Key personalizzate")
+                            Text(stringResource(R.string.lastfm_config_custom_keys))
                         }
                     }
 
                     if (showCustomApiFields) {
                         Text(
-                            text = "Chiavi API Last.fm (creabili gratis su last.fm/api/account/create):",
+                            text = stringResource(R.string.lastfm_custom_keys_desc),
                             style = MaterialTheme.typography.labelMedium,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
@@ -458,7 +460,7 @@ fun LastFmDialog(
                         OutlinedTextField(
                             value = inputApiKey,
                             onValueChange = { inputApiKey = it },
-                            label = { Text("API Key Last.fm") },
+                            label = { Text(stringResource(R.string.lastfm_api_key_label)) },
                             leadingIcon = {
                                 Icon(Icons.Default.Key, contentDescription = null)
                             },
@@ -471,7 +473,7 @@ fun LastFmDialog(
                         OutlinedTextField(
                             value = inputSharedSecret,
                             onValueChange = { inputSharedSecret = it },
-                            label = { Text("Shared Secret Last.fm") },
+                            label = { Text(stringResource(R.string.lastfm_shared_secret_label)) },
                             leadingIcon = {
                                 Icon(Icons.Default.Lock, contentDescription = null)
                             },
@@ -479,7 +481,7 @@ fun LastFmDialog(
                                 IconButton(onClick = { secretVisible = !secretVisible }) {
                                     Icon(
                                         imageVector = if (secretVisible) Icons.Default.VisibilityOff else Icons.Default.Visibility,
-                                        contentDescription = if (secretVisible) "Nascondi secret" else "Mostra secret"
+                                        contentDescription = if (secretVisible) stringResource(R.string.hide_password) else stringResource(R.string.show_password)
                                     )
                                 }
                             },
@@ -541,7 +543,7 @@ fun LastFmDialog(
         confirmButton = {
             if (isLoggedIn) {
                 Button(onClick = onDismiss) {
-                    Text("Chiudi")
+                    Text(stringResource(R.string.close))
                 }
             } else {
                 Button(
@@ -562,7 +564,7 @@ fun LastFmDialog(
                             strokeWidth = 2.dp
                         )
                     } else {
-                        Text("Accedi")
+                        Text(stringResource(R.string.lastfm_sign_in_action))
                     }
                 }
             }
@@ -575,14 +577,14 @@ fun LastFmDialog(
                         contentColor = MaterialTheme.colorScheme.error
                     )
                 ) {
-                    Text("Disconnetti")
+                    Text(stringResource(R.string.lastfm_sign_out_action))
                 }
             } else {
                 TextButton(
                     onClick = onDismiss,
                     enabled = !isLoading
                 ) {
-                    Text("Annulla")
+                    Text(stringResource(R.string.cancel))
                 }
             }
         }

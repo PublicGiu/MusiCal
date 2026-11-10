@@ -27,6 +27,7 @@ import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.MusicNote
 import androidx.compose.material.icons.filled.Person
 import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.res.stringResource
 import com.example.musicplayer.R
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
@@ -66,7 +67,7 @@ fun TrackListItem(
     onAddToFavoritesClick: (() -> Unit)? = null,
     isFavorite: Boolean = false,
     onRemoveClick: (() -> Unit)? = null,
-    removeLabel: String = "Rimuovi da playlist",
+    removeLabel: String? = null,
     playCount: Int = 0,
     onAutoTagClick: ((AudioTrack) -> Unit)? = null,
     onArtistClick: ((String) -> Unit)? = null,
@@ -140,7 +141,7 @@ fun TrackListItem(
                 if (imageRequest != null && !isImageError) {
                     AsyncImage(
                         model = imageRequest,
-                        contentDescription = "Copertina ${track.title}",
+                        contentDescription = stringResource(R.string.cover_content_desc, track.title),
                         contentScale = ContentScale.Crop,
                         modifier = Modifier.fillMaxSize(),
                         onError = { isImageError = true }
@@ -201,8 +202,13 @@ fun TrackListItem(
                         modifier = Modifier.weight(1f, fill = false)
                     )
                     if (playCount > 0) {
+                        val playCountText = if (playCount == 1) {
+                            stringResource(R.string.play_count_single, playCount)
+                        } else {
+                            stringResource(R.string.play_count_multiple, playCount)
+                        }
                         Text(
-                            text = " • $playCount ${if (playCount == 1) "ascolto" else "ascolti"}",
+                            text = " • $playCountText",
                             style = MaterialTheme.typography.labelSmall,
                             color = MaterialTheme.colorScheme.primary
                         )
@@ -228,7 +234,7 @@ fun TrackListItem(
                     ) {
                         Icon(
                             imageVector = Icons.Default.MoreVert,
-                            contentDescription = "Altre opzioni",
+                            contentDescription = stringResource(R.string.player_more_options),
                             tint = MaterialTheme.colorScheme.onSurfaceVariant
                         )
                     }
@@ -239,7 +245,7 @@ fun TrackListItem(
                     ) {
                         if (onArtistClick != null) {
                             DropdownMenuItem(
-                                text = { Text("Visualizza artista") },
+                                text = { Text(stringResource(R.string.player_menu_view_artist)) },
                                 leadingIcon = {
                                     Icon(
                                         imageVector = Icons.Default.Person,
@@ -255,7 +261,7 @@ fun TrackListItem(
                         }
                         if (onAddToQueueClick != null) {
                             DropdownMenuItem(
-                                text = { Text("Aggiungi alla coda") },
+                                text = { Text(stringResource(R.string.player_menu_add_to_queue)) },
                                 leadingIcon = {
                                     Icon(
                                         painter = painterResource(R.drawable.ic_queue_music_custom),
@@ -272,7 +278,11 @@ fun TrackListItem(
                             DropdownMenuItem(
                                 text = {
                                     Text(
-                                        text = if (isFavorite) "Aggiunto ai brani preferiti" else "Aggiungi ai brani preferiti"
+                                        text = if (isFavorite) {
+                                            stringResource(R.string.player_menu_added_to_favorites)
+                                        } else {
+                                            stringResource(R.string.player_menu_add_to_favorites)
+                                        }
                                     )
                                 },
                                 leadingIcon = {
@@ -297,7 +307,7 @@ fun TrackListItem(
                         }
                         if (onAddToPlaylistClick != null) {
                             DropdownMenuItem(
-                                text = { Text("Aggiungi a playlist") },
+                                text = { Text(stringResource(R.string.player_menu_add_to_playlist)) },
                                 leadingIcon = {
                                     Icon(Icons.AutoMirrored.Filled.QueueMusic, contentDescription = null)
                                 },
@@ -309,7 +319,7 @@ fun TrackListItem(
                         }
                         if (onAutoTagClick != null) {
                             DropdownMenuItem(
-                                text = { Text("Auto-tagga & testi") },
+                                text = { Text(stringResource(R.string.player_menu_auto_tag)) },
                                 leadingIcon = {
                                     Icon(
                                         imageVector = Icons.Default.AutoFixHigh,
@@ -325,7 +335,7 @@ fun TrackListItem(
                         }
                         if (onRemoveClick != null) {
                             DropdownMenuItem(
-                                text = { Text(removeLabel) },
+                                text = { Text(removeLabel ?: stringResource(R.string.remove_from_playlist_action)) },
                                 leadingIcon = {
                                     Icon(Icons.Default.DeleteOutline, contentDescription = null)
                                 },

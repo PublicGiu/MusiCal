@@ -40,6 +40,8 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.res.stringResource
+import com.example.musicplayer.R
 import com.example.musicplayer.playback.SleepTimerState
 import kotlin.math.roundToInt
 
@@ -65,7 +67,7 @@ fun SleepTimerDialog(
                 )
                 Spacer(modifier = Modifier.width(10.dp))
                 Text(
-                    text = "Timer di spegnimento",
+                    text = stringResource(R.string.sleep_timer),
                     style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.Bold)
                 )
             }
@@ -91,19 +93,23 @@ fun SleepTimerDialog(
                         ) {
                             Column(modifier = Modifier.padding(14.dp)) {
                                 Text(
-                                    text = if (active.isEndOfTrack) "ATTIVO: ALLA FINE DEL BRANO" else "TIMER IN CORSO",
+                                    text = if (active.isEndOfTrack) {
+                                        stringResource(R.string.sleep_timer_banner_end_of_track)
+                                    } else {
+                                        stringResource(R.string.sleep_timer_banner_timer)
+                                    },
                                     style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold),
                                     color = MaterialTheme.colorScheme.primary
                                 )
                                 Spacer(modifier = Modifier.height(4.dp))
                                 Text(
                                     text = if (active.isEndOfTrack) {
-                                        "La musica si fermerà dolcemente al termine della canzone attuale."
+                                        stringResource(R.string.sleep_timer_end_of_track_desc)
                                     } else {
                                         val totalSeconds = (active.remainingMillis / 1000L).coerceAtLeast(0L)
                                         val min = totalSeconds / 60
                                         val sec = totalSeconds % 60
-                                        "Spegnimento tra %02d:%02d".format(min, sec)
+                                        stringResource(R.string.sleep_timer_stopping_in, min, sec)
                                     },
                                     style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
                                     color = MaterialTheme.colorScheme.onPrimaryContainer
@@ -123,7 +129,7 @@ fun SleepTimerDialog(
                                         modifier = Modifier.size(18.dp)
                                     )
                                     Spacer(modifier = Modifier.width(6.dp))
-                                    Text("Disattiva timer")
+                                    Text(stringResource(R.string.sleep_timer_turn_off))
                                 }
                             }
                         }
@@ -131,7 +137,7 @@ fun SleepTimerDialog(
                 }
 
                 Text(
-                    text = "OPZIONI RAPIDE",
+                    text = stringResource(R.string.sleep_timer_quick_options),
                     style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold),
                     color = MaterialTheme.colorScheme.primary,
                     modifier = Modifier.padding(bottom = 8.dp)
@@ -203,13 +209,13 @@ fun SleepTimerDialog(
                         modifier = Modifier.size(18.dp)
                     )
                     Spacer(modifier = Modifier.width(8.dp))
-                    Text("Al termine del brano corrente")
+                    Text(stringResource(R.string.sleep_timer_at_end_of_track))
                 }
 
                 Spacer(modifier = Modifier.height(18.dp))
 
                 Text(
-                    text = "DURATA PERSONALIZZATA (${customMinutes.roundToInt()} min)",
+                    text = stringResource(R.string.sleep_timer_custom_duration_header, customMinutes.roundToInt()),
                     style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold),
                     color = MaterialTheme.colorScheme.primary,
                     modifier = Modifier.padding(bottom = 2.dp)
@@ -230,12 +236,12 @@ fun SleepTimerDialog(
                     modifier = Modifier.fillMaxWidth(),
                     shape = RoundedCornerShape(10.dp)
                 ) {
-                    Text("Avvia timer (${customMinutes.roundToInt()} min)")
+                    Text(stringResource(R.string.sleep_timer_start_custom, customMinutes.roundToInt()))
                 }
 
                 Spacer(modifier = Modifier.height(8.dp))
                 Text(
-                    text = "La musica effettuerà un fade-out graduale prima di fermarsi.",
+                    text = stringResource(R.string.sleep_timer_fade_note),
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f)
                 )
@@ -243,7 +249,7 @@ fun SleepTimerDialog(
         },
         confirmButton = {
             TextButton(onClick = onDismiss) {
-                Text("Chiudi")
+                Text(stringResource(R.string.close))
             }
         },
         shape = RoundedCornerShape(20.dp)

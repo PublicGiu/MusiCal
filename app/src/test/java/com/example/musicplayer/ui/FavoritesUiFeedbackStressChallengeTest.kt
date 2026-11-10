@@ -220,12 +220,12 @@ class FavoritesUiFeedbackStressChallengeTest {
         val content = playlistsViewFile.readText()
 
         // 1. PlaylistItem must guard "Elimina playlist" with !playlist.isFavorites
-        val guardRegex = Regex("""if\s*\(\s*!playlist\.isFavorites\s*\)\s*\{[\s\S]*?text\s*=\s*\"Elimina playlist\"""")
+        val guardRegex = Regex("""if\s*\(\s*!playlist\.isFavorites\s*\)\s*\{[\s\S]*?text\s*=\s*(?:\"Elimina playlist\"|stringResource\(R\.string\.delete_playlist_action\))""")
         assertTrue("PlaylistItem must guard 'Elimina playlist' with if (!playlist.isFavorites)", guardRegex.containsMatchIn(content))
 
         // 2. PlaylistDetailView must NOT contain "Elimina playlist"
         val detailViewSection = content.substringAfter("fun PlaylistDetailView").substringBefore("fun CreatePlaylistDialog")
-        assertFalse("PlaylistDetailView must not offer 'Elimina playlist' menu option", detailViewSection.contains("Elimina playlist"))
+        assertFalse("PlaylistDetailView must not offer 'Elimina playlist' menu option", detailViewSection.contains("Elimina playlist") || detailViewSection.contains("R.string.delete_playlist_action"))
 
         // 3. PlaylistDetailView must bind cover_favorites when isFavorites
         assertTrue("PlaylistDetailView must reference cover_favorites for header",
@@ -244,7 +244,7 @@ class FavoritesUiFeedbackStressChallengeTest {
         val trackItemFile = File(uiDir, "components/TrackListItem.kt")
         val trackItemContent = trackItemFile.readText()
         assertTrue("TrackListItem must accept onAddToFavoritesClick", trackItemContent.contains("onAddToFavoritesClick: (() -> Unit)? = null"))
-        assertTrue("TrackListItem must display 'Aggiungi ai brani preferiti'", trackItemContent.contains("Aggiungi ai brani preferiti"))
+        assertTrue("TrackListItem must display 'Aggiungi ai brani preferiti'", trackItemContent.contains("Aggiungi ai brani preferiti") || trackItemContent.contains("R.string.player_menu_add_to_favorites"))
         assertTrue("TrackListItem must use FavoriteBorder icon", trackItemContent.contains("Icons.Default.FavoriteBorder"))
 
         // 2. AlbumDetailView.kt must accept and forward onAddToFavoritesClick
@@ -268,7 +268,7 @@ class FavoritesUiFeedbackStressChallengeTest {
         assertTrue("handleAddToFavorites must call addTrackToPlaylist for FAVORITES_PLAYLIST_ID",
             mainScreenContent.contains("viewModel.addTrackToPlaylist(Playlist.FAVORITES_PLAYLIST_ID, track.id)"))
         assertTrue("handleAddToFavorites must trigger Snackbar with aggiunto ai preferiti",
-            mainScreenContent.contains("\\\"${'$'}{track.title}\\\" aggiunto ai preferiti"))
+            mainScreenContent.contains("\\\"${'$'}{track.title}\\\" aggiunto ai preferiti") || mainScreenContent.contains("R.string.snackbar_added_to_favorites"))
 
         // Surface wiring checks:
         assertTrue("MainScreen must wire onAddToFavoritesClick to Songs TrackListItem",
@@ -289,7 +289,7 @@ class FavoritesUiFeedbackStressChallengeTest {
         // 1. MiniPlayer must have + button with Icons.Default.Add
         assertTrue("PlayerBottomBar must contain + button invoking onAddToPlaylistClick",
             bottomBarContent.contains("Icons.Default.Add") &&
-                    bottomBarContent.contains("contentDescription = \"Aggiungi a playlist\"") &&
+                    (bottomBarContent.contains("contentDescription = \"Aggiungi a playlist\"") || bottomBarContent.contains("R.string.player_menu_add_to_playlist")) &&
                     bottomBarContent.contains("onAddToPlaylistClick?.invoke(it)"))
 
         // 2. AddToPlaylistDialog in PlaylistsView.kt

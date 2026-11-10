@@ -7,7 +7,9 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.ui.platform.LocalContext
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.example.musicplayer.R
 import com.example.musicplayer.data.Album
 import com.example.musicplayer.data.AudioTrack
 import com.example.musicplayer.data.PlaybackContext
@@ -68,6 +70,7 @@ fun MainModalsHost(
     snackbarHostState: SnackbarHostState
 ) {
     val coroutineScope = rememberCoroutineScope()
+    val context = LocalContext.current
 
     // Flussi di stato del ViewModel per la riproduzione e le opzioni modali
     val currentTrack by viewModel.currentTrack.collectAsStateWithLifecycle()
@@ -328,7 +331,7 @@ fun MainModalsHost(
                 viewModel.addTracksToQueue(artistTracks)
                 coroutineScope.launch {
                     snackbarHostState.showSnackbar(
-                        message = "${artistTracks.size} brani di $artistName aggiunti alla coda",
+                        message = context.getString(R.string.snackbar_artist_tracks_added_to_queue, artistTracks.size, artistName),
                         duration = SnackbarDuration.Short
                     )
                 }

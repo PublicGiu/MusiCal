@@ -74,6 +74,8 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.lerp
 import androidx.compose.ui.util.lerp
+import androidx.compose.ui.res.stringResource
+import com.example.musicplayer.R
 import coil.compose.AsyncImage
 import coil.request.ImageRequest
 import coil.size.Precision
@@ -369,7 +371,7 @@ private fun PlayerTrackInfoRow(
                 if (imageRequest != null && !isImageError) {
                     AsyncImage(
                         model = imageRequest,
-                        contentDescription = "Copertina ${track?.title ?: ""}",
+                        contentDescription = stringResource(R.string.cover_content_desc, track?.title ?: ""),
                         contentScale = ContentScale.Crop,
                         modifier = Modifier.fillMaxSize(),
                         onError = { isImageError = true }
@@ -431,7 +433,7 @@ private fun PlayerTrackInfoRow(
         ) {
             Icon(
                 imageVector = Icons.Default.Add,
-                contentDescription = "Aggiungi a playlist",
+                contentDescription = stringResource(R.string.player_menu_add_to_playlist),
                 modifier = Modifier.size(24.dp)
             )
         }
@@ -468,7 +470,7 @@ private fun PlayerTrackInfoRow(
             ) { playing ->
                 Icon(
                     imageVector = if (playing) Icons.Default.Pause else Icons.Default.PlayArrow,
-                    contentDescription = if (playing) "Pausa" else "Riproduci",
+                    contentDescription = if (playing) stringResource(R.string.pause) else stringResource(R.string.play),
                     modifier = Modifier.size(28.dp)
                 )
             }

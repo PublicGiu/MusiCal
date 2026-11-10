@@ -17,8 +17,10 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import com.example.musicplayer.R
 import com.example.musicplayer.data.Album
 import com.example.musicplayer.data.AudioTrack
 import com.example.musicplayer.data.Playlist
@@ -64,7 +66,7 @@ fun GlobalSearchResultsView(
                     tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f)
                 )
                 Text(
-                    text = "Nessun risultato per \"$query\"",
+                    text = stringResource(R.string.search_no_results, query),
                     style = MaterialTheme.typography.bodyLarge,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
@@ -79,7 +81,7 @@ fun GlobalSearchResultsView(
             if (matchingTracks.isNotEmpty()) {
                 item {
                     Text(
-                        text = "Brani trovati (${matchingTracks.size})",
+                        text = stringResource(R.string.search_tracks_found, matchingTracks.size),
                         style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
                         color = MaterialTheme.colorScheme.primary,
                         modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)
@@ -107,7 +109,7 @@ fun GlobalSearchResultsView(
                 item {
                     Spacer(modifier = Modifier.height(12.dp))
                     Text(
-                        text = "Album trovati (${matchingAlbums.size})",
+                        text = stringResource(R.string.search_albums_found, matchingAlbums.size),
                         style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
                         color = MaterialTheme.colorScheme.primary,
                         modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)
@@ -128,7 +130,7 @@ fun GlobalSearchResultsView(
                 item {
                     Spacer(modifier = Modifier.height(12.dp))
                     Text(
-                        text = "Playlist trovate (${matchingPlaylists.size})",
+                        text = stringResource(R.string.search_playlists_found, matchingPlaylists.size),
                         style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
                         color = MaterialTheme.colorScheme.primary,
                         modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)

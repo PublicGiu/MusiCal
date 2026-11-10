@@ -21,6 +21,7 @@ import androidx.compose.foundation.lazy.grid.rememberLazyGridState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.res.stringResource
 import com.example.musicplayer.R
 import androidx.compose.material.icons.filled.Album
 import androidx.compose.material.icons.filled.AutoFixHigh
@@ -78,7 +79,7 @@ fun AlbumsGridView(
                     tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f)
                 )
                 Text(
-                    text = "Nessun album trovato",
+                    text = stringResource(R.string.no_albums_found),
                     style = MaterialTheme.typography.bodyLarge,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
@@ -157,7 +158,7 @@ fun AlbumGridItem(
                 if (imageRequest != null && !isImageError) {
                     AsyncImage(
                         model = imageRequest,
-                        contentDescription = "Copertina album ${album.title}",
+                        contentDescription = stringResource(R.string.album_cover_content_desc, album.title),
                         contentScale = ContentScale.Crop,
                         modifier = Modifier.fillMaxSize(),
                         onError = { isImageError = true }
@@ -204,8 +205,13 @@ fun AlbumGridItem(
                     )
 
                     // Conteggio brani
+                    val tracksCountText = if (album.trackCount == 1) {
+                        stringResource(R.string.album_songs_count_single)
+                    } else {
+                        stringResource(R.string.album_songs_count_multiple, album.trackCount)
+                    }
                     Text(
-                        text = "${album.trackCount} ${if (album.trackCount == 1) "brano" else "brani"}",
+                        text = tracksCountText,
                         style = MaterialTheme.typography.labelSmall,
                         color = MaterialTheme.colorScheme.primary,
                         maxLines = 1
@@ -221,7 +227,7 @@ fun AlbumGridItem(
                         ) {
                             Icon(
                                 imageVector = Icons.Default.MoreVert,
-                                contentDescription = "Altre opzioni per ${album.title}",
+                                contentDescription = stringResource(R.string.options_for_item, album.title),
                                 tint = MaterialTheme.colorScheme.onSurfaceVariant
                             )
                         }
@@ -231,7 +237,7 @@ fun AlbumGridItem(
                         ) {
                             if (onAddToQueueClick != null) {
                                 DropdownMenuItem(
-                                    text = { Text("Aggiungi alla coda") },
+                                    text = { Text(stringResource(R.string.player_menu_add_to_queue)) },
                                     leadingIcon = {
                                         Icon(
                                             painter = painterResource(R.drawable.ic_queue_music_custom),
@@ -246,7 +252,7 @@ fun AlbumGridItem(
                             }
                             if (album.isMixedOrGeneric()) {
                                 DropdownMenuItem(
-                                    text = { Text("Separa in album distinti") },
+                                    text = { Text(stringResource(R.string.album_separate_option)) },
                                     leadingIcon = {
                                         Icon(
                                             imageVector = Icons.Default.AutoFixHigh,
@@ -260,7 +266,7 @@ fun AlbumGridItem(
                                     }
                                 )
                                 DropdownMenuItem(
-                                    text = { Text("Uniforma tutto in questo album") },
+                                    text = { Text(stringResource(R.string.album_unify_option)) },
                                     leadingIcon = {
                                         Icon(
                                             imageVector = Icons.Default.MusicNote,
@@ -275,7 +281,7 @@ fun AlbumGridItem(
                                 )
                             } else if (onAutoTagAlbumClick != null) {
                                 DropdownMenuItem(
-                                    text = { Text("Uniforma & auto-tagga album") },
+                                    text = { Text(stringResource(R.string.album_autotag_option)) },
                                     leadingIcon = {
                                         Icon(
                                             imageVector = Icons.Default.AutoFixHigh,

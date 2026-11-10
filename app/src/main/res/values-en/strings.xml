@@ -116,6 +116,8 @@
     <string name="duplicates_restore_menu">Restore ignored duplicates</string>
     <string name="duplicates_snackbar_ignored">Duplicate tracks ignored</string>
     <string name="duplicates_snackbar_restored">Duplicate detection restored</string>
+    <string name="duplicates_deleted_single">1 duplicate file deleted from storage</string>
+    <string name="duplicates_deleted_multiple">%d duplicate files deleted from storage</string>
 
     <!-- Album & Artist Detail -->
     <string name="album_tracks_summary">%1$s • %2$s min</string>
@@ -166,4 +168,239 @@
     <string name="update_dialog_download_now">Download now</string>
     <string name="update_dialog_ignore">Ignore</string>
     <string name="update_dialog_later">Later</string>
+
+    <!-- Additional Common and Generic Actions -->
+    <string name="reset">Reset</string>
+    <string name="retry">Retry</string>
+    <string name="done">Done</string>
+    <string name="edit">Edit</string>
+    <string name="remove">Remove</string>
+    <string name="add_to_queue">Add to queue</string>
+    <string name="play_next">Play next</string>
+    <string name="unknown_artist">Unknown artist</string>
+    <string name="unknown_album">Unknown album</string>
+    <string name="unknown_filename">Unknown file name</string>
+    <string name="no_track_playing">No track playing</string>
+    <string name="play_count_single">%d play</string>
+    <string name="play_count_multiple">%d plays</string>
+    <string name="library_tracks_count">%d songs in library</string>
+    <string name="updating_library_message">Updating library…</string>
+    <string name="permissions_required_title">Permissions Required</string>
+    <string name="options_for_item">More options for %s</string>
+    <string name="drag_to_reorder">Drag to reorder</string>
+    <string name="track_number_display">Track %d</string>
+    <string name="preview_play">Play preview</string>
+
+    <!-- Music Source Descriptions -->
+    <string name="source_mode_intelligent_desc">Automatically filters WhatsApp voice notes, phone recordings and system sounds</string>
+    <string name="source_mode_music_desc">Only files in the Music/ folder and subfolders</string>
+    <string name="source_mode_all_desc">All indexed audio files on device without directory restrictions</string>
+    <string name="source_mode_custom_desc">Only files within manually selected custom folders</string>
+
+    <!-- Artist View -->
+    <string name="artist_view_title">Artist</string>
+    <string name="artist_close_desc">Close artist view</string>
+    <string name="artist_album_count_single">1 album</string>
+    <string name="artist_album_count_multiple">%d albums</string>
+
+    <!-- Album &amp; Related Views -->
+    <string name="no_albums_found">No albums found</string>
+    <string name="back_to_albums">Back to albums</string>
+
+    <!-- Playlist Management -->
+    <string name="no_playlists_created">No playlists created</string>
+    <string name="create_first_playlist">Create your first playlist</string>
+    <string name="new_playlist">New Playlist</string>
+    <string name="playlist_name_label">Playlist name</string>
+    <string name="create_playlist_button">Create</string>
+    <string name="add_to_playlist_dialog_title">Add to playlist</string>
+    <string name="select_playlist_for_track">Select playlist for \"%s\":</string>
+    <string name="no_playlists_available">No playlists available.</string>
+    <string name="change_cover">Change cover</string>
+    <string name="set_cover">Set cover</string>
+    <string name="add_cover_optional">Add cover (optional)</string>
+    <string name="remove_cover">Remove cover</string>
+    <string name="delete_playlist_action">Delete playlist</string>
+    <string name="remove_from_playlist_action">Remove from playlist</string>
+    <string name="back_to_playlists">Back to playlists</string>
+    <string name="empty_favorites_title">No favorite tracks</string>
+    <string name="empty_favorites_desc">Tap the three dots (⋮) next to a song to add it to your favorite tracks.</string>
+    <string name="empty_playlist_title">This playlist is empty</string>
+    <string name="empty_playlist_desc">Add songs by tapping the player + button or the three dots (⋮) next to a track.</string>
+
+    <!-- Additional Player Controls -->
+    <string name="shuffle_active">Shuffle enabled</string>
+    <string name="enable_shuffle">Enable shuffle</string>
+    <string name="repeat_track_current">Repeat current track</string>
+    <string name="repeat_playlist">Repeat playlist</string>
+    <string name="enable_repeat">Enable repeat</string>
+    <string name="view_queue">View playback queue</string>
+    <string name="synced_lyrics_desc">Synced lyrics</string>
+
+    <!-- Playback Queue -->
+    <string name="queue_upcoming">Next up</string>
+    <string name="queue_empty_autoplay">No upcoming tracks scheduled</string>
+    <string name="queue_move_to_top">Move to top</string>
+    <string name="queue_remove_from_list">Remove from queue</string>
+
+    <!-- Audio Equalizer -->
+    <string name="equalizer_not_supported">Hardware audio equalizer is not supported on this device.</string>
+    <string name="equalizer_presets_header">AUDIO PRESETS</string>
+    <string name="equalizer_bands_header">FREQUENCY BANDS</string>
+    <string name="equalizer_bass_boost_header">BASS BOOST</string>
+    <string name="equalizer_virtualizer_header">SURROUND AUDIO (VIRTUALIZER)</string>
+
+    <!-- Additional Sleep Timer -->
+    <string name="sleep_timer_banner_end_of_track">ACTIVE: AT END OF TRACK</string>
+    <string name="sleep_timer_banner_timer">TIMER RUNNING</string>
+    <string name="sleep_timer_end_of_track_desc">Music will stop gently at the end of the current song.</string>
+    <string name="sleep_timer_stopping_in">Stopping in %1$02d:%2$02d</string>
+    <string name="sleep_timer_turn_off">Turn off timer</string>
+    <string name="sleep_timer_quick_options">QUICK OPTIONS</string>
+    <string name="sleep_timer_custom_duration_header">CUSTOM DURATION (%d min)</string>
+    <string name="sleep_timer_start_custom">Start timer (%d min)</string>
+    <string name="sleep_timer_fade_note">Music will fade out gradually before stopping.</string>
+    <string name="sleep_timer_at_end_of_track">At the end of current track</string>
+
+    <!-- Listening Statistics -->
+    <string name="stats_plays_title">Plays</string>
+    <string name="stats_time_title">Time</string>
+    <string name="stats_unique_tracks_title">Unique songs</string>
+    <string name="stats_top_tracks_title">Most played songs</string>
+    <string name="stats_top_artists_title">Top artists</string>
+    <string name="stats_top_albums_title">Most played albums</string>
+    <string name="stats_empty_message">No listening statistics recorded yet.\nPlay your music to see your favorite songs and artists!</string>
+    <string name="stats_reset_button">Reset statistics</string>
+    <string name="stats_reset_dialog_title">Reset listening statistics</string>
+    <string name="stats_reset_dialog_desc">Are you sure you want to delete all recorded playback statistics? This action cannot be undone.</string>
+    <string name="stats_reset_confirm">Reset</string>
+
+    <!-- Last.fm -->
+    <string name="lastfm_dialog_title">Last.fm Scrobbler</string>
+    <string name="lastfm_section_title">Last.fm Integration</string>
+    <string name="lastfm_connected_as">Connected as: %s</string>
+    <string name="lastfm_default_user">User</string>
+    <string name="lastfm_not_connected">Not connected to Last.fm</string>
+    <string name="lastfm_waiting_api_keys">Awaiting API keys</string>
+    <string name="lastfm_scrobbling_active">Scrobbling active</string>
+    <string name="lastfm_description">Played tracks are automatically scrobbled to your profile after 50% duration or 4 minutes.</string>
+    <string name="lastfm_offline_cache_count">Offline cache: %d pending</string>
+    <string name="lastfm_offline_cache_subtitle">They will be sent when connection is restored</string>
+    <string name="lastfm_sync_action">Sync</string>
+    <string name="lastfm_config_custom_keys">Configure custom API keys</string>
+    <string name="lastfm_missing_keys_warning">API keys missing in this build: enter your API Key and Shared Secret to resume scrobbling without signing out.</string>
+    <string name="lastfm_custom_keys_header">Custom Last.fm API keys:</string>
+    <string name="lastfm_custom_keys_desc">Last.fm API keys (create for free at last.fm/api/account/create):</string>
+    <string name="lastfm_api_key_label">Last.fm API Key</string>
+    <string name="lastfm_shared_secret_label">Last.fm Shared Secret</string>
+    <string name="lastfm_save_keys_and_sync">Save keys and sync</string>
+    <string name="lastfm_login_prompt">Sign in with your Last.fm account to automatically scrobble your music and show \'Now playing\' status.</string>
+    <string name="lastfm_username_label">Last.fm username</string>
+    <string name="lastfm_password_label">Password</string>
+    <string name="lastfm_sign_in_action">Sign in</string>
+    <string name="lastfm_sign_out_action">Sign out</string>
+    <string name="lastfm_pending_settings_note">%d scrobbles saved offline awaiting connection</string>
+    <string name="lastfm_manage_account">Manage Last.fm account</string>
+    <string name="lastfm_login_button">Sign in to Last.fm</string>
+
+    <!-- Settings About &amp; Updates -->
+    <string name="settings_arch_desc">Architecture powered by AndroidX Media3, Jetpack Compose, Room and native Material 3.</string>
+    <string name="settings_updates_github_header">Updates &amp; GitHub</string>
+    <string name="settings_new_version_available">New version available: v%s!</string>
+    <string name="settings_download_update">Download update</string>
+    <string name="settings_update_check_error">Error during update check: %s</string>
+
+    <!-- Global Search Results -->
+    <string name="search_no_results">No results for \"%s\"</string>
+    <string name="search_tracks_found">Songs found (%d)</string>
+    <string name="search_albums_found">Albums found (%d)</string>
+    <string name="search_playlists_found">Playlists found (%d)</string>
+
+    <!-- Smart Auto-Tagger &amp; Metadata Enricher -->
+    <string name="autotag_title">Smart Auto-Tagger &amp; Enricher</string>
+    <string name="autotag_subtitle">Deezer HD Metadata + LRCLIB Synced Lyrics</string>
+    <string name="autotag_current">Current</string>
+    <string name="autotag_tag_title">Title</string>
+    <string name="autotag_tag_artist">Artist</string>
+    <string name="autotag_tag_album">Album</string>
+    <string name="autotag_tag_album_artist">Album Artist (for grouping)</string>
+    <string name="autotag_tag_album_artist_short">Album Artist</string>
+    <string name="autotag_tag_album_artist_unique">Album Artist (unique for all tracks)</string>
+    <string name="autotag_tag_album_artist_unique_badge">Unique Album Artist</string>
+    <string name="autotag_tag_genre">Genre</string>
+    <string name="autotag_tag_year">Year</string>
+    <string name="autotag_tag_track_num">Track No.</string>
+    <string name="autotag_tag_disc_num">Disc No.</string>
+    <string name="autotag_tag_track_disc">Track / Disc</string>
+    <string name="autotag_group_all_tracks_badge">Group all tracks</string>
+    <string name="autotag_search_alt_prompt">Not the right song? Search or choose alternatives</string>
+    <string name="autotag_search_deezer_button">Search on Deezer</string>
+    <string name="autotag_alt_results_header">Other matching results:</string>
+    <string name="autotag_use_candidate">Use</string>
+    <string name="autotag_opt_normalize_title">Normalize album title</string>
+    <string name="autotag_opt_normalize_title_sub">Removes suffixes like [Deluxe] or (Remastered)</string>
+    <string name="autotag_opt_hd_cover">Embed HD cover (1000x1000)</string>
+    <string name="autotag_opt_hd_cover_sub">Embeds artwork directly into audio file frames</string>
+    <string name="autotag_opt_lyrics">Save synced lyrics (.lrc)</string>
+    <string name="autotag_opt_lyrics_sub">Enables karaoke sync in full-screen player</string>
+    <string name="autotag_apply_and_save">Apply and Save</string>
+    <string name="autotag_mode_separate">Separate into distinct albums</string>
+    <string name="autotag_mode_unify">Unify into a single album</string>
+    <string name="autotag_separate_created_count">%d distinct albums will be created</string>
+    <string name="autotag_separate_desc">Each track will be assigned to its original album and artist with dedicated HD cover and ID3 tags.</string>
+    <string name="autotag_custom_album_cover_applied">Will be applied to all %d songs in the album</string>
+    <string name="autotag_custom_album_cover_pick">Tap to pick a gallery image to apply to all songs</string>
+    <string name="autotag_edit_album_details_title">Customize Album Details</string>
+    <string name="autotag_proposed_album_details_title">Proposed Album Metadata</string>
+    <string name="autotag_dest_tracks_separate">Track destination:</string>
+    <string name="autotag_dest_tracks_unify">Tracks to update:</string>
+    <string name="autotag_track_album_disc_format">Disc: %1$s • %2$s</string>
+    <string name="autotag_track_position">Pos. %s</string>
+    <string name="autotag_opt_normalize_album_sub">Removes Deluxe or Remastered suffixes for all tracks</string>
+    <string name="autotag_opt_cover_separate">Embed original HD cover for each album</string>
+    <string name="autotag_opt_cover_separate_sub">Downloads and writes 1000x1000px artwork specific to each song\'s album</string>
+    <string name="autotag_opt_cover_unify">Embed HD cover in all tracks</string>
+    <string name="autotag_opt_cover_unify_sub">Applies the same 1000x1000px cover art</string>
+    <string name="autotag_opt_lyrics_album">Include synced lyrics (.lrc)</string>
+    <string name="autotag_opt_lyrics_album_sub">Saves karaoke synchronization for each track</string>
+    <string name="autotag_action_separate">Separate and Create %d Albums</string>
+    <string name="autotag_action_unify">Unify %d Songs</string>
+    <string name="autotag_writing_files">Writing tags and cover to files…</string>
+    <string name="autotag_writing_progress">%1$s (%2$d of %3$d)</string>
+    <string name="autotag_completed_title">Update completed!</string>
+    <string name="autotag_error_title">Unable to complete enrichment</string>
+    <string name="autotag_quick_edit_details">Quick Edit Metadata</string>
+    <string name="autotag_proposed_details">Proposed Metadata</string>
+    <string name="autotag_from_gallery">From Gallery</string>
+    <string name="autotag_new_hd">New HD</string>
+    <string name="autotag_gallery">Gallery</string>
+    <string name="autotag_choose_gallery">Choose from gallery</string>
+    <string name="autotag_change_image">Change image</string>
+    <string name="autotag_cover_from_gallery">Cover from gallery</string>
+    <string name="autotag_cover_album">Album Cover</string>
+    <string name="autotag_lyrics_synced_ready">Synced lyrics (.lrc) ready</string>
+    <string name="autotag_lyrics_plain_ready">Plain lyrics available</string>
+    <string name="autotag_lyrics_none">No lyrics found on LRCLIB</string>
+    <string name="autotag_header_separate">Separate Songs into Distinct Albums (%d tracks)</string>
+    <string name="autotag_header_unify">Unify Album Metadata (%d tracks)</string>
+    <string name="autotag_uniform_album_badge">Unify album</string>
+    <string name="autotag_position_corrected_badge">Correct position</string>
+    <string name="autotag_not_set">Not set</string>
+    <string name="autotag_not_set_f">Not set</string>
+    <string name="autotag_disc_format">Disc %d</string>
+
+    <!-- Snackbar Messages &amp; UI Notifications -->
+    <string name="snackbar_cover_updated">Cover updated for \"%s\"</string>
+    <string name="snackbar_cover_removed">Cover removed from \"%s\"</string>
+    <string name="snackbar_track_added_next">\"%s\" added as next</string>
+    <string name="snackbar_album_added_next">Album \"%1$s\" (%2$d songs) added as next</string>
+    <string name="snackbar_playlist_added_next">Playlist \"%1$s\" (%2$d songs) added as next</string>
+    <string name="snackbar_removed_from_favorites">\"%s\" removed from favorites</string>
+    <string name="snackbar_added_to_favorites">\"%s\" added to favorites</string>
+    <string name="snackbar_track_added_to_playlist">\"%1$s\" added to \"%2$s\"</string>
+    <string name="snackbar_artist_tracks_added_to_queue">%1$d songs by %2$s added to queue</string>
+    <string name="show_password">Show password</string>
+    <string name="hide_password">Hide password</string>
+    <string name="cover_content_desc">Cover %s</string>
+    <string name="album_cover_content_desc">Album cover %s</string>
 </resources>

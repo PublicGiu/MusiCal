@@ -47,11 +47,12 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.res.stringResource
+import com.example.musicplayer.R
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import coil.compose.AsyncImage
-import com.example.musicplayer.R
 import com.example.musicplayer.data.Album
 import com.example.musicplayer.data.AudioTrack
 import com.example.musicplayer.data.extractMainArtist
@@ -119,12 +120,12 @@ fun ArtistDetailSheet(
                 IconButton(onClick = onDismissRequest) {
                     Icon(
                         imageVector = Icons.Default.Close,
-                        contentDescription = "Chiudi vista artista"
+                        contentDescription = stringResource(R.string.artist_close_desc)
                     )
                 }
 
                 Text(
-                    text = "Artista",
+                    text = stringResource(R.string.artist_view_title),
                     style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
                     color = MaterialTheme.colorScheme.onSurface
                 )
@@ -182,8 +183,18 @@ fun ArtistDetailSheet(
 
                         Spacer(modifier = Modifier.height(4.dp))
 
+                        val songsCount = if (artistTracks.size == 1) {
+                            stringResource(R.string.album_songs_count_single)
+                        } else {
+                            stringResource(R.string.album_songs_count_multiple, artistTracks.size)
+                        }
+                        val albumsCount = if (artistAlbums.size == 1) {
+                            stringResource(R.string.artist_album_count_single)
+                        } else {
+                            stringResource(R.string.artist_album_count_multiple, artistAlbums.size)
+                        }
                         Text(
-                            text = "${artistTracks.size} ${if (artistTracks.size == 1) "brano" else "brani"} • ${artistAlbums.size} ${if (artistAlbums.size == 1) "album" else "album"}",
+                            text = "$songsCount • $albumsCount",
                             style = MaterialTheme.typography.bodyMedium,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
@@ -206,7 +217,7 @@ fun ArtistDetailSheet(
                                     modifier = Modifier.size(20.dp)
                                 )
                                 Spacer(modifier = Modifier.width(6.dp))
-                                Text("Riproduci tutti")
+                                Text(stringResource(R.string.album_play_all))
                             }
 
                             OutlinedButton(
@@ -220,7 +231,7 @@ fun ArtistDetailSheet(
                                     modifier = Modifier.size(20.dp)
                                 )
                                 Spacer(modifier = Modifier.width(6.dp))
-                                Text("Metti in coda")
+                                Text(stringResource(R.string.add_to_queue))
                             }
                         }
                     }
@@ -233,7 +244,7 @@ fun ArtistDetailSheet(
                     item {
                         Column(modifier = Modifier.fillMaxWidth()) {
                             Text(
-                                text = "Album",
+                                text = stringResource(R.string.tab_albums),
                                 style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
                                 color = MaterialTheme.colorScheme.onSurface,
                                 modifier = Modifier.padding(horizontal = 24.dp, vertical = 8.dp)
@@ -285,8 +296,13 @@ fun ArtistDetailSheet(
                                                 maxLines = 1,
                                                 overflow = TextOverflow.Ellipsis
                                             )
+                                            val albumTrackCount = if (album.trackCount == 1) {
+                                                stringResource(R.string.album_songs_count_single)
+                                            } else {
+                                                stringResource(R.string.album_songs_count_multiple, album.trackCount)
+                                            }
                                             Text(
-                                                text = "${album.trackCount} brani",
+                                                text = albumTrackCount,
                                                 style = MaterialTheme.typography.labelSmall,
                                                 color = MaterialTheme.colorScheme.onSurfaceVariant
                                             )
@@ -303,7 +319,7 @@ fun ArtistDetailSheet(
                 // Sezione Tutti i Brani
                 item {
                     Text(
-                        text = "Brani",
+                        text = stringResource(R.string.tab_tracks),
                         style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
                         color = MaterialTheme.colorScheme.onSurface,
                         modifier = Modifier.padding(horizontal = 24.dp, vertical = 8.dp)

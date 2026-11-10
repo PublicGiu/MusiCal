@@ -301,7 +301,7 @@ fun QueueBottomSheet(
                         }
 
                         Text(
-                            text = "Successivi",
+                            text = stringResource(R.string.queue_upcoming),
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
@@ -317,7 +317,7 @@ fun QueueBottomSheet(
                             contentAlignment = Alignment.Center
                         ) {
                             Text(
-                                text = "Nessun brano successivo programmato",
+                                text = stringResource(R.string.queue_empty_autoplay),
                                 style = MaterialTheme.typography.bodyMedium,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant
                             )
@@ -483,7 +483,7 @@ private fun ReorderableTrackList(
                             ) {
                                 Icon(
                                     imageVector = Icons.Default.Close,
-                                    contentDescription = "Rimuovi",
+                                    contentDescription = stringResource(R.string.remove),
                                     tint = MaterialTheme.colorScheme.onSurfaceVariant,
                                     modifier = Modifier.size(18.dp)
                                 )
@@ -499,7 +499,7 @@ private fun ReorderableTrackList(
                             ) {
                                 Icon(
                                     imageVector = Icons.Default.ArrowUpward,
-                                    contentDescription = "Sposta in cima",
+                                    contentDescription = stringResource(R.string.queue_move_to_top),
                                     tint = if (canMoveToTop) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.25f),
                                     modifier = Modifier.size(18.dp)
                                 )
@@ -564,7 +564,7 @@ private fun ReorderableTrackList(
                             ) {
                                 Icon(
                                     imageVector = Icons.Default.DragHandle,
-                                    contentDescription = "Trascina per riordinare",
+                                    contentDescription = stringResource(R.string.drag_to_reorder),
                                     tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f),
                                     modifier = Modifier.size(20.dp)
                                 )
@@ -783,7 +783,7 @@ private fun SwipeableQueueTrackItem(
             ) {
                 Icon(
                     imageVector = Icons.Default.DeleteOutline,
-                    contentDescription = "Rimuovi dalla lista",
+                    contentDescription = stringResource(R.string.queue_remove_from_list),
                     tint = rightIconTint,
                     modifier = Modifier
                         .size(22.dp)
@@ -807,7 +807,7 @@ private fun SwipeableQueueTrackItem(
             ) {
                 Icon(
                     painter = painterResource(R.drawable.ic_queue_music_custom),
-                    contentDescription = "Metti in coda",
+                    contentDescription = stringResource(R.string.add_to_queue),
                     tint = leftIconTint,
                     modifier = Modifier
                         .size(22.dp)

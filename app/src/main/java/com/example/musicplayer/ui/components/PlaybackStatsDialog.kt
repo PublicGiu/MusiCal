@@ -51,12 +51,14 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
+import com.example.musicplayer.R
 import com.example.musicplayer.data.AudioTrack
 import com.example.musicplayer.data.TrackStats
 import com.example.musicplayer.data.extractMainArtist
@@ -178,7 +180,7 @@ fun PlaybackStatsDialog(
                         }
                         Spacer(modifier = Modifier.width(12.dp))
                         Text(
-                            text = "Statistiche d'ascolto",
+                            text = stringResource(R.string.settings_stats_title),
                             style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.Bold),
                             color = MaterialTheme.colorScheme.onSurface
                         )
@@ -187,7 +189,7 @@ fun PlaybackStatsDialog(
                     IconButton(onClick = onDismissRequest) {
                         Icon(
                             imageVector = Icons.Default.Close,
-                            contentDescription = "Chiudi",
+                            contentDescription = stringResource(R.string.close),
                             tint = MaterialTheme.colorScheme.onSurfaceVariant
                         )
                     }
@@ -207,19 +209,19 @@ fun PlaybackStatsDialog(
                             horizontalArrangement = Arrangement.spacedBy(10.dp)
                         ) {
                             StatSummaryCard(
-                                title = "Riproduzioni",
+                                title = stringResource(R.string.stats_plays_title),
                                 value = "$totalPlays",
                                 icon = Icons.Default.Headphones,
                                 modifier = Modifier.weight(1f)
                             )
                             StatSummaryCard(
-                                title = "Tempo",
+                                title = stringResource(R.string.stats_time_title),
                                 value = formatListeningTime(totalListeningTimeMs),
                                 icon = Icons.Default.Timer,
                                 modifier = Modifier.weight(1f)
                             )
                             StatSummaryCard(
-                                title = "Brani unici",
+                                title = stringResource(R.string.stats_unique_tracks_title),
                                 value = "${tracksWithStats.size}",
                                 icon = Icons.Default.MusicNote,
                                 modifier = Modifier.weight(1f)
@@ -232,7 +234,7 @@ fun PlaybackStatsDialog(
                     if (topTracks.isNotEmpty()) {
                         item {
                             Text(
-                                text = "Brani più ascoltati",
+                                text = stringResource(R.string.stats_top_tracks_title),
                                 style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
                                 color = MaterialTheme.colorScheme.primary
                             )
@@ -271,7 +273,7 @@ fun PlaybackStatsDialog(
                                     )
                                 }
                                 Text(
-                                    text = "${stat.playCount} ${if (stat.playCount == 1) "ascolto" else "ascolti"}",
+                                    text = if (stat.playCount == 1) stringResource(R.string.play_count_single, stat.playCount) else stringResource(R.string.play_count_multiple, stat.playCount),
                                     style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Bold),
                                     color = MaterialTheme.colorScheme.primary
                                 )
@@ -285,7 +287,7 @@ fun PlaybackStatsDialog(
                     if (topArtists.isNotEmpty()) {
                         item {
                             Text(
-                                text = "Artisti preferiti",
+                                text = stringResource(R.string.stats_top_artists_title),
                                 style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
                                 color = MaterialTheme.colorScheme.primary
                             )
@@ -317,7 +319,7 @@ fun PlaybackStatsDialog(
                                     modifier = Modifier.weight(1f)
                                 )
                                 Text(
-                                    text = "$count ascolti",
+                                    text = if (count == 1) stringResource(R.string.play_count_single, count) else stringResource(R.string.play_count_multiple, count),
                                     style = MaterialTheme.typography.labelMedium,
                                     color = MaterialTheme.colorScheme.onSurfaceVariant
                                 )
@@ -331,7 +333,7 @@ fun PlaybackStatsDialog(
                     if (topAlbums.isNotEmpty()) {
                         item {
                             Text(
-                                text = "Album più riprodotti",
+                                text = stringResource(R.string.stats_top_albums_title),
                                 style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
                                 color = MaterialTheme.colorScheme.primary
                             )
@@ -363,7 +365,7 @@ fun PlaybackStatsDialog(
                                     modifier = Modifier.weight(1f)
                                 )
                                 Text(
-                                    text = "$count ascolti",
+                                    text = if (count == 1) stringResource(R.string.play_count_single, count) else stringResource(R.string.play_count_multiple, count),
                                     style = MaterialTheme.typography.labelMedium,
                                     color = MaterialTheme.colorScheme.onSurfaceVariant
                                 )
@@ -382,7 +384,7 @@ fun PlaybackStatsDialog(
                                 contentAlignment = Alignment.Center
                             ) {
                                 Text(
-                                    text = "Nessuna statistica d'ascolto registrata finora.\nAscolta la tua musica per visualizzare i brani e gli artisti preferiti!",
+                                    text = stringResource(R.string.stats_empty_message),
                                     style = MaterialTheme.typography.bodyMedium,
                                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                                     textAlign = androidx.compose.ui.text.style.TextAlign.Center
@@ -409,7 +411,7 @@ fun PlaybackStatsDialog(
                             modifier = Modifier.size(18.dp)
                         )
                         Spacer(modifier = Modifier.width(8.dp))
-                        Text("Azzera statistiche")
+                        Text(stringResource(R.string.stats_reset_button))
                     }
                 }
             }
@@ -420,8 +422,8 @@ fun PlaybackStatsDialog(
     if (showResetConfirm) {
         AlertDialog(
             onDismissRequest = { showResetConfirm = false },
-            title = { Text("Azzera statistiche d'ascolto") },
-            text = { Text("Sei sicuro di voler cancellare tutte le statistiche di riproduzione registrate? Questa azione non può essere annullata.") },
+            title = { Text(stringResource(R.string.stats_reset_dialog_title)) },
+            text = { Text(stringResource(R.string.stats_reset_dialog_desc)) },
             confirmButton = {
                 TextButton(
                     onClick = {
@@ -430,12 +432,12 @@ fun PlaybackStatsDialog(
                     },
                     colors = ButtonDefaults.textButtonColors(contentColor = MaterialTheme.colorScheme.error)
                 ) {
-                    Text("Azzera")
+                    Text(stringResource(R.string.stats_reset_confirm))
                 }
             },
             dismissButton = {
                 TextButton(onClick = { showResetConfirm = false }) {
-                    Text("Annulla")
+                    Text(stringResource(R.string.cancel))
                 }
             }
         )

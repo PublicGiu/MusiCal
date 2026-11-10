@@ -483,7 +483,7 @@ private fun DuplicateTrackItem(
                     if (track.trackNumber > 0) {
                         Spacer(modifier = Modifier.width(6.dp))
                         Text(
-                            text = "Traccia ${track.trackNumber}",
+                            text = stringResource(R.string.track_number_display, track.trackNumber),
                             style = MaterialTheme.typography.labelSmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
@@ -502,7 +502,7 @@ private fun DuplicateTrackItem(
                     )
                     Spacer(modifier = Modifier.width(4.dp))
                     Text(
-                        text = track.displayName.ifBlank { "Nome file sconosciuto" },
+                        text = track.displayName.ifBlank { stringResource(R.string.unknown_filename) },
                         style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Medium),
                         color = MaterialTheme.colorScheme.onSurface,
                         maxLines = 1,
@@ -566,7 +566,7 @@ private fun DuplicateTrackItem(
             ) {
                 Icon(
                     imageVector = if (isCurrentlyPlaying) Icons.Default.Pause else Icons.Default.PlayArrow,
-                    contentDescription = if (isCurrentlyPlaying) "Pausa" else "Ascolta anteprima",
+                    contentDescription = if (isCurrentlyPlaying) stringResource(R.string.pause) else stringResource(R.string.preview_play),
                     modifier = Modifier.size(20.dp)
                 )
             }

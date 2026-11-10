@@ -78,6 +78,7 @@ import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.TextRange
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.TextFieldValue
@@ -86,6 +87,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import kotlin.math.abs
 import coil.compose.AsyncImage
+import com.example.musicplayer.R
 import com.example.musicplayer.data.Album
 import com.example.musicplayer.data.AudioTrack
 import com.example.musicplayer.data.formatDurationMs
@@ -170,12 +172,12 @@ fun MetadataEnricherSheet(
                 Spacer(modifier = Modifier.width(12.dp))
                 Column {
                     Text(
-                        text = "Smart Auto-Tagger & Enricher",
+                        text = stringResource(R.string.autotag_title),
                         style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
                         color = MaterialTheme.colorScheme.onSurface
                     )
                     Text(
-                        text = "Metadati Deezer HD + Testi Sincronizzati LRCLIB",
+                        text = stringResource(R.string.autotag_subtitle),
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
@@ -337,7 +339,7 @@ private fun ReviewTrackContent(
             // Copertina Attuale
             Column(horizontalAlignment = Alignment.CenterHorizontally) {
                 Text(
-                    text = "Attuale",
+                    text = stringResource(R.string.autotag_current),
                     style = MaterialTheme.typography.labelMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
@@ -377,7 +379,7 @@ private fun ReviewTrackContent(
             Column(horizontalAlignment = Alignment.CenterHorizontally) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Text(
-                        text = if (customCoverBytes != null && customCoverBytes !== enriched.coverBytes) "Da Galleria" else "Nuova HD",
+                        text = if (customCoverBytes != null && customCoverBytes !== enriched.coverBytes) stringResource(R.string.autotag_from_gallery) else stringResource(R.string.autotag_new_hd),
                         style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Bold),
                         color = MaterialTheme.colorScheme.primary
                     )
@@ -407,7 +409,7 @@ private fun ReviewTrackContent(
                     if (coverModel != null) {
                         AsyncImage(
                             model = coverModel,
-                            contentDescription = "Nuova copertina",
+                            contentDescription = stringResource(R.string.autotag_new_hd),
                             contentScale = ContentScale.Crop,
                             modifier = Modifier.matchParentSize()
                         )
@@ -436,7 +438,7 @@ private fun ReviewTrackContent(
                     )
                     Spacer(modifier = Modifier.width(4.dp))
                     Text(
-                        text = if (customCoverBytes != null && customCoverBytes !== enriched.coverBytes) "Cambia" else "Galleria",
+                        text = if (customCoverBytes != null && customCoverBytes !== enriched.coverBytes) stringResource(R.string.edit) else stringResource(R.string.autotag_gallery),
                         style = MaterialTheme.typography.labelSmall
                     )
                 }
@@ -458,7 +460,7 @@ private fun ReviewTrackContent(
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     Text(
-                        text = if (isEditingDetails) "Modifica Rapida Metadati" else "Metadati Proposti",
+                        text = if (isEditingDetails) stringResource(R.string.autotag_quick_edit_details) else stringResource(R.string.autotag_proposed_details),
                         style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold),
                         color = MaterialTheme.colorScheme.primary
                     )
@@ -469,7 +471,7 @@ private fun ReviewTrackContent(
                             modifier = Modifier.size(16.dp)
                         )
                         Spacer(modifier = Modifier.width(4.dp))
-                        Text(if (isEditingDetails) "Fine" else "Modifica")
+                        Text(if (isEditingDetails) stringResource(R.string.done) else stringResource(R.string.edit))
                     }
                 }
 
@@ -477,28 +479,28 @@ private fun ReviewTrackContent(
                     AutotagEditTextField(
                         value = editedTitle,
                         onValueChange = { editedTitle = it },
-                        label = "Titolo",
+                        label = stringResource(R.string.autotag_tag_title),
                         modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
                         singleLine = true
                     )
                     AutotagEditTextField(
                         value = editedArtist,
                         onValueChange = { editedArtist = it },
-                        label = "Artista",
+                        label = stringResource(R.string.autotag_tag_artist),
                         modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
                         singleLine = true
                     )
                     AutotagEditTextField(
                         value = editedAlbum,
                         onValueChange = { editedAlbum = it },
-                        label = "Album",
+                        label = stringResource(R.string.autotag_tag_album),
                         modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
                         singleLine = true
                     )
                     AutotagEditTextField(
                         value = editedAlbumArtist,
                         onValueChange = { editedAlbumArtist = it },
-                        label = "Artista Album (per raggruppamento)",
+                        label = stringResource(R.string.autotag_tag_album_artist),
                         modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
                         singleLine = true
                     )
@@ -506,14 +508,14 @@ private fun ReviewTrackContent(
                         AutotagEditTextField(
                             value = editedGenre,
                             onValueChange = { editedGenre = it },
-                            label = "Genere",
+                            label = stringResource(R.string.autotag_tag_genre),
                             modifier = Modifier.weight(1f).padding(end = 4.dp, top = 4.dp, bottom = 4.dp),
                             singleLine = true
                         )
                         OutlinedTextField(
                             value = editedYear,
                             onValueChange = { editedYear = it },
-                            label = { Text("Anno") },
+                            label = { Text(stringResource(R.string.autotag_tag_year)) },
                             modifier = Modifier.weight(0.6f).padding(start = 4.dp, top = 4.dp, bottom = 4.dp),
                             singleLine = true
                         )
@@ -522,43 +524,45 @@ private fun ReviewTrackContent(
                         OutlinedTextField(
                             value = editedTrackNumber,
                             onValueChange = { editedTrackNumber = it },
-                            label = { Text("N° Traccia") },
+                            label = { Text(stringResource(R.string.autotag_tag_track_num)) },
                             modifier = Modifier.weight(1f).padding(end = 4.dp, top = 4.dp, bottom = 4.dp),
                             singleLine = true
                         )
                         OutlinedTextField(
                             value = editedDiscNumber,
                             onValueChange = { editedDiscNumber = it },
-                            label = { Text("N° Disco") },
+                            label = { Text(stringResource(R.string.autotag_tag_disc_num)) },
                             modifier = Modifier.weight(1f).padding(start = 4.dp, top = 4.dp, bottom = 4.dp),
                             singleLine = true
                         )
                     }
                 } else {
-                    DiffRow(label = "Titolo", oldValue = track.title, newValue = editedTitle)
-                    DiffRow(label = "Artista", oldValue = track.artist, newValue = editedArtist)
-                    DiffRow(label = "Album", oldValue = track.album, newValue = editedAlbum)
+                    DiffRow(label = stringResource(R.string.autotag_tag_title), oldValue = track.title, newValue = editedTitle)
+                    DiffRow(label = stringResource(R.string.autotag_tag_artist), oldValue = track.artist, newValue = editedArtist)
+                    DiffRow(label = stringResource(R.string.autotag_tag_album), oldValue = track.album, newValue = editedAlbum)
                     DiffRow(
-                        label = "Album Artist",
-                        oldValue = track.albumArtist.ifBlank { "Non impostato" },
+                        label = stringResource(R.string.autotag_tag_album_artist_short),
+                        oldValue = track.albumArtist.ifBlank { stringResource(R.string.autotag_not_set) },
                         newValue = editedAlbumArtist,
-                        highlightBadge = "Uniforma album"
+                        highlightBadge = stringResource(R.string.autotag_uniform_album_badge)
                     )
                     if (editedYear.isNotBlank()) {
-                        DiffRow(label = "Anno", oldValue = "-", newValue = editedYear)
+                        DiffRow(label = stringResource(R.string.autotag_tag_year), oldValue = "-", newValue = editedYear)
                     }
                     if (editedTrackNumber.isNotBlank()) {
-                        val oldPosStr = if (track.trackNumber > 0) "${track.trackNumber} (Disco ${track.discNumber})" else "Non impostata"
-                        val newPosStr = "$editedTrackNumber (Disco $editedDiscNumber)"
+                        val discLabel = stringResource(R.string.autotag_disc_format, track.discNumber)
+                        val newDiscLabel = stringResource(R.string.autotag_disc_format, editedDiscNumber.toIntOrNull() ?: 1)
+                        val oldPosStr = if (track.trackNumber > 0) "${track.trackNumber} ($discLabel)" else stringResource(R.string.autotag_not_set_f)
+                        val newPosStr = "$editedTrackNumber ($newDiscLabel)"
                         DiffRow(
-                            label = "Traccia / Disco",
+                            label = stringResource(R.string.autotag_tag_track_disc),
                             oldValue = oldPosStr,
                             newValue = newPosStr,
-                            highlightBadge = if (track.trackNumber <= 0 || track.trackNumber.toString() != editedTrackNumber) "Posizione corretta" else null
+                            highlightBadge = if (track.trackNumber <= 0 || track.trackNumber.toString() != editedTrackNumber) stringResource(R.string.autotag_position_corrected_badge) else null
                         )
                     }
                     if (editedGenre.isNotBlank()) {
-                        DiffRow(label = "Genere", oldValue = track.genre.ifBlank { "-" }, newValue = editedGenre)
+                        DiffRow(label = stringResource(R.string.autotag_tag_genre), oldValue = track.genre.ifBlank { "-" }, newValue = editedGenre)
                     }
                 }
             }
@@ -589,7 +593,7 @@ private fun ReviewTrackContent(
                         )
                         Spacer(modifier = Modifier.width(8.dp))
                         Text(
-                            text = "Non è il brano giusto? Cerca o scegli altri",
+                            text = stringResource(R.string.autotag_search_alt_prompt),
                             style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Medium),
                             color = MaterialTheme.colorScheme.onSurface
                         )
@@ -610,14 +614,14 @@ private fun ReviewTrackContent(
                             OutlinedTextField(
                                 value = customSearchTitle,
                                 onValueChange = { customSearchTitle = it },
-                                label = { Text("Titolo") },
+                                label = { Text(stringResource(R.string.autotag_tag_title)) },
                                 modifier = Modifier.weight(1f).padding(end = 4.dp),
                                 singleLine = true
                             )
                             OutlinedTextField(
                                 value = customSearchArtist,
                                 onValueChange = { customSearchArtist = it },
-                                label = { Text("Artista") },
+                                label = { Text(stringResource(R.string.autotag_tag_artist)) },
                                 modifier = Modifier.weight(1f).padding(start = 4.dp),
                                 singleLine = true
                             )
@@ -627,13 +631,13 @@ private fun ReviewTrackContent(
                             onClick = { onCustomSearch(customSearchTitle, customSearchArtist) },
                             modifier = Modifier.align(Alignment.End)
                         ) {
-                            Text("Cerca su Deezer")
+                            Text(stringResource(R.string.autotag_search_deezer_button))
                         }
 
                         if (candidates.isNotEmpty()) {
                             Spacer(modifier = Modifier.height(10.dp))
                             Text(
-                                text = "Altri risultati trovati:",
+                                text = stringResource(R.string.autotag_alt_results_header),
                                 style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Bold),
                                 color = MaterialTheme.colorScheme.onSurfaceVariant
                             )
@@ -693,7 +697,7 @@ private fun ReviewTrackContent(
                                             onClick = { onSelectCandidate(candidate) },
                                             modifier = Modifier.padding(start = 6.dp)
                                         ) {
-                                            Text("Usa")
+                                            Text(stringResource(R.string.autotag_use_candidate))
                                         }
                                     }
                                 }
@@ -744,9 +748,9 @@ private fun ReviewTrackContent(
                         Spacer(modifier = Modifier.width(8.dp))
                         Text(
                             text = when {
-                                enriched.hasSyncedLyrics -> "Testi sincronizzati (.lrc) pronti"
-                                enriched.hasPlainLyrics -> "Testo semplice disponibile"
-                                else -> "Nessun testo trovato su LRCLIB"
+                                enriched.hasSyncedLyrics -> stringResource(R.string.autotag_lyrics_synced_ready)
+                                enriched.hasPlainLyrics -> stringResource(R.string.autotag_lyrics_plain_ready)
+                                else -> stringResource(R.string.autotag_lyrics_none)
                             },
                             style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Medium),
                             color = MaterialTheme.colorScheme.onSurface
@@ -789,22 +793,22 @@ private fun ReviewTrackContent(
 
         // Opzioni di salvataggio
         OptionSwitch(
-            label = "Normalizza titolo album",
-            subtitle = "Rimuove suffissi come [Deluxe] o (Remastered)",
+            label = stringResource(R.string.autotag_opt_normalize_title),
+            subtitle = stringResource(R.string.autotag_opt_normalize_title_sub),
             checked = options.normalizeAlbum,
             onCheckedChange = { options = options.copy(normalizeAlbum = it) }
         )
 
         OptionSwitch(
-            label = "Incorpora copertina HD (1000x1000)",
-            subtitle = "Salva l'immagine nei frame del file audio",
+            label = stringResource(R.string.autotag_opt_hd_cover),
+            subtitle = stringResource(R.string.autotag_opt_hd_cover_sub),
             checked = options.embedCover,
             onCheckedChange = { options = options.copy(embedCover = it) }
         )
 
         OptionSwitch(
-            label = "Salva testi sincronizzati (.lrc)",
-            subtitle = "Abilita il karaoke nel player a schermo intero",
+            label = stringResource(R.string.autotag_opt_lyrics),
+            subtitle = stringResource(R.string.autotag_opt_lyrics_sub),
             checked = options.includeLyrics,
             onCheckedChange = { options = options.copy(includeLyrics = it) }
         )
@@ -817,7 +821,7 @@ private fun ReviewTrackContent(
             horizontalArrangement = Arrangement.End
         ) {
             TextButton(onClick = onCancel) {
-                Text("Annulla")
+                Text(stringResource(R.string.cancel))
             }
             Spacer(modifier = Modifier.width(10.dp))
             Button(
@@ -842,7 +846,7 @@ private fun ReviewTrackContent(
             ) {
                 Icon(imageVector = Icons.Default.Check, contentDescription = null, modifier = Modifier.size(18.dp))
                 Spacer(modifier = Modifier.width(8.dp))
-                Text("Applica e Salva")
+                Text(stringResource(R.string.autotag_apply_and_save))
             }
         }
     }
@@ -931,8 +935,8 @@ private fun ReviewAlbumContent(
             .verticalScroll(scrollState)
     ) {
         Text(
-            text = if (isSeparationMode) "Separa Brani in Album Distinti (${album.tracks.size} tracce)"
-            else "Uniforma Metadati Album (${album.tracks.size} tracce)",
+            text = if (isSeparationMode) stringResource(R.string.autotag_header_separate, album.tracks.size)
+            else stringResource(R.string.autotag_header_unify, album.tracks.size),
             style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold),
             color = MaterialTheme.colorScheme.primary
         )
@@ -956,7 +960,7 @@ private fun ReviewAlbumContent(
                         .clickable { onToggleSeparationMode(true) }
                 ) {
                     Text(
-                        text = "Separa in album distinti",
+                        text = stringResource(R.string.autotag_mode_separate),
                         style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Bold),
                         color = if (isSeparationMode) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurfaceVariant,
                         modifier = Modifier.padding(vertical = 8.dp),
@@ -971,7 +975,7 @@ private fun ReviewAlbumContent(
                         .clickable { onToggleSeparationMode(false) }
                 ) {
                     Text(
-                        text = "Uniforma in un unico album",
+                        text = stringResource(R.string.autotag_mode_unify),
                         style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Bold),
                         color = if (!isSeparationMode) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurfaceVariant,
                         modifier = Modifier.padding(vertical = 8.dp),
@@ -1012,7 +1016,7 @@ private fun ReviewAlbumContent(
                     if (coverModel != null) {
                         AsyncImage(
                             model = coverModel,
-                            contentDescription = "Copertina album",
+                            contentDescription = stringResource(R.string.autotag_cover_album),
                             contentScale = ContentScale.Crop,
                             modifier = Modifier.matchParentSize()
                         )
@@ -1029,14 +1033,14 @@ private fun ReviewAlbumContent(
 
                 Column(modifier = Modifier.weight(1f)) {
                     Text(
-                        text = if (customAlbumCoverBytes != null) "Copertina da galleria" else "Copertina Album",
+                        text = if (customAlbumCoverBytes != null) stringResource(R.string.autotag_cover_from_gallery) else stringResource(R.string.autotag_cover_album),
                         style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold),
                         color = MaterialTheme.colorScheme.onSurface
                     )
                     Spacer(modifier = Modifier.height(2.dp))
                     Text(
-                        text = if (customAlbumCoverBytes != null) "Verrà applicata a tutti i ${album.tracks.size} brani dell'album"
-                        else "Tocca per scegliere un'immagine dalla galleria da applicare a tutti i brani",
+                        text = if (customAlbumCoverBytes != null) stringResource(R.string.autotag_custom_album_cover_applied, album.tracks.size)
+                        else stringResource(R.string.autotag_custom_album_cover_pick),
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
@@ -1057,7 +1061,7 @@ private fun ReviewAlbumContent(
                         )
                         Spacer(modifier = Modifier.width(6.dp))
                         Text(
-                            text = if (customAlbumCoverBytes != null) "Cambia immagine" else "Scegli da galleria",
+                            text = if (customAlbumCoverBytes != null) stringResource(R.string.autotag_change_image) else stringResource(R.string.autotag_choose_gallery),
                             style = MaterialTheme.typography.labelSmall
                         )
                     }
@@ -1085,12 +1089,12 @@ private fun ReviewAlbumContent(
                     Spacer(modifier = Modifier.width(12.dp))
                     Column(modifier = Modifier.weight(1f)) {
                         Text(
-                            text = "Verranno creati $targetAlbumCount album distinti",
+                            text = stringResource(R.string.autotag_separate_created_count, targetAlbumCount),
                             style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold),
                             color = MaterialTheme.colorScheme.onSecondaryContainer
                         )
                         Text(
-                            text = "Ciascun brano verrà associato al rispettivo disco e artista con copertina HD e tag ID3 dedicati.",
+                            text = stringResource(R.string.autotag_separate_desc),
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSecondaryContainer.copy(alpha = 0.85f)
                         )
@@ -1110,7 +1114,7 @@ private fun ReviewAlbumContent(
                         verticalAlignment = Alignment.CenterVertically
                     ) {
                         Text(
-                            text = if (isEditingAlbumDetails) "Personalizza Dettagli Album" else "Metadati Album Proposti",
+                            text = if (isEditingAlbumDetails) stringResource(R.string.autotag_edit_album_details_title) else stringResource(R.string.autotag_proposed_album_details_title),
                             style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold),
                             color = MaterialTheme.colorScheme.primary
                         )
@@ -1121,7 +1125,7 @@ private fun ReviewAlbumContent(
                                 modifier = Modifier.size(16.dp)
                             )
                             Spacer(modifier = Modifier.width(4.dp))
-                            Text(if (isEditingAlbumDetails) "Fine" else "Modifica")
+                            Text(if (isEditingAlbumDetails) stringResource(R.string.done) else stringResource(R.string.edit))
                         }
                     }
 
@@ -1132,7 +1136,7 @@ private fun ReviewAlbumContent(
                                 editedAlbumTitle = it
                                 updateTracksWithCurrentCustomizations(title = it)
                             },
-                            label = "Titolo Album",
+                            label = stringResource(R.string.autotag_tag_album),
                             modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
                             singleLine = true
                         )
@@ -1142,7 +1146,7 @@ private fun ReviewAlbumContent(
                                 editedAlbumArtist = it
                                 updateTracksWithCurrentCustomizations(artist = it)
                             },
-                            label = "Artista Album (univoco per tutte le tracce)",
+                            label = stringResource(R.string.autotag_tag_album_artist_unique),
                             modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
                             singleLine = true
                         )
@@ -1153,7 +1157,7 @@ private fun ReviewAlbumContent(
                                     editedAlbumGenre = it
                                     updateTracksWithCurrentCustomizations(genreStr = it)
                                 },
-                                label = "Genere",
+                                label = stringResource(R.string.autotag_tag_genre),
                                 modifier = Modifier.weight(1f).padding(end = 4.dp, top = 4.dp, bottom = 4.dp),
                                 singleLine = true
                             )
@@ -1163,24 +1167,24 @@ private fun ReviewAlbumContent(
                                     editedAlbumYear = it
                                     updateTracksWithCurrentCustomizations(yearStr = it)
                                 },
-                                label = { Text("Anno") },
+                                label = { Text(stringResource(R.string.autotag_tag_year)) },
                                 modifier = Modifier.weight(0.6f).padding(start = 4.dp, top = 4.dp, bottom = 4.dp),
                                 singleLine = true
                             )
                         }
                     } else {
-                        DiffRow(label = "Album", oldValue = album.title, newValue = editedAlbumTitle)
+                        DiffRow(label = stringResource(R.string.autotag_tag_album), oldValue = album.title, newValue = editedAlbumTitle)
                         DiffRow(
-                            label = "Album Artist univoco",
+                            label = stringResource(R.string.autotag_tag_album_artist_unique_badge),
                             oldValue = album.artist,
                             newValue = editedAlbumArtist,
-                            highlightBadge = "Raggruppa tutte le tracce"
+                            highlightBadge = stringResource(R.string.autotag_group_all_tracks_badge)
                         )
                         if (editedAlbumYear.isNotBlank()) {
-                            DiffRow(label = "Anno", oldValue = "-", newValue = editedAlbumYear)
+                            DiffRow(label = stringResource(R.string.autotag_tag_year), oldValue = "-", newValue = editedAlbumYear)
                         }
                         if (editedAlbumGenre.isNotBlank()) {
-                            DiffRow(label = "Genere", oldValue = "-", newValue = editedAlbumGenre)
+                            DiffRow(label = stringResource(R.string.autotag_tag_genre), oldValue = "-", newValue = editedAlbumGenre)
                         }
                     }
                 }
@@ -1191,7 +1195,7 @@ private fun ReviewAlbumContent(
 
         // Lista delle tracce con nuovo numero di traccia
         Text(
-            text = if (isSeparationMode) "Destinazione brani:" else "Tracce che verranno aggiornate:",
+            text = if (isSeparationMode) stringResource(R.string.autotag_dest_tracks_separate) else stringResource(R.string.autotag_dest_tracks_unify),
             style = MaterialTheme.typography.labelLarge,
             color = MaterialTheme.colorScheme.onSurfaceVariant
         )
@@ -1237,7 +1241,7 @@ private fun ReviewAlbumContent(
                         )
                         if (isSeparationMode) {
                             Text(
-                                text = "Disco: ${enriched?.album ?: track.album} • ${enriched?.albumArtist ?: track.artist}",
+                                text = stringResource(R.string.autotag_track_album_disc_format, enriched?.album ?: track.album, enriched?.albumArtist ?: track.artist),
                                 style = MaterialTheme.typography.bodySmall.copy(fontWeight = FontWeight.Medium),
                                 color = MaterialTheme.colorScheme.primary,
                                 maxLines = 1,
@@ -1255,7 +1259,7 @@ private fun ReviewAlbumContent(
                     }
                     if (posChanged && pos > 0) {
                         Text(
-                            text = "Pos. $pos",
+                            text = stringResource(R.string.autotag_track_position, pos.toString()),
                             style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold),
                             color = MaterialTheme.colorScheme.primary,
                             modifier = Modifier
@@ -1282,23 +1286,23 @@ private fun ReviewAlbumContent(
 
         if (!isSeparationMode) {
             OptionSwitch(
-                label = "Normalizza titolo album",
-                subtitle = "Rimuove suffissi Deluxe o Remastered per tutte le tracce",
+                label = stringResource(R.string.autotag_opt_normalize_title),
+                subtitle = stringResource(R.string.autotag_opt_normalize_album_sub),
                 checked = options.normalizeAlbum,
                 onCheckedChange = { options = options.copy(normalizeAlbum = it) }
             )
         }
 
         OptionSwitch(
-            label = if (isSeparationMode) "Incorpora copertina HD originale per ciascun album" else "Incorpora copertina HD in tutti i brani",
-            subtitle = if (isSeparationMode) "Scarica e scrive l'artwork 1000x1000px specifico del disco di ogni brano" else "Applica la medesima copertina 1000x1000px",
+            label = if (isSeparationMode) stringResource(R.string.autotag_opt_cover_separate) else stringResource(R.string.autotag_opt_cover_unify),
+            subtitle = if (isSeparationMode) stringResource(R.string.autotag_opt_cover_separate_sub) else stringResource(R.string.autotag_opt_cover_unify_sub),
             checked = options.embedCover,
             onCheckedChange = { options = options.copy(embedCover = it) }
         )
 
         OptionSwitch(
-            label = "Includi testi sincronizzati (.lrc)",
-            subtitle = "Salva la sincronizzazione karaoke per ciascuna traccia",
+            label = stringResource(R.string.autotag_opt_lyrics_album),
+            subtitle = stringResource(R.string.autotag_opt_lyrics_album_sub),
             checked = options.includeLyrics,
             onCheckedChange = { options = options.copy(includeLyrics = it) }
         )
@@ -1310,7 +1314,7 @@ private fun ReviewAlbumContent(
             horizontalArrangement = Arrangement.End
         ) {
             TextButton(onClick = onCancel) {
-                Text("Annulla")
+                Text(stringResource(R.string.cancel))
             }
             Spacer(modifier = Modifier.width(10.dp))
             Button(
@@ -1322,8 +1326,8 @@ private fun ReviewAlbumContent(
                 Icon(imageVector = Icons.Default.Check, contentDescription = null, modifier = Modifier.size(18.dp))
                 Spacer(modifier = Modifier.width(8.dp))
                 Text(
-                    if (isSeparationMode) "Separa e Crea $targetAlbumCount Album"
-                    else "Uniforma ${album.tracks.size} Brani"
+                    if (isSeparationMode) stringResource(R.string.autotag_action_separate, targetAlbumCount)
+                    else stringResource(R.string.autotag_action_unify, album.tracks.size)
                 )
             }
         }
@@ -1349,13 +1353,13 @@ private fun WritingContent(current: Int, total: Int, trackTitle: String) {
         )
         Spacer(modifier = Modifier.height(20.dp))
         Text(
-            text = "Scrittura tag e copertina su file...",
+            text = stringResource(R.string.autotag_writing_files),
             style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold),
             color = MaterialTheme.colorScheme.onSurface
         )
         Spacer(modifier = Modifier.height(6.dp))
         Text(
-            text = "$trackTitle ($current di $total)",
+            text = stringResource(R.string.autotag_writing_progress, trackTitle, current, total),
             style = MaterialTheme.typography.bodyMedium,
             color = MaterialTheme.colorScheme.onSurfaceVariant
         )
@@ -1383,7 +1387,7 @@ private fun SuccessContent(message: String, onDone: () -> Unit) {
         )
         Spacer(modifier = Modifier.height(16.dp))
         Text(
-            text = "Aggiornamento completato!",
+            text = stringResource(R.string.autotag_completed_title),
             style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
             color = MaterialTheme.colorScheme.onSurface
         )
@@ -1398,7 +1402,7 @@ private fun SuccessContent(message: String, onDone: () -> Unit) {
             onClick = onDone,
             colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary)
         ) {
-            Text("Chiudi")
+            Text(stringResource(R.string.close))
         }
     }
 }
@@ -1419,7 +1423,7 @@ private fun ErrorContent(message: String, onDismiss: () -> Unit, onRetry: () -> 
         )
         Spacer(modifier = Modifier.height(14.dp))
         Text(
-            text = "Impossibile completare l'arricchimento",
+            text = stringResource(R.string.autotag_error_title),
             style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold),
             color = MaterialTheme.colorScheme.error
         )
@@ -1432,11 +1436,11 @@ private fun ErrorContent(message: String, onDismiss: () -> Unit, onRetry: () -> 
         Spacer(modifier = Modifier.height(20.dp))
         Row {
             TextButton(onClick = onDismiss) {
-                Text("Chiudi")
+                Text(stringResource(R.string.close))
             }
             Spacer(modifier = Modifier.width(10.dp))
             FilledTonalButton(onClick = onRetry) {
-                Text("Riprova")
+                Text(stringResource(R.string.retry))
             }
         }
     }

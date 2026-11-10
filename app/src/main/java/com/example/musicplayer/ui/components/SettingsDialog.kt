@@ -521,19 +521,13 @@ fun SettingsDialog(
                                         )
                                         Spacer(modifier = Modifier.width(8.dp))
                                         Column(modifier = Modifier.weight(1f)) {
-                                            val labelText = when (mode) {
-                                                AudioSourceMode.INTELLIGENT -> stringResource(R.string.source_mode_intelligent_recommended)
-                                                AudioSourceMode.MUSIC_ONLY -> stringResource(R.string.source_mode_music)
-                                                AudioSourceMode.ALL -> stringResource(R.string.source_mode_all)
-                                                AudioSourceMode.CUSTOM_FOLDERS -> stringResource(R.string.source_mode_custom)
-                                            }
                                             Text(
-                                                text = labelText,
+                                                text = stringResource(mode.labelResId),
                                                 style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Bold),
                                                 color = if (isSelected) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onSurface
                                             )
                                             Text(
-                                                text = mode.description,
+                                                text = stringResource(mode.descriptionResId),
                                                 style = MaterialTheme.typography.bodySmall,
                                                 color = if (isSelected) MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.8f) else MaterialTheme.colorScheme.onSurfaceVariant
                                             )
@@ -703,7 +697,7 @@ fun SettingsDialog(
                             tint = Color.Unspecified
                         )
                     },
-                    title = "Integrazione Last.fm"
+                    title = stringResource(R.string.lastfm_section_title)
                 )
                 Card(
                     modifier = Modifier.fillMaxWidth(),
@@ -736,10 +730,10 @@ fun SettingsDialog(
                             Spacer(modifier = Modifier.width(8.dp))
                             Text(
                                 text = if (isLastFmLoggedIn) {
-                                    "Connesso come: ${lastFmUsername ?: "Utente"}"
+                                    stringResource(R.string.lastfm_connected_as, lastFmUsername ?: stringResource(R.string.lastfm_default_user))
                                 } else {
-                                    "Non connesso a Last.fm"
-                                } ,
+                                    stringResource(R.string.lastfm_not_connected)
+                                },
                                 style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.SemiBold)
                             )
                         }
@@ -747,7 +741,7 @@ fun SettingsDialog(
                         if (pendingScrobblesCount > 0) {
                             Spacer(modifier = Modifier.height(6.dp))
                             Text(
-                                text = "$pendingScrobblesCount scrobble salvati offline in attesa di connessione",
+                                text = stringResource(R.string.lastfm_pending_settings_note, pendingScrobblesCount),
                                 style = MaterialTheme.typography.bodySmall,
                                 color = Color(0xFFFF9800)
                             )
@@ -759,7 +753,7 @@ fun SettingsDialog(
                             onClick = onOpenLastFmDialog,
                             modifier = Modifier.fillMaxWidth()
                         ) {
-                            Text(if (isLastFmLoggedIn) "Gestisci account Last.fm" else "Accedi a Last.fm")
+                            Text(if (isLastFmLoggedIn) stringResource(R.string.lastfm_manage_account) else stringResource(R.string.lastfm_login_button))
                         }
                     }
                 }
@@ -785,7 +779,7 @@ fun SettingsDialog(
                         )
                         Spacer(modifier = Modifier.height(6.dp))
                         Text(
-                            text = "Architettura basata su AndroidX Media3, Jetpack Compose, Room e Material 3 nativo.",
+                            text = stringResource(R.string.settings_arch_desc),
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
@@ -796,7 +790,7 @@ fun SettingsDialog(
 
                         // Sezione Aggiornamenti GitHub
                         Text(
-                            text = "Aggiornamenti & GitHub",
+                            text = stringResource(R.string.settings_updates_github_header),
                             style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold)
                         )
                         Spacer(modifier = Modifier.height(8.dp))
@@ -835,7 +829,7 @@ fun SettingsDialog(
                                                 )
                                                 Spacer(modifier = Modifier.width(8.dp))
                                                 Text(
-                                                    text = "Nuova versione disponibile: v${updateInfo?.latestVersion}!",
+                                                    text = stringResource(R.string.settings_new_version_available, updateInfo?.latestVersion ?: ""),
                                                     style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Bold),
                                                     color = MaterialTheme.colorScheme.onPrimaryContainer
                                                 )
@@ -855,7 +849,7 @@ fun SettingsDialog(
                                                 },
                                                 modifier = Modifier.fillMaxWidth()
                                             ) {
-                                                Text("Scarica aggiornamento")
+                                                Text(stringResource(R.string.settings_download_update))
                                             }
                                         }
                                     }
@@ -881,7 +875,7 @@ fun SettingsDialog(
                             }
                             updateCheckError != null -> {
                                 Text(
-                                    text = "Errore durante la verifica: $updateCheckError",
+                                    text = stringResource(R.string.settings_update_check_error, updateCheckError ?: ""),
                                     style = MaterialTheme.typography.bodySmall,
                                     color = MaterialTheme.colorScheme.error
                                 )

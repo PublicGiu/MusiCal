@@ -116,6 +116,8 @@
     <string name="duplicates_restore_menu">Ripristina duplicati ignorati</string>
     <string name="duplicates_snackbar_ignored">Brani duplicati ignorati</string>
     <string name="duplicates_snackbar_restored">Rilevamento duplicati ripristinato</string>
+    <string name="duplicates_deleted_single">1 file duplicato eliminato dallo storage</string>
+    <string name="duplicates_deleted_multiple">%d file duplicati eliminati dallo storage</string>
 
     <!-- Dettaglio Album & Artista -->
     <string name="album_tracks_summary">%1$s • %2$s min</string>
@@ -166,4 +168,239 @@
     <string name="update_dialog_download_now">Scarica ora</string>
     <string name="update_dialog_ignore">Ignora</string>
     <string name="update_dialog_later">Più tardi</string>
+
+    <!-- Azioni Comuni e Generiche Aggiuntive -->
+    <string name="reset">Reimposta</string>
+    <string name="retry">Riprova</string>
+    <string name="done">Fine</string>
+    <string name="edit">Modifica</string>
+    <string name="remove">Rimuovi</string>
+    <string name="add_to_queue">Metti in coda</string>
+    <string name="play_next">Riproduci come successivo</string>
+    <string name="unknown_artist">Artista sconosciuto</string>
+    <string name="unknown_album">Album sconosciuto</string>
+    <string name="unknown_filename">Nome file sconosciuto</string>
+    <string name="no_track_playing">Nessun brano in riproduzione</string>
+    <string name="play_count_single">%d ascolto</string>
+    <string name="play_count_multiple">%d ascolti</string>
+    <string name="library_tracks_count">%d brani in libreria</string>
+    <string name="updating_library_message">Aggiornamento libreria in corso…</string>
+    <string name="permissions_required_title">Permessi Richiesti</string>
+    <string name="options_for_item">Altre opzioni per %s</string>
+    <string name="drag_to_reorder">Trascina per riordinare</string>
+    <string name="track_number_display">Traccia %d</string>
+    <string name="preview_play">Ascolta anteprima</string>
+
+    <!-- Descrizioni Sorgenti Musicali -->
+    <string name="source_mode_intelligent_desc">Filtra automaticamente note vocali WhatsApp, registrazioni telefoniche e suoni di sistema</string>
+    <string name="source_mode_music_desc">Esclusivamente i file nella cartella Music/ e sottocartelle</string>
+    <string name="source_mode_all_desc">Tutti i file audio indicizzati nel dispositivo senza restrizioni di percorso</string>
+    <string name="source_mode_custom_desc">Solo i file all\'interno delle cartelle specifiche scelte manualmente</string>
+
+    <!-- Vista Artista -->
+    <string name="artist_view_title">Artista</string>
+    <string name="artist_close_desc">Chiudi vista artista</string>
+    <string name="artist_album_count_single">1 album</string>
+    <string name="artist_album_count_multiple">%d album</string>
+
+    <!-- Album &amp; Viste Correlate -->
+    <string name="no_albums_found">Nessun album trovato</string>
+    <string name="back_to_albums">Torna agli album</string>
+
+    <!-- Gestione Playlist -->
+    <string name="no_playlists_created">Nessuna playlist creata</string>
+    <string name="create_first_playlist">Crea la tua prima playlist</string>
+    <string name="new_playlist">Nuova Playlist</string>
+    <string name="playlist_name_label">Nome playlist</string>
+    <string name="create_playlist_button">Crea</string>
+    <string name="add_to_playlist_dialog_title">Aggiungi a playlist</string>
+    <string name="select_playlist_for_track">Seleziona la playlist per \"%s\":</string>
+    <string name="no_playlists_available">Non ci sono playlist disponibili.</string>
+    <string name="change_cover">Cambia copertina</string>
+    <string name="set_cover">Imposta copertina</string>
+    <string name="add_cover_optional">Aggiungi copertina (opzionale)</string>
+    <string name="remove_cover">Rimuovi copertina</string>
+    <string name="delete_playlist_action">Elimina playlist</string>
+    <string name="remove_from_playlist_action">Rimuovi da playlist</string>
+    <string name="back_to_playlists">Torna alle playlist</string>
+    <string name="empty_favorites_title">Nessun brano preferito</string>
+    <string name="empty_favorites_desc">Tocca i tre puntini (⋮) accanto a un brano per aggiungerlo ai tuoi brani preferiti.</string>
+    <string name="empty_playlist_title">Questa playlist è vuota</string>
+    <string name="empty_playlist_desc">Aggiungi i tuoi brani toccando il pulsante + del player o i tre puntini (⋮) accanto a una canzone.</string>
+
+    <!-- Controlli Player Aggiuntivi -->
+    <string name="shuffle_active">Shuffle attivo</string>
+    <string name="enable_shuffle">Attiva shuffle</string>
+    <string name="repeat_track_current">Ripeti traccia corrente</string>
+    <string name="repeat_playlist">Ripeti playlist</string>
+    <string name="enable_repeat">Attiva ripetizione</string>
+    <string name="view_queue">Visualizza coda di riproduzione</string>
+    <string name="synced_lyrics_desc">Testi sincronizzati</string>
+
+    <!-- Coda di Riproduzione -->
+    <string name="queue_upcoming">Successivi</string>
+    <string name="queue_empty_autoplay">Nessun brano successivo programmato</string>
+    <string name="queue_move_to_top">Sposta in cima</string>
+    <string name="queue_remove_from_list">Rimuovi dalla coda</string>
+
+    <!-- Equalizzatore Audio -->
+    <string name="equalizer_not_supported">L\'equalizzatore audio hardware non è supportato su questo dispositivo.</string>
+    <string name="equalizer_presets_header">PRESET AUDIO</string>
+    <string name="equalizer_bands_header">BANDE DI FREQUENZA</string>
+    <string name="equalizer_bass_boost_header">BASS BOOST</string>
+    <string name="equalizer_virtualizer_header">AUDIO SURROUND (VIRTUALIZZATORE)</string>
+
+    <!-- Timer di Spegnimento Aggiuntivi -->
+    <string name="sleep_timer_banner_end_of_track">ATTIVO: ALLA FINE DEL BRANO</string>
+    <string name="sleep_timer_banner_timer">TIMER IN CORSO</string>
+    <string name="sleep_timer_end_of_track_desc">La musica si fermerà dolcemente al termine della canzone attuale.</string>
+    <string name="sleep_timer_stopping_in">Spegnimento tra %1$02d:%2$02d</string>
+    <string name="sleep_timer_turn_off">Disattiva timer</string>
+    <string name="sleep_timer_quick_options">OPZIONI RAPIDE</string>
+    <string name="sleep_timer_custom_duration_header">DURATA PERSONALIZZATA (%d min)</string>
+    <string name="sleep_timer_start_custom">Avvia timer (%d min)</string>
+    <string name="sleep_timer_fade_note">La musica effettuerà un fade-out graduale prima di fermarsi.</string>
+    <string name="sleep_timer_at_end_of_track">Al termine del brano corrente</string>
+
+    <!-- Statistiche di Riproduzione -->
+    <string name="stats_plays_title">Riproduzioni</string>
+    <string name="stats_time_title">Tempo</string>
+    <string name="stats_unique_tracks_title">Brani unici</string>
+    <string name="stats_top_tracks_title">Brani più ascoltati</string>
+    <string name="stats_top_artists_title">Artisti preferiti</string>
+    <string name="stats_top_albums_title">Album più riprodotti</string>
+    <string name="stats_empty_message">Nessuna statistica d\'ascolto registrata finora.\nAscolta la tua musica per visualizzare i brani e gli artisti preferiti!</string>
+    <string name="stats_reset_button">Azzera statistiche</string>
+    <string name="stats_reset_dialog_title">Azzera statistiche d\'ascolto</string>
+    <string name="stats_reset_dialog_desc">Sei sicuro di voler cancellare tutte le statistiche di riproduzione registrate? Questa azione non può essere annullata.</string>
+    <string name="stats_reset_confirm">Azzera</string>
+
+    <!-- Last.fm -->
+    <string name="lastfm_dialog_title">Last.fm Scrobbler</string>
+    <string name="lastfm_section_title">Integrazione Last.fm</string>
+    <string name="lastfm_connected_as">Connesso come: %s</string>
+    <string name="lastfm_default_user">Utente</string>
+    <string name="lastfm_not_connected">Non connesso a Last.fm</string>
+    <string name="lastfm_waiting_api_keys">In attesa di chiavi API</string>
+    <string name="lastfm_scrobbling_active">Scrobbling attivo</string>
+    <string name="lastfm_description">I brani riprodotti vengono automaticamente registrati sul tuo profilo dopo il 50% della durata o 4 minuti.</string>
+    <string name="lastfm_offline_cache_count">Cache offline: %d in attesa</string>
+    <string name="lastfm_offline_cache_subtitle">Verranno inviati al ripristino della rete</string>
+    <string name="lastfm_sync_action">Sincronizza</string>
+    <string name="lastfm_config_custom_keys">Configura API Key personalizzate</string>
+    <string name="lastfm_missing_keys_warning">Chiavi API mancanti in questo APK: inserisci API Key e Shared Secret per riattivare lo scrobbling senza disconnetterti.</string>
+    <string name="lastfm_custom_keys_header">Chiavi API Last.fm personalizzate:</string>
+    <string name="lastfm_custom_keys_desc">Chiavi API Last.fm (creabili gratis su last.fm/api/account/create):</string>
+    <string name="lastfm_api_key_label">API Key Last.fm</string>
+    <string name="lastfm_shared_secret_label">Shared Secret Last.fm</string>
+    <string name="lastfm_save_keys_and_sync">Salva chiavi e sincronizza</string>
+    <string name="lastfm_login_prompt">Accedi con il tuo account Last.fm per registrare automaticamente i tuoi ascolti e mostrare lo stato \'In riproduzione\'.</string>
+    <string name="lastfm_username_label">Nome utente Last.fm</string>
+    <string name="lastfm_password_label">Password</string>
+    <string name="lastfm_sign_in_action">Accedi</string>
+    <string name="lastfm_sign_out_action">Disconnetti</string>
+    <string name="lastfm_pending_settings_note">%d scrobble salvati offline in attesa di connessione</string>
+    <string name="lastfm_manage_account">Gestisci account Last.fm</string>
+    <string name="lastfm_login_button">Accedi a Last.fm</string>
+
+    <!-- Impostazioni Info &amp; Aggiornamenti -->
+    <string name="settings_arch_desc">Architettura basata su AndroidX Media3, Jetpack Compose, Room e Material 3 nativo.</string>
+    <string name="settings_updates_github_header">Aggiornamenti &amp; GitHub</string>
+    <string name="settings_new_version_available">Nuova versione disponibile: v%s!</string>
+    <string name="settings_download_update">Scarica aggiornamento</string>
+    <string name="settings_update_check_error">Errore durante la verifica: %s</string>
+
+    <!-- Risultati Ricerca Globale -->
+    <string name="search_no_results">Nessun risultato per \"%s\"</string>
+    <string name="search_tracks_found">Brani trovati (%d)</string>
+    <string name="search_albums_found">Album trovati (%d)</string>
+    <string name="search_playlists_found">Playlist trovate (%d)</string>
+
+    <!-- Smart Auto-Tagger &amp; Metadata Enricher -->
+    <string name="autotag_title">Smart Auto-Tagger &amp; Enricher</string>
+    <string name="autotag_subtitle">Metadati Deezer HD + Testi Sincronizzati LRCLIB</string>
+    <string name="autotag_current">Attuale</string>
+    <string name="autotag_tag_title">Titolo</string>
+    <string name="autotag_tag_artist">Artista</string>
+    <string name="autotag_tag_album">Album</string>
+    <string name="autotag_tag_album_artist">Artista Album (per raggruppamento)</string>
+    <string name="autotag_tag_album_artist_short">Album Artist</string>
+    <string name="autotag_tag_album_artist_unique">Artista Album (univoco per tutte le tracce)</string>
+    <string name="autotag_tag_album_artist_unique_badge">Album Artist univoco</string>
+    <string name="autotag_tag_genre">Genere</string>
+    <string name="autotag_tag_year">Anno</string>
+    <string name="autotag_tag_track_num">N° Traccia</string>
+    <string name="autotag_tag_disc_num">N° Disco</string>
+    <string name="autotag_tag_track_disc">Traccia / Disco</string>
+    <string name="autotag_group_all_tracks_badge">Raggruppa tutte le tracce</string>
+    <string name="autotag_search_alt_prompt">Non è il brano giusto? Cerca o scegli altri</string>
+    <string name="autotag_search_deezer_button">Cerca su Deezer</string>
+    <string name="autotag_alt_results_header">Altri risultati trovati:</string>
+    <string name="autotag_use_candidate">Usa</string>
+    <string name="autotag_opt_normalize_title">Normalizza titolo album</string>
+    <string name="autotag_opt_normalize_title_sub">Rimuove suffissi come [Deluxe] o (Remastered)</string>
+    <string name="autotag_opt_hd_cover">Incorpora copertina HD (1000x1000)</string>
+    <string name="autotag_opt_hd_cover_sub">Salva l\'immagine nei frame del file audio</string>
+    <string name="autotag_opt_lyrics">Salva testi sincronizzati (.lrc)</string>
+    <string name="autotag_opt_lyrics_sub">Abilita il karaoke nel player a schermo intero</string>
+    <string name="autotag_apply_and_save">Applica e Salva</string>
+    <string name="autotag_mode_separate">Separa in album distinti</string>
+    <string name="autotag_mode_unify">Uniforma in un unico album</string>
+    <string name="autotag_separate_created_count">Verranno creati %d album distinti</string>
+    <string name="autotag_separate_desc">Ciascun brano verrà associato al rispettivo disco e artista con copertina HD e tag ID3 dedicati.</string>
+    <string name="autotag_custom_album_cover_applied">Verrà applicata a tutti i %d brani dell\'album</string>
+    <string name="autotag_custom_album_cover_pick">Tocca per scegliere un\'immagine dalla galleria da applicare a tutti i brani</string>
+    <string name="autotag_edit_album_details_title">Personalizza Dettagli Album</string>
+    <string name="autotag_proposed_album_details_title">Metadati Album Proposti</string>
+    <string name="autotag_dest_tracks_separate">Destinazione brani:</string>
+    <string name="autotag_dest_tracks_unify">Tracce che verranno aggiornate:</string>
+    <string name="autotag_track_album_disc_format">Disco: %1$s • %2$s</string>
+    <string name="autotag_track_position">Pos. %s</string>
+    <string name="autotag_opt_normalize_album_sub">Rimuove suffissi Deluxe o Remastered per tutte le tracce</string>
+    <string name="autotag_opt_cover_separate">Incorpora copertina HD originale per ciascun album</string>
+    <string name="autotag_opt_cover_separate_sub">Scarica e scrive l\'artwork 1000x1000px specifico del disco di ogni brano</string>
+    <string name="autotag_opt_cover_unify">Incorpora copertina HD in tutti i brani</string>
+    <string name="autotag_opt_cover_unify_sub">Applica la medesima copertina 1000x1000px</string>
+    <string name="autotag_opt_lyrics_album">Includi testi sincronizzati (.lrc)</string>
+    <string name="autotag_opt_lyrics_album_sub">Salva la sincronizzazione karaoke per ciascuna traccia</string>
+    <string name="autotag_action_separate">Separa e Crea %d Album</string>
+    <string name="autotag_action_unify">Uniforma %d Brani</string>
+    <string name="autotag_writing_files">Scrittura tag e copertina su file…</string>
+    <string name="autotag_writing_progress">%1$s (%2$d di %3$d)</string>
+    <string name="autotag_completed_title">Aggiornamento completato!</string>
+    <string name="autotag_error_title">Impossibile completare l\'arricchimento</string>
+    <string name="autotag_quick_edit_details">Modifica Rapida Metadati</string>
+    <string name="autotag_proposed_details">Metadati Proposti</string>
+    <string name="autotag_from_gallery">Da Galleria</string>
+    <string name="autotag_new_hd">Nuova HD</string>
+    <string name="autotag_gallery">Galleria</string>
+    <string name="autotag_choose_gallery">Scegli da galleria</string>
+    <string name="autotag_change_image">Cambia immagine</string>
+    <string name="autotag_cover_from_gallery">Copertina da galleria</string>
+    <string name="autotag_cover_album">Copertina Album</string>
+    <string name="autotag_lyrics_synced_ready">Testi sincronizzati (.lrc) pronti</string>
+    <string name="autotag_lyrics_plain_ready">Testo semplice disponibile</string>
+    <string name="autotag_lyrics_none">Nessun testo trovato su LRCLIB</string>
+    <string name="autotag_header_separate">Separa Brani in Album Distinti (%d tracce)</string>
+    <string name="autotag_header_unify">Uniforma Metadati Album (%d tracce)</string>
+    <string name="autotag_uniform_album_badge">Uniforma album</string>
+    <string name="autotag_position_corrected_badge">Posizione corretta</string>
+    <string name="autotag_not_set">Non impostato</string>
+    <string name="autotag_not_set_f">Non impostata</string>
+    <string name="autotag_disc_format">Disco %d</string>
+
+    <!-- Messaggi Snackbar e Notifiche Interfaccia -->
+    <string name="snackbar_cover_updated">Copertina aggiornata per \"%s\"</string>
+    <string name="snackbar_cover_removed">Copertina rimossa da \"%s\"</string>
+    <string name="snackbar_track_added_next">\"%s\" aggiunto come successivo</string>
+    <string name="snackbar_album_added_next">Album \"%1$s\" (%2$d brani) aggiunto come successivo</string>
+    <string name="snackbar_playlist_added_next">Playlist \"%1$s\" (%2$d brani) aggiunta come successiva</string>
+    <string name="snackbar_removed_from_favorites">\"%s\" rimosso dai preferiti</string>
+    <string name="snackbar_added_to_favorites">\"%s\" aggiunto ai preferiti</string>
+    <string name="snackbar_track_added_to_playlist">\"%1$s\" aggiunto a \"%2$s\"</string>
+    <string name="snackbar_artist_tracks_added_to_queue">%1$d brani di %2$s aggiunti alla coda</string>
+    <string name="show_password">Mostra password</string>
+    <string name="hide_password">Nascondi password</string>
+    <string name="cover_content_desc">Copertina %s</string>
+    <string name="album_cover_content_desc">Copertina album %s</string>
 </resources>

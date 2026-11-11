@@ -17,6 +17,8 @@ import androidx.media3.session.SessionToken
 import com.example.musicplayer.data.Album
 import com.example.musicplayer.data.AppLanguage
 import com.example.musicplayer.data.AppPreferences
+import com.example.musicplayer.data.ArtistInfoRepository
+import com.example.musicplayer.data.ArtistSearchResult
 import com.example.musicplayer.data.AudioTrack
 import com.example.musicplayer.data.DuplicateTrackGroup
 import com.example.musicplayer.data.PlaybackContext
@@ -74,6 +76,7 @@ class MusicViewModel(application: Application) : AndroidViewModel(application) {
     private val playlistRepository = PlaylistRepository(application)
     private val statsRepository = StatsRepository(application)
     private val libraryCacheRepository = LibraryCacheRepository(application)
+    val artistInfoRepository = ArtistInfoRepository(application)
     val metadataEnricherCoordinator = MetadataEnricherCoordinator(
         context = application,
         scope = viewModelScope,
@@ -205,6 +208,38 @@ class MusicViewModel(application: Application) : AndroidViewModel(application) {
     ) { playlists, query ->
         if (query.isBlank()) emptyList()
         else playlists.filter { it.name.contains(query, ignoreCase = true) }
+    }.flowOn(Dispatchers.Default)
+     .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+
+    val matchingArtists: StateFlow<List<ArtistSearchResult>> = combine(
+        _tracks, _albums, _searchQuery
+    ) { tracks, albums, query ->
+        val trimmed = query.trim()
+        if (trimmed.isBlank()) {
+            emptyList()
+        } else {
+            val distinctArtists = tracks.map { it.artist.trim() }
+                .filter { it.isNotBlank() }
+                .distinct()
+                .filter { artist ->
+                    artist.contains(trimmed, ignoreCase = true) ||
+                        extractMainArtist(artist).contains(trimmed, ignoreCase = true)
+                }
+
+            distinctArtists.map { artistName ->
+                val artistTracks = tracks.filter { it.matchesArtist(artistName) }
+                val artistAlbums = albums.filter { it.matchesArtist(artistName) }
+                val cached = artistInfoRepository.getCachedArtistInfo(artistName)
+                val fallbackUri = artistTracks.firstOrNull { it.albumArtUri != null }?.albumArtUri
+                ArtistSearchResult(
+                    name = artistName,
+                    trackCount = artistTracks.size,
+                    albumCount = artistAlbums.size,
+                    photoUrl = cached?.photoUrl,
+                    fallbackCoverUri = fallbackUri
+                )
+            }.sortedByDescending { it.trackCount }
+        }
     }.flowOn(Dispatchers.Default)
      .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 

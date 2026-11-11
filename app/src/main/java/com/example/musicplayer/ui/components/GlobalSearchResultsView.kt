@@ -1,27 +1,43 @@
 package com.example.musicplayer.ui.components
 
+import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ArrowForward
+import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.SearchOff
+import androidx.compose.material3.Card
+import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import coil.compose.AsyncImage
 import com.example.musicplayer.R
 import com.example.musicplayer.data.Album
+import com.example.musicplayer.data.ArtistSearchResult
 import com.example.musicplayer.data.AudioTrack
 import com.example.musicplayer.data.Playlist
 import com.example.musicplayer.data.TrackStats
@@ -42,6 +58,7 @@ fun GlobalSearchResultsView(
     onAddToPlaylistClick: (AudioTrack) -> Unit,
     onDeletePlaylistClick: (Playlist) -> Unit,
     modifier: Modifier = Modifier,
+    matchingArtists: List<ArtistSearchResult> = emptyList(),
     onAddAlbumToQueueClick: ((Album) -> Unit)? = null,
     onAddPlaylistToQueueClick: ((Playlist) -> Unit)? = null,
     onAddToFavoritesClick: ((AudioTrack) -> Unit)? = null,
@@ -51,7 +68,7 @@ fun GlobalSearchResultsView(
     onAutoTagTrackClick: ((AudioTrack) -> Unit)? = null,
     onArtistClick: ((String) -> Unit)? = null
 ) {
-    val totalResults = matchingTracks.size + matchingAlbums.size + matchingPlaylists.size
+    val totalResults = matchingArtists.size + matchingTracks.size + matchingAlbums.size + matchingPlaylists.size
 
     if (totalResults == 0) {
         Box(
@@ -77,9 +94,104 @@ fun GlobalSearchResultsView(
             modifier = modifier.fillMaxSize(),
             contentPadding = androidx.compose.foundation.layout.PaddingValues(vertical = 8.dp)
         ) {
-            // Sezione 1: Brani trovati
+            // Sezione 1: Artisti trovati
+            if (matchingArtists.isNotEmpty()) {
+                item {
+                    Text(
+                        text = stringResource(R.string.search_artists_found, matchingArtists.size),
+                        style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
+                        color = MaterialTheme.colorScheme.primary,
+                        modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)
+                    )
+                }
+                items(matchingArtists, key = { "artist_${it.name}" }) { artist ->
+                    Card(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 16.dp, vertical = 4.dp)
+                            .clip(RoundedCornerShape(12.dp))
+                            .clickable { onArtistClick?.invoke(artist.name) },
+                        colors = CardDefaults.cardColors(
+                            containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)
+                        ),
+                        shape = RoundedCornerShape(12.dp)
+                    ) {
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(12.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Box(
+                                modifier = Modifier
+                                    .size(52.dp)
+                                    .clip(CircleShape)
+                                    .background(MaterialTheme.colorScheme.primaryContainer),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                val photo = artist.photoUrl ?: artist.fallbackCoverUri
+                                if (photo != null) {
+                                    AsyncImage(
+                                        model = photo,
+                                        contentDescription = artist.name,
+                                        contentScale = ContentScale.Crop,
+                                        modifier = Modifier.fillMaxSize()
+                                    )
+                                } else {
+                                    Icon(
+                                        imageVector = Icons.Default.Person,
+                                        contentDescription = null,
+                                        tint = MaterialTheme.colorScheme.onPrimaryContainer,
+                                        modifier = Modifier.size(28.dp)
+                                    )
+                                }
+                            }
+
+                            Spacer(modifier = Modifier.width(14.dp))
+
+                            Column(modifier = Modifier.weight(1f)) {
+                                Text(
+                                    text = artist.name,
+                                    style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
+                                    color = MaterialTheme.colorScheme.onSurface,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis
+                                )
+                                Spacer(modifier = Modifier.height(2.dp))
+                                val albumStr = if (artist.albumCount == 1) {
+                                    stringResource(R.string.artist_album_count_single)
+                                } else {
+                                    stringResource(R.string.artist_album_count_multiple, artist.albumCount)
+                                }
+                                val subtitle = if (artist.trackCount == 1) {
+                                    stringResource(R.string.artist_search_subtitle_single, artist.trackCount, albumStr)
+                                } else {
+                                    stringResource(R.string.artist_search_subtitle_multiple, artist.trackCount, albumStr)
+                                }
+                                Text(
+                                    text = subtitle,
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                            }
+
+                            Icon(
+                                imageVector = Icons.AutoMirrored.Filled.ArrowForward,
+                                contentDescription = null,
+                                tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f),
+                                modifier = Modifier.size(20.dp)
+                            )
+                        }
+                    }
+                }
+            }
+
+            // Sezione 2: Brani trovati
             if (matchingTracks.isNotEmpty()) {
                 item {
+                    if (matchingArtists.isNotEmpty()) {
+                        Spacer(modifier = Modifier.height(12.dp))
+                    }
                     Text(
                         text = stringResource(R.string.search_tracks_found, matchingTracks.size),
                         style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),

@@ -8,6 +8,7 @@ import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.aspectRatio
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -64,7 +65,9 @@ fun AlbumsGridView(
     onAddToQueueClick: ((Album) -> Unit)? = null,
     onAutoTagAlbumClick: ((Album) -> Unit)? = null,
     onAutoTagAlbumSeparationClick: ((Album) -> Unit)? = null,
-    state: LazyGridState = rememberLazyGridState()
+    state: LazyGridState = rememberLazyGridState(),
+    isAlphabetical: Boolean = false,
+    letterProvider: ((Int) -> String?)? = null
 ) {
     if (albums.isEmpty()) {
         Box(
@@ -86,26 +89,44 @@ fun AlbumsGridView(
             }
         }
     } else {
-        LazyVerticalGrid(
-            state = state,
-            columns = GridCells.Fixed(2),
-            modifier = modifier.fillMaxSize(),
-            contentPadding = PaddingValues(12.dp),
-            horizontalArrangement = Arrangement.spacedBy(12.dp),
-            verticalArrangement = Arrangement.spacedBy(12.dp)
-        ) {
-            items(
-                items = albums,
-                key = { it.id },
-                contentType = { "album_grid_item" }
-            ) { album ->
-                AlbumGridItem(
-                    modifier = Modifier.animateItem(),
-                    album = album,
-                    onClick = { onAlbumClick(album) },
-                    onAddToQueueClick = onAddToQueueClick,
-                    onAutoTagAlbumClick = onAutoTagAlbumClick,
-                    onAutoTagAlbumSeparationClick = onAutoTagAlbumSeparationClick
+        Box(modifier = modifier.fillMaxSize()) {
+            LazyVerticalGrid(
+                state = state,
+                columns = GridCells.Fixed(2),
+                modifier = Modifier.fillMaxSize(),
+                contentPadding = PaddingValues(12.dp),
+                horizontalArrangement = Arrangement.spacedBy(12.dp),
+                verticalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
+                items(
+                    items = albums,
+                    key = { it.id },
+                    contentType = { "album_grid_item" }
+                ) { album ->
+                    AlbumGridItem(
+                        modifier = Modifier.animateItem(
+                            fadeInSpec = null,
+                            fadeOutSpec = null
+                        ),
+                        album = album,
+                        onClick = { onAlbumClick(album) },
+                        onAddToQueueClick = onAddToQueueClick,
+                        onAutoTagAlbumClick = onAutoTagAlbumClick,
+                        onAutoTagAlbumSeparationClick = onAutoTagAlbumSeparationClick
+                    )
+                }
+            }
+
+            if (albums.isNotEmpty()) {
+                FastScrollbar(
+                    gridState = state,
+                    totalItems = albums.size,
+                    isAlphabetical = isAlphabetical,
+                    letterProvider = letterProvider,
+                    modifier = Modifier
+                        .align(Alignment.CenterEnd)
+                        .fillMaxHeight()
+                        .padding(top = 8.dp, bottom = 12.dp)
                 )
             }
         }

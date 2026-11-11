@@ -290,6 +290,39 @@ private val VARIOUS_ARTISTS_NAMES = setOf(
 )
 
 private val FEAT_ARTIST_REGEX = Regex("""(?i)\s+(feat\.?|ft\.?|featuring|with|vs\.?|&|,|\+|x|/)\s+.*""")
+private val COLLAB_SEPARATORS_REGEX = Regex("""(?i)(\s*,\s*|\s+(&|x|\+|and)\s+)""")
+
+/**
+ * Verifica se un nome artista rappresenta un progetto collaborativo o di coppia
+ * (es. "Drake & 21 Savage", "Salmo & Noyz Narcos").
+ */
+fun isCollabArtist(artistName: String?): Boolean {
+    if (artistName.isNullOrBlank()) return false
+    val trimmed = artistName.trim()
+    if (isVariousArtists(trimmed)) return false
+    return COLLAB_SEPARATORS_REGEX.containsMatchIn(trimmed)
+}
+
+/**
+ * Estrae i singoli artisti che compongono il progetto collaborativo.
+ * Es: "Drake & 21 Savage" -> listOf("Drake", "21 Savage")
+ */
+fun extractCollaborators(artistName: String?): List<String> {
+    if (artistName.isNullOrBlank()) return emptyList()
+    val parts = artistName.split(COLLAB_SEPARATORS_REGEX)
+    return parts.map { it.trim() }.filter { it.isNotBlank() }
+}
+
+/**
+ * Verifica se un artista solista è uno dei partner in un progetto collaborativo.
+ * Es: isPartnerInCollab("Drake", "Drake & 21 Savage") -> true
+ */
+fun isPartnerInCollab(soloArtist: String?, collabArtist: String?): Boolean {
+    if (soloArtist.isNullOrBlank() || collabArtist.isNullOrBlank()) return false
+    val cleanSolo = soloArtist.trim()
+    val partners = extractCollaborators(collabArtist)
+    return partners.any { it.equals(cleanSolo, ignoreCase = true) }
+}
 
 /**
  * Verifica se una stringa di album è generica o assente.
@@ -316,30 +349,117 @@ fun extractMainArtist(artist: String?): String {
 }
 
 /**
- * Verifica se un brano appartiene a un determinato artista (considerando sia il tag artist completo,
- * sia l'albumArtist, sia l'artista principale estratto senza featuring).
+ * Verifica se un brano appartiene esclusivamente a un progetto collaborativo (es. "Drake & 21 Savage").
  */
-fun AudioTrack.matchesArtist(artistName: String): Boolean {
-    val target = artistName.trim()
-    if (target.isBlank()) return false
-    val mainTarget = extractMainArtist(target)
-    return artist.trim().equals(target, ignoreCase = true) ||
-            albumArtist.trim().equals(target, ignoreCase = true) ||
-            extractMainArtist(artist).equals(target, ignoreCase = true) ||
-            (mainTarget.isNotBlank() && extractMainArtist(artist).equals(mainTarget, ignoreCase = true))
+fun AudioTrack.matchesCollabArtist(collabArtistName: String): Boolean {
+    val target = collabArtistName.trim()
+    if (target.isBlank() || !isCollabArtist(target)) return false
+
+    val targetPartners = extractCollaborators(target)
+
+    if (artist.trim().equals(target, ignoreCase = true) || albumArtist.trim().equals(target, ignoreCase = true)) {
+        return true
+    }
+
+    if (isCollabArtist(artist)) {
+        val trackPartners = extractCollaborators(artist)
+        if (trackPartners.size == targetPartners.size && trackPartners.all { tp -> targetPartners.any { it.equals(tp, ignoreCase = true) } }) {
+            return true
+        }
+    }
+    if (isCollabArtist(albumArtist)) {
+        val albumPartners = extractCollaborators(albumArtist)
+        if (albumPartners.size == targetPartners.size && albumPartners.all { ap -> targetPartners.any { it.equals(ap, ignoreCase = true) } }) {
+            return true
+        }
+    }
+
+    return false
 }
 
 /**
- * Verifica se un album appartiene a un determinato artista o contiene suoi brani.
+ * Verifica se un brano appartiene a un artista solista, ESCLUDENDO i progetti collaborativi/di coppia
+ * per evitare duplicazioni nei profili singoli.
+ */
+fun AudioTrack.matchesSoloArtist(soloArtistName: String): Boolean {
+    val target = soloArtistName.trim()
+    if (target.isBlank()) return false
+
+    // Se la traccia appartiene esplicitamente a un progetto di coppia in cui questo artista è partner,
+    // la escludiamo dal profilo solista (sarà visibile nel profilo di coppia dedicato).
+    if (isCollabArtist(artist) && isPartnerInCollab(target, artist)) {
+        return false
+    }
+    if (isCollabArtist(albumArtist) && isPartnerInCollab(target, albumArtist)) {
+        return false
+    }
+
+    val mainArtist = extractMainArtist(artist)
+    val mainAlbumArtist = extractMainArtist(albumArtist)
+
+    return artist.trim().equals(target, ignoreCase = true) ||
+            albumArtist.trim().equals(target, ignoreCase = true) ||
+            (mainArtist.isNotBlank() && mainArtist.equals(target, ignoreCase = true)) ||
+            (mainAlbumArtist.isNotBlank() && mainAlbumArtist.equals(target, ignoreCase = true))
+}
+
+/**
+ * Verifica se un brano appartiene a un determinato artista, distinguendo tra profili di coppia e solisti.
+ */
+fun AudioTrack.matchesArtist(artistName: String): Boolean {
+    return if (isCollabArtist(artistName)) {
+        matchesCollabArtist(artistName)
+    } else {
+        matchesSoloArtist(artistName)
+    }
+}
+
+/**
+ * Verifica se un album appartiene al progetto collaborativo di coppia.
+ */
+fun Album.matchesCollabArtist(collabArtistName: String): Boolean {
+    val target = collabArtistName.trim()
+    if (target.isBlank() || !isCollabArtist(target)) return false
+
+    if (artist.trim().equals(target, ignoreCase = true)) return true
+    if (isCollabArtist(artist)) {
+        val albumPartners = extractCollaborators(artist)
+        val targetPartners = extractCollaborators(target)
+        if (albumPartners.size == targetPartners.size && albumPartners.all { ap -> targetPartners.any { it.equals(ap, ignoreCase = true) } }) {
+            return true
+        }
+    }
+    return tracks.isNotEmpty() && tracks.all { it.matchesCollabArtist(target) }
+}
+
+/**
+ * Verifica se un album appartiene all'artista solista, ESCLUDENDO gli album collaborativi di coppia.
+ */
+fun Album.matchesSoloArtist(soloArtistName: String): Boolean {
+    val target = soloArtistName.trim()
+    if (target.isBlank()) return false
+
+    if (isCollabArtist(artist) && isPartnerInCollab(target, artist)) {
+        return false
+    }
+
+    val validTracks = tracks.filter { it.matchesSoloArtist(target) }
+    if (validTracks.isEmpty()) return false
+
+    val mainAlbumArtist = extractMainArtist(artist)
+    return artist.trim().equals(target, ignoreCase = true) ||
+            (mainAlbumArtist.isNotBlank() && mainAlbumArtist.equals(target, ignoreCase = true))
+}
+
+/**
+ * Verifica se un album appartiene a un determinato artista, distinguendo tra profili di coppia e solisti.
  */
 fun Album.matchesArtist(artistName: String): Boolean {
-    val target = artistName.trim()
-    if (target.isBlank()) return false
-    val mainTarget = extractMainArtist(target)
-    return artist.trim().equals(target, ignoreCase = true) ||
-            extractMainArtist(artist).equals(target, ignoreCase = true) ||
-            (mainTarget.isNotBlank() && extractMainArtist(artist).equals(mainTarget, ignoreCase = true)) ||
-            tracks.any { it.matchesArtist(target) }
+    return if (isCollabArtist(artistName)) {
+        matchesCollabArtist(artistName)
+    } else {
+        matchesSoloArtist(artistName)
+    }
 }
 
 /**

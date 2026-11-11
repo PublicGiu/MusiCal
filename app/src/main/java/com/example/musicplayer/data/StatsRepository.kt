@@ -59,7 +59,7 @@ class StatsRepository(context: Context) {
             jsonArray.put(obj)
         }
 
-        val bytes = jsonArray.toString(2).toByteArray(Charsets.UTF_8)
+        val bytes = jsonArray.toString().toByteArray(Charsets.UTF_8)
         val fos = atomicFile.startWrite()
         try {
             fos.write(bytes)

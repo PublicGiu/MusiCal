@@ -41,6 +41,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.calculateEndPadding
 import androidx.compose.foundation.layout.calculateStartPadding
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -138,6 +139,7 @@ import com.example.musicplayer.ui.components.AlbumsGridView
 import com.example.musicplayer.ui.components.ArtistDetailSheet
 import com.example.musicplayer.ui.components.CreatePlaylistDialog
 import com.example.musicplayer.ui.components.EqualizerDialog
+import com.example.musicplayer.ui.components.FastScrollbar
 import com.example.musicplayer.ui.components.FullScreenPlayerSheet
 import com.example.musicplayer.ui.components.GlobalSearchResultsView
 import com.example.musicplayer.ui.components.LastFmDialog
@@ -153,6 +155,7 @@ import com.example.musicplayer.ui.components.SleepTimerDialog
 import com.example.musicplayer.ui.components.SortSelectorRow
 import com.example.musicplayer.ui.components.TrackListItem
 import com.example.musicplayer.ui.components.UpdateAvailableDialog
+import com.example.musicplayer.ui.components.extractAlphabeticalHeader
 import com.example.musicplayer.ui.components.rememberCollapsingScrollConnection
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -208,6 +211,7 @@ fun MainScreen(
     val matchingTracks by viewModel.matchingTracks.collectAsStateWithLifecycle()
     val matchingAlbums by viewModel.matchingAlbums.collectAsStateWithLifecycle()
     val matchingPlaylists by viewModel.matchingPlaylists.collectAsStateWithLifecycle()
+    val matchingArtists by viewModel.matchingArtists.collectAsStateWithLifecycle()
 
     // Aggiornamenti GitHub
     val updateInfo by viewModel.updateInfo.collectAsStateWithLifecycle()
@@ -1094,6 +1098,7 @@ fun MainScreen(
                                     matchingTracks = matchingTracks,
                                     matchingAlbums = matchingAlbums,
                                     matchingPlaylists = matchingPlaylists,
+                                    matchingArtists = matchingArtists,
                                     currentTrack = currentTrack,
                                     isPlaying = isPlaying,
                                     stats = stats,
@@ -1280,29 +1285,49 @@ fun MainScreen(
                                                         when (page) {
                                                             // 1. Scheda 'Brani'
                                                             0 -> {
-                                                                LazyColumn(
-                                                                    state = tracksListState,
-                                                                    modifier = Modifier.fillMaxSize(),
-                                                                    contentPadding = PaddingValues(bottom = 12.dp)
-                                                                ) {
-                                                                    items(
-                                                                        items = sortedTracks,
-                                                                        key = { it.id },
-                                                                        contentType = { "track_list_item" }
-                                                                    ) { track ->
-                                                                        TrackListItem(
-                                                                            modifier = Modifier.animateItem(),
-                                                                            track = track,
-                                                                            isSelected = currentTrack?.id == track.id,
-                                                                            isPlaying = isPlaying && currentTrack?.id == track.id,
-                                                                            onClick = { viewModel.playTrack(track) },
-                                                                            onAddToQueueClick = handleAddTrackToQueue,
-                                                                            onAddToPlaylistClick = { trackToAddToPlaylist = it },
-                                                                            onAddToFavoritesClick = { handleAddToFavorites(track) },
-                                                                            isFavorite = track.id in favoriteTrackIds,
-                                                                            playCount = stats[track.id]?.playCount ?: 0,
-                                                                            onAutoTagClick = { viewModel.startTrackEnrichment(it) },
-                                                                            onArtistClick = { artist -> selectedArtistForSheet = artist }
+                                                                Box(modifier = Modifier.fillMaxSize()) {
+                                                                    LazyColumn(
+                                                                        state = tracksListState,
+                                                                        modifier = Modifier.fillMaxSize(),
+                                                                        contentPadding = PaddingValues(bottom = 12.dp)
+                                                                    ) {
+                                                                        items(
+                                                                            items = sortedTracks,
+                                                                            key = { it.id },
+                                                                            contentType = { "track_list_item" }
+                                                                        ) { track ->
+                                                                            TrackListItem(
+                                                                                modifier = Modifier.animateItem(
+                                                                                    fadeInSpec = null,
+                                                                                    fadeOutSpec = null
+                                                                                ),
+                                                                                track = track,
+                                                                                isSelected = currentTrack?.id == track.id,
+                                                                                isPlaying = isPlaying && currentTrack?.id == track.id,
+                                                                                onClick = { viewModel.playTrack(track) },
+                                                                                onAddToQueueClick = handleAddTrackToQueue,
+                                                                                onAddToPlaylistClick = { trackToAddToPlaylist = it },
+                                                                                onAddToFavoritesClick = { handleAddToFavorites(track) },
+                                                                                isFavorite = track.id in favoriteTrackIds,
+                                                                                playCount = stats[track.id]?.playCount ?: 0,
+                                                                                onAutoTagClick = { viewModel.startTrackEnrichment(it) },
+                                                                                onArtistClick = { artist -> selectedArtistForSheet = artist }
+                                                                            )
+                                                                        }
+                                                                    }
+
+                                                                    if (sortedTracks.isNotEmpty()) {
+                                                                        FastScrollbar(
+                                                                            state = tracksListState,
+                                                                            totalItems = sortedTracks.size,
+                                                                            isAlphabetical = sortOption == SortOption.ALPHABETICAL,
+                                                                            letterProvider = { index ->
+                                                                                sortedTracks.getOrNull(index)?.title?.let { extractAlphabeticalHeader(it) }
+                                                                            },
+                                                                            modifier = Modifier
+                                                                                .align(Alignment.CenterEnd)
+                                                                                .fillMaxHeight()
+                                                                                .padding(top = 8.dp, bottom = 12.dp)
                                                                         )
                                                                     }
                                                                 }
@@ -1316,7 +1341,11 @@ fun MainScreen(
                                                                     onAddToQueueClick = handleAddAlbumToQueue,
                                                                     onAutoTagAlbumClick = { viewModel.startAlbumEnrichment(it, separateAlbums = false) },
                                                                     onAutoTagAlbumSeparationClick = { viewModel.startAlbumEnrichment(it, separateAlbums = true) },
-                                                                    state = albumsGridState
+                                                                    state = albumsGridState,
+                                                                    isAlphabetical = sortOption == SortOption.ALPHABETICAL,
+                                                                    letterProvider = { index ->
+                                                                        sortedAlbums.getOrNull(index)?.title?.let { extractAlphabeticalHeader(it) }
+                                                                    }
                                                                 )
                                                             }
 
@@ -1332,7 +1361,11 @@ fun MainScreen(
                                                                     onAddToQueueClick = handleAddPlaylistToQueue,
                                                                     onChangeCoverClick = handleChangePlaylistCover,
                                                                     onRemoveCoverClick = handleRemovePlaylistCover,
-                                                                    state = playlistsListState
+                                                                    state = playlistsListState,
+                                                                    isAlphabetical = sortOption == SortOption.ALPHABETICAL,
+                                                                    letterProvider = { index ->
+                                                                        sortedPlaylists.getOrNull(index)?.name?.let { extractAlphabeticalHeader(it) }
+                                                                    }
                                                                 )
                                                             }
                                                         }

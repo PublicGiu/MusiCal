@@ -15,6 +15,7 @@ import androidx.compose.animation.scaleIn
 import androidx.compose.animation.scaleOut
 import androidx.compose.animation.togetherWith
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.basicMarquee
 import androidx.compose.foundation.clickable
@@ -34,6 +35,8 @@ import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.pager.HorizontalPager
 import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.foundation.shape.CircleShape
@@ -59,6 +62,8 @@ import androidx.compose.material.icons.filled.Shuffle
 import androidx.compose.material.icons.filled.SkipNext
 import androidx.compose.material.icons.filled.SkipPrevious
 import androidx.compose.material.icons.filled.Timer
+import androidx.compose.material3.Card
+import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -96,7 +101,9 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.compose.ui.util.lerp
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.media3.common.Player
 import androidx.palette.graphics.Palette
 import coil.compose.AsyncImage
@@ -104,9 +111,12 @@ import coil.imageLoader
 import coil.request.ImageRequest
 import coil.request.SuccessResult
 import coil.size.Precision
+import com.example.musicplayer.data.ArtistInfo
+import com.example.musicplayer.data.ArtistInfoRepository
 import com.example.musicplayer.data.AudioTrack
 import com.example.musicplayer.data.LyricsData
 import com.example.musicplayer.data.PlaybackContext
+import com.example.musicplayer.data.extractMainArtist
 import com.example.musicplayer.data.formatDurationMs
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -145,12 +155,25 @@ fun FullScreenPlayerSheet(
     playbackContext: PlaybackContext = PlaybackContext.Library,
     onContextClick: (() -> Unit)? = null,
     onArtistClick: ((String) -> Unit)? = null,
-    onOpenSleepTimer: () -> Unit = {}
+    onOpenSleepTimer: () -> Unit = {},
+    artistInfoRepository: ArtistInfoRepository? = null
 ) {
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
     val context = LocalContext.current
     var isLyricsViewActive by remember { mutableStateOf(false) }
     var menuExpanded by remember { mutableStateOf(false) }
+
+    val currentArtistName = currentTrack?.artist?.trim().orEmpty()
+    val displayArtistName = remember(currentArtistName) {
+        extractMainArtist(currentArtistName).ifBlank { currentArtistName }
+    }
+    val artistInfoFlow = remember(displayArtistName, artistInfoRepository) {
+        if (displayArtistName.isNotBlank() && artistInfoRepository != null) {
+            artistInfoRepository.getArtistInfoFlow(displayArtistName)
+        } else null
+    }
+    val artistInfo by (artistInfoFlow?.collectAsStateWithLifecycle(initialValue = null)
+        ?: remember { mutableStateOf<ArtistInfo?>(null) })
 
     // Coda effettiva per il Pager: usa la coda completa o la traccia corrente come fallback
     val effectiveQueue = remember(queue, currentTrack) {
@@ -290,7 +313,7 @@ fun FullScreenPlayerSheet(
         scrimColor = Color.Black.copy(alpha = 0.75f),
         modifier = modifier.fillMaxSize()
     ) {
-        Column(
+        Box(
             modifier = Modifier
                 .fillMaxSize()
                 .background(Color(0xFF0E0B16)) // Base solida opaca
@@ -303,11 +326,21 @@ fun FullScreenPlayerSheet(
                         )
                     )
                 )
-                .statusBarsPadding()
-                .navigationBarsPadding()
-                .padding(horizontal = 24.dp, vertical = 12.dp),
-            horizontalAlignment = Alignment.CenterHorizontally
         ) {
+            LazyColumn(
+                modifier = Modifier.fillMaxSize()
+            ) {
+                // 1. Schermata principale del Player a tutta altezza
+                item {
+                    Column(
+                        modifier = Modifier
+                            .fillParentMaxHeight()
+                            .fillMaxWidth()
+                            .statusBarsPadding()
+                            .navigationBarsPadding()
+                            .padding(horizontal = 24.dp, vertical = 12.dp),
+                        horizontalAlignment = Alignment.CenterHorizontally
+                    ) {
             // 1. Top Bar interna: freccia in basso + sorgente/album + bilanciamento
             Row(
                 modifier = Modifier
@@ -768,6 +801,97 @@ fun FullScreenPlayerSheet(
             }
 
             Spacer(modifier = Modifier.weight(0.4f))
+                    }
+                }
+
+                // 2. Sezione "Sull'artista" visibile scorrendo verso il basso
+                item {
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 24.dp)
+                            .navigationBarsPadding()
+                            .padding(bottom = 32.dp, top = 8.dp)
+                    ) {
+                        Card(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clip(RoundedCornerShape(20.dp))
+                                .then(
+                                    if (onArtistClick != null && currentArtistName.isNotBlank()) {
+                                        Modifier.clickable { onArtistClick(currentArtistName) }
+                                    } else Modifier
+                                ),
+                            shape = RoundedCornerShape(20.dp),
+                            colors = CardDefaults.cardColors(
+                                containerColor = Color.White.copy(alpha = 0.08f)
+                            ),
+                            border = BorderStroke(1.dp, Color.White.copy(alpha = 0.12f))
+                        ) {
+                            Column(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(20.dp)
+                            ) {
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    val artistPhotoModel = artistInfo?.photoUrl ?: currentTrack?.albumArtUri
+                                    Box(
+                                        modifier = Modifier
+                                            .size(76.dp)
+                                            .clip(CircleShape)
+                                            .background(Color.White.copy(alpha = 0.15f)),
+                                        contentAlignment = Alignment.Center
+                                    ) {
+                                        if (artistPhotoModel != null) {
+                                            AsyncImage(
+                                                model = artistPhotoModel,
+                                                contentDescription = currentArtistName,
+                                                contentScale = ContentScale.Crop,
+                                                modifier = Modifier.fillMaxSize()
+                                            )
+                                        } else {
+                                            Icon(
+                                                imageVector = Icons.Default.Person,
+                                                contentDescription = null,
+                                                tint = Color.White.copy(alpha = 0.8f),
+                                                modifier = Modifier.size(40.dp)
+                                            )
+                                        }
+                                    }
+
+                                    Spacer(modifier = Modifier.width(16.dp))
+
+                                    Column(modifier = Modifier.weight(1f)) {
+                                        Text(
+                                            text = displayArtistName.ifBlank { stringResource(R.string.unknown_artist) },
+                                            style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.Bold),
+                                            color = Color.White,
+                                            maxLines = 2,
+                                            overflow = TextOverflow.Ellipsis
+                                        )
+                                    }
+                                }
+
+                                val bioExtract = artistInfo?.biography?.trim()
+                                if (!bioExtract.isNullOrBlank()) {
+                                    Spacer(modifier = Modifier.height(14.dp))
+                                    Text(
+                                        text = bioExtract,
+                                        style = MaterialTheme.typography.bodyMedium,
+                                        color = Color.White.copy(alpha = 0.85f),
+                                        maxLines = 3,
+                                        overflow = TextOverflow.Ellipsis,
+                                        lineHeight = 20.sp
+                                    )
+                                }
+                            }
+                        }
+                    }
+                }
+            }
         }
     }
 }

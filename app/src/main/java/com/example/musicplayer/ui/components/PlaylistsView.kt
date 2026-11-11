@@ -30,6 +30,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -143,7 +144,9 @@ fun PlaylistsView(
     onAddToQueueClick: ((Playlist) -> Unit)? = null,
     onChangeCoverClick: ((Playlist) -> Unit)? = null,
     onRemoveCoverClick: ((Playlist) -> Unit)? = null,
-    state: LazyListState = rememberLazyListState()
+    state: LazyListState = rememberLazyListState(),
+    isAlphabetical: Boolean = false,
+    letterProvider: ((Int) -> String?)? = null
 ) {
     Box(modifier = modifier.fillMaxSize()) {
         if (playlists.isEmpty()) {
@@ -190,7 +193,10 @@ fun PlaylistsView(
                     contentType = { "playlist_item" }
                 ) { playlist ->
                     PlaylistItem(
-                        modifier = Modifier.animateItem(),
+                        modifier = Modifier.animateItem(
+                            fadeInSpec = null,
+                            fadeOutSpec = null
+                        ),
                         playlist = playlist,
                         onClick = { onPlaylistClick(playlist) },
                         onDeleteClick = { onDeletePlaylistClick(playlist) },
@@ -199,6 +205,19 @@ fun PlaylistsView(
                         onRemoveCoverClick = if (!playlist.isFavorites) onRemoveCoverClick else null
                     )
                 }
+            }
+
+            if (playlists.isNotEmpty()) {
+                FastScrollbar(
+                    state = state,
+                    totalItems = playlists.size,
+                    isAlphabetical = isAlphabetical,
+                    letterProvider = letterProvider,
+                    modifier = Modifier
+                        .align(Alignment.CenterEnd)
+                        .fillMaxHeight()
+                        .padding(top = 8.dp, bottom = 84.dp)
+                )
             }
         }
 

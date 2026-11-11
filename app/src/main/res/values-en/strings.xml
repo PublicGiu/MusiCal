@@ -202,6 +202,25 @@
     <string name="artist_close_desc">Close artist view</string>
     <string name="artist_album_count_single">1 album</string>
     <string name="artist_album_count_multiple">%d albums</string>
+    <string name="artist_collaborations">Collaborations</string>
+    <string name="expand">Expand</string>
+    <string name="collapse">Collapse</string>
+    <string name="artist_bio_title">Biography</string>
+    <string name="artist_bio_read_more">Tap to read full biography</string>
+    <string name="artist_bio_source">Source: %s</string>
+    <string name="artist_bio_loading">Loading artist info…</string>
+    <string name="search_artists_found">Artists (%d)</string>
+    <string name="artist_search_subtitle_single">%1$d song • %2$s</string>
+    <string name="artist_search_subtitle_multiple">%1$d songs • %2$s</string>
+    <string name="player_about_artist">About the artist</string>
+    <string name="player_view_artist_profile">View artist profile</string>
+    <string name="edit_artist_title">Edit artist</string>
+    <string name="edit_artist_gallery">Gallery</string>
+    <string name="edit_artist_album_covers">Album covers</string>
+    <string name="edit_artist_reset_photo">Reset photo</string>
+    <string name="edit_artist_bio_placeholder">Biography…</string>
+    <string name="edit_artist_search_wiki_placeholder">Search on Wikipedia…</string>
+    <string name="edit_artist_reset_bio">Reset biography</string>
 
     <!-- Album &amp; Related Views -->
     <string name="no_albums_found">No albums found</string>

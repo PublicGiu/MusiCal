@@ -209,7 +209,8 @@ fun MainModalsHost(
                         onDismissFullScreenPlayer()
                     }
                 }
-            }
+            },
+            artistInfoRepository = viewModel.artistInfoRepository
         )
     }
 
@@ -344,7 +345,9 @@ fun MainModalsHost(
             onAddToPlaylistClick = onAddToPlaylistRequest,
             onAddToFavoritesClick = onAddToFavorites,
             favoriteTrackIds = favoriteTrackIds,
-            onAutoTagTrackClick = { viewModel.startTrackEnrichment(it) }
+            onAutoTagTrackClick = { viewModel.startTrackEnrichment(it) },
+            artistInfoRepository = viewModel.artistInfoRepository,
+            onNavigateToArtist = onSelectArtistForSheet
         )
     }
 

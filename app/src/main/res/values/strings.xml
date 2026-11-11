@@ -202,6 +202,25 @@
     <string name="artist_close_desc">Chiudi vista artista</string>
     <string name="artist_album_count_single">1 album</string>
     <string name="artist_album_count_multiple">%d album</string>
+    <string name="artist_collaborations">Collaborazioni</string>
+    <string name="expand">Espandi</string>
+    <string name="collapse">Comprimi</string>
+    <string name="artist_bio_title">Biografia</string>
+    <string name="artist_bio_read_more">Tocca per leggere la biografia completa</string>
+    <string name="artist_bio_source">Fonte: %s</string>
+    <string name="artist_bio_loading">Caricamento informazioni artista…</string>
+    <string name="search_artists_found">Artisti (%d)</string>
+    <string name="artist_search_subtitle_single">%1$d brano • %2$s</string>
+    <string name="artist_search_subtitle_multiple">%1$d brani • %2$s</string>
+    <string name="player_about_artist">Sull\'artista</string>
+    <string name="player_view_artist_profile">Visualizza profilo artista</string>
+    <string name="edit_artist_title">Modifica artista</string>
+    <string name="edit_artist_gallery">Galleria</string>
+    <string name="edit_artist_album_covers">Copertine album</string>
+    <string name="edit_artist_reset_photo">Ripristina foto</string>
+    <string name="edit_artist_bio_placeholder">Biografia…</string>
+    <string name="edit_artist_search_wiki_placeholder">Cerca su Wikipedia…</string>
+    <string name="edit_artist_reset_bio">Ripristina biografia</string>
 
     <!-- Album &amp; Viste Correlate -->
     <string name="no_albums_found">Nessun album trovato</string>

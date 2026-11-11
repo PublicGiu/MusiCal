@@ -5,6 +5,7 @@ import android.net.Uri
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -90,7 +91,7 @@ fun UpdateAvailableDialog(
                         color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
                         modifier = Modifier
                             .fillMaxWidth()
-                            .heightIn(min = 60.dp, max = 240.dp)
+                            .heightIn(min = 80.dp, max = 340.dp)
                     ) {
                         Column(
                             modifier = Modifier
@@ -112,36 +113,61 @@ fun UpdateAvailableDialog(
             }
         },
         confirmButton = {
-            Button(
-                onClick = {
-                    try {
-                        val intent = Intent(Intent.ACTION_VIEW, Uri.parse(targetUrl)).apply {
-                            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-                        }
-                        context.startActivity(intent)
-                    } catch (e: Exception) {
-                        e.printStackTrace()
-                    }
-                    onDismiss()
-                }
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.SpaceBetween
             ) {
-                Icon(
-                    imageVector = Icons.Default.Download,
-                    contentDescription = null,
-                    modifier = Modifier.size(18.dp)
-                )
-                Spacer(modifier = Modifier.width(6.dp))
-                Text(stringResource(R.string.update_dialog_download_now))
-            }
-        },
-        dismissButton = {
-            Row {
-                TextButton(onClick = onNeverShowAgain) {
-                    Text(stringResource(R.string.update_dialog_ignore))
+                TextButton(
+                    onClick = onNeverShowAgain,
+                    contentPadding = PaddingValues(horizontal = 6.dp, vertical = 4.dp)
+                ) {
+                    Text(
+                        text = stringResource(R.string.update_dialog_ignore),
+                        style = MaterialTheme.typography.labelMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
                 }
-                Spacer(modifier = Modifier.width(4.dp))
-                OutlinedButton(onClick = onDismiss) {
-                    Text(stringResource(R.string.update_dialog_later))
+
+                Row(
+                    horizontalArrangement = Arrangement.spacedBy(6.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    OutlinedButton(
+                        onClick = onDismiss,
+                        contentPadding = PaddingValues(horizontal = 8.dp, vertical = 4.dp)
+                    ) {
+                        Text(
+                            text = stringResource(R.string.update_dialog_later),
+                            style = MaterialTheme.typography.labelMedium
+                        )
+                    }
+
+                    Button(
+                        onClick = {
+                            try {
+                                val intent = Intent(Intent.ACTION_VIEW, Uri.parse(targetUrl)).apply {
+                                    addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                                }
+                                context.startActivity(intent)
+                            } catch (e: Exception) {
+                                e.printStackTrace()
+                            }
+                            onDismiss()
+                        },
+                        contentPadding = PaddingValues(horizontal = 10.dp, vertical = 4.dp)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Download,
+                            contentDescription = null,
+                            modifier = Modifier.size(16.dp)
+                        )
+                        Spacer(modifier = Modifier.width(4.dp))
+                        Text(
+                            text = stringResource(R.string.update_dialog_download_now),
+                            style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Bold)
+                        )
+                    }
                 }
             }
         }

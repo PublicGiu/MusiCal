@@ -533,20 +533,25 @@ fun ArtistDetailSheet(
                     items = displayedTracks,
                     key = { index, track -> "${track.id}_$index" }
                 ) { _, track ->
-                    TrackListItem(
+                    SwipeToQueueTrackItem(
                         track = track,
-                        isSelected = currentTrack?.id == track.id,
-                        isPlaying = isPlaying && currentTrack?.id == track.id,
-                        onClick = {
-                            val actualIndex = artistTracks.indexOfFirst { it.id == track.id }.coerceAtLeast(0)
-                            onPlayTrackIndex(actualIndex)
-                        },
-                        onAddToQueueClick = onAddToQueueClick,
-                        onAddToPlaylistClick = onAddToPlaylistClick,
-                        onAddToFavoritesClick = onAddToFavoritesClick?.let { cb -> { cb(track) } },
-                        isFavorite = track.id in favoriteTrackIds,
-                        onAutoTagClick = onAutoTagTrackClick
-                    )
+                        onSwipeToQueue = { onAddToQueueClick?.invoke(track) }
+                    ) {
+                        TrackListItem(
+                            track = track,
+                            isSelected = currentTrack?.id == track.id,
+                            isPlaying = isPlaying && currentTrack?.id == track.id,
+                            onClick = {
+                                val actualIndex = artistTracks.indexOfFirst { it.id == track.id }.coerceAtLeast(0)
+                                onPlayTrackIndex(actualIndex)
+                            },
+                            onAddToQueueClick = onAddToQueueClick,
+                            onAddToPlaylistClick = onAddToPlaylistClick,
+                            onAddToFavoritesClick = onAddToFavoritesClick?.let { cb -> { cb(track) } },
+                            isFavorite = track.id in favoriteTrackIds,
+                            onAutoTagClick = onAutoTagTrackClick
+                        )
+                    }
                 }
 
                 // Sezione Collaborazioni (per artista solista con progetti congiunti di coppia)
@@ -573,21 +578,6 @@ fun ArtistDetailSheet(
                     Spacer(modifier = Modifier.navigationBarsPadding())
                     Spacer(modifier = Modifier.height(32.dp))
                 }
-            }
-
-            val collabsCount = if (relatedCollabs.isNotEmpty()) 1 + relatedCollabs.size else 0
-            val totalItems = 1 + (if (artistAlbums.isNotEmpty()) 1 else 0) + 1 + displayedTracks.size + collabsCount + 1
-            if (totalItems > 1) {
-                FastScrollbar(
-                    state = artistListState,
-                    totalItems = totalItems,
-                    isAlphabetical = false,
-                    letterProvider = null,
-                    modifier = Modifier
-                        .align(Alignment.CenterEnd)
-                        .fillMaxHeight()
-                        .padding(top = 8.dp, bottom = 24.dp)
-                )
             }
         }
     }

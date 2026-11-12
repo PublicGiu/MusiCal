@@ -626,7 +626,6 @@ fun ArtistDetailSheet(
                             contentAlignment = Alignment.Center
                         ) {
                             Surface(
-                                onClick = { isTracksExpanded = false },
                                 modifier = Modifier
                                     .border(
                                         width = 1.dp,
@@ -638,11 +637,10 @@ fun ArtistDetailSheet(
                                 shadowElevation = 4.dp
                             ) {
                                 Icon(
-                                    painter = painterResource(R.drawable.keyboard_arrow_down_24),
+                                    painter = painterResource(R.drawable.keyboard_arrow_up_24),
                                     contentDescription = stringResource(R.string.collapse),
                                     tint = LocalMusicVioletNeon,
                                     modifier = Modifier
-                                        .graphicsLayer { rotationZ = 180f }
                                         .padding(horizontal = 14.dp, vertical = 4.dp)
                                         .size(20.dp)
                                 )

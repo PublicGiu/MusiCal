@@ -143,15 +143,16 @@ object ReleaseNotesParser {
         if (!isPotentialHeader(trimmed)) return false
 
         val normalized = normalizeHeader(trimmed)
-        return normalized.startsWith("italiano") ||
-                normalized.startsWith("italian") ||
+        return normalized.contains("italiano") ||
+                normalized.contains("italian") ||
                 normalized == "it" ||
                 normalized.contains("🇮🇹") ||
+                normalized.contains(":it:") ||
                 normalized.contains("(it)") ||
                 normalized.contains("[it]") ||
-                normalized.startsWith("novità (it)") ||
-                normalized.startsWith("changelog (it)") ||
-                normalized.startsWith("note di rilascio (it)")
+                normalized.contains("novità (it)") ||
+                normalized.contains("changelog (it)") ||
+                normalized.contains("note di rilascio (it)")
     }
 
     fun isEnglishHeader(line: String): Boolean {
@@ -159,17 +160,19 @@ object ReleaseNotesParser {
         if (!isPotentialHeader(trimmed)) return false
 
         val normalized = normalizeHeader(trimmed)
-        return normalized.startsWith("english") ||
-                normalized.startsWith("inglese") ||
+        return normalized.contains("english") ||
+                normalized.contains("inglese") ||
                 normalized == "en" ||
                 normalized.contains("🇬🇧") ||
                 normalized.contains("🇺🇸") ||
+                normalized.contains(":gb:") ||
+                normalized.contains(":uk:") ||
                 normalized.contains("(en)") ||
                 normalized.contains("[en]") ||
-                normalized.startsWith("what's new (en)") ||
-                normalized.startsWith("whats new (en)") ||
-                normalized.startsWith("changelog (en)") ||
-                normalized.startsWith("release notes (en)")
+                normalized.contains("what's new (en)") ||
+                normalized.contains("whats new (en)") ||
+                normalized.contains("changelog (en)") ||
+                normalized.contains("release notes (en)")
     }
 
     private fun isPotentialHeader(line: String): Boolean {

@@ -117,8 +117,8 @@ class ArtistInfoRepositoryTest {
     @Test
     fun testLastFmBioCleanup() {
         val rawBioContent = """
-            Antonio Serretti, in arte Tony Boy, è un rapper e cantante italiano nato a Padova nel 1999.
-            Ha pubblicato diversi album acclamati dalla critica come Going Hard e Nostalgia.
+            Antonio Serretti, in arte &quot;Tony Boy&quot;, è un rapper &amp; cantante italiano nato a Padova nel 1999.
+            Ha pubblicato l&#39;album &apos;Going Hard&apos; e Nostalgia...
             
             <a href="https://www.last.fm/music/Tony+Boy">Read more on Last.fm</a>.
             User-contributed text is available under the Creative Commons By-SA License; additional terms may apply.
@@ -126,11 +126,16 @@ class ArtistInfoRepositoryTest {
 
         val cleanBio = cleanLastFmBio(rawBioContent)
 
-        assertTrue(cleanBio.startsWith("Antonio Serretti, in arte Tony Boy"))
-        assertTrue(cleanBio.contains("Going Hard e Nostalgia"))
+        assertTrue(cleanBio.startsWith("Antonio Serretti, in arte \"Tony Boy\", è un rapper & cantante italiano"))
+        assertTrue(cleanBio.contains("l'album 'Going Hard' e Nostalgia"))
+        assertTrue(cleanBio.endsWith("."))
+        assertFalse(cleanBio.endsWith("..."))
         assertFalse(cleanBio.contains("Last.fm"))
         assertFalse(cleanBio.contains("Creative Commons"))
         assertFalse(cleanBio.contains("<a href"))
+        assertFalse(cleanBio.contains("&quot;"))
+        assertFalse(cleanBio.contains("&amp;"))
+        assertFalse(cleanBio.contains("&#39;"))
     }
 
     @Test
@@ -222,8 +227,25 @@ class ArtistInfoRepositoryTest {
     @Test
     fun testLimitBiographyLengthShortText() {
         val shortBio = "Aubrey Drake Graham è un rapper e cantante canadese."
-        val limited = limitBiographyLength(shortBio, maxChars = 1200)
+        val limited = limitBiographyLength(shortBio, maxChars = 2800)
         assertEquals(shortBio, limited)
+    }
+
+    @Test
+    fun testLimitBiographyLengthPreservesCompleteParagraphs() {
+        val p1 = "Primo paragrafo che introduce l'artista e le sue origini musicali nei minimi dettagli."
+        val p2 = "Secondo paragrafo che racconta l'uscita del primo album in studio e il successo ottenuto nelle classifiche nazionali."
+        val p3 = "Terzo paragrafo che descrive la tournée mondiale e le successive collaborazioni con grandi artisti."
+        val fullBio = "$p1\n\n$p2\n\n$p3"
+
+        // Con limite a 220 caratteri: p1 (~87) + p2 (~117) = ~206 caratteri -> entrano entrambi completi.
+        // p3 farebbe superare la soglia, quindi NON deve essere iniziato a metà lasciando il concetto campato in aria.
+        val limited = limitBiographyLength(fullBio, maxChars = 220)
+        assertTrue(limited.contains(p1))
+        assertTrue(limited.contains(p2))
+        assertFalse(limited.contains(p3))
+        assertTrue(limited.endsWith("."))
+        assertFalse(limited.endsWith("..."))
     }
 
     @Test
@@ -234,11 +256,119 @@ class ArtistInfoRepositoryTest {
         val sentence4 = "Quarta frase che supera ampiamente il limite dei caratteri consentiti per la biografia."
         val fullText = sentence1 + sentence2 + sentence3 + sentence4
 
-        // Poniamo un limite di 100 caratteri: deve tagliare alla fine di sentence2
+        // Poniamo un limite di 100 caratteri in un testo privo di interruzioni di paragrafo:
+        // deve tagliare alla fine di sentence2
         val limited = limitBiographyLength(fullText, maxChars = 100)
         assertTrue(limited.endsWith("."))
         assertTrue(limited.contains("Seconda frase"))
         assertFalse(limited.contains("Terza frase"))
+    }
+
+    @Test
+    fun testIsReliableMusicWikipediaPageValidArtists() {
+        val tonyBoyJson = JSONObject("""
+            {
+                "title": "Tony Boy",
+                "type": "standard",
+                "description": "rapper italiano",
+                "extract": "Antonio Serretti, noto come Tony Boy (Padova, 1999), è un rapper e cantante italiano."
+            }
+        """.trimIndent())
+        assertTrue(isReliableMusicWikipediaPage(tonyBoyJson, "Tony Boy"))
+
+        val coronaCantanteJson = JSONObject("""
+            {
+                "title": "Corona (cantante)",
+                "type": "standard",
+                "description": "cantante brasiliana naturalizzata italiana",
+                "extract": "Corona, pseudonimo di Olga Maria de Souza, è una cantante brasiliana naturalizzata italiana nota per The Rhythm of the Night."
+            }
+        """.trimIndent())
+        assertTrue(isReliableMusicWikipediaPage(coronaCantanteJson, "Corona"))
+
+        val genesisBandJson = JSONObject("""
+            {
+                "title": "Genesis (gruppo musicale)",
+                "type": "standard",
+                "description": "gruppo musicale britannico",
+                "extract": "I Genesis sono stati un celebre gruppo musicale rock britannico formatosi nel 1967."
+            }
+        """.trimIndent())
+        assertTrue(isReliableMusicWikipediaPage(genesisBandJson, "Genesis"))
+    }
+
+    @Test
+    fun testIsReliableMusicWikipediaPageRejectsDisambiguation() {
+        val disambiguationTypeJson = JSONObject("""
+            {
+                "title": "Corona",
+                "type": "disambiguation",
+                "description": "pagina di disambiguazione di un progetto Wikimedia",
+                "extract": "Corona può riferirsi a diverse voci."
+            }
+        """.trimIndent())
+        assertFalse(isReliableMusicWikipediaPage(disambiguationTypeJson, "Corona"))
+
+        val disambiguationExtractJson = JSONObject("""
+            {
+                "title": "Genesis",
+                "type": "standard",
+                "extract": "Genesis può indicare: Genesis (gruppo musicale), Genesi (Bibbia)..."
+            }
+        """.trimIndent())
+        assertFalse(isReliableMusicWikipediaPage(disambiguationExtractJson, "Genesis"))
+    }
+
+    @Test
+    fun testIsReliableMusicWikipediaPageRejectsNonMusicDomains() {
+        val astronomyJson = JSONObject("""
+            {
+                "title": "Corona",
+                "type": "standard",
+                "description": "fenomeno astronomico del Sole",
+                "extract": "La corona solare è la parte più esterna dell'atmosfera del Sole, formata da gas ionizzato ad altissime temperature."
+            }
+        """.trimIndent())
+        assertFalse(isReliableMusicWikipediaPage(astronomyJson, "Corona"))
+
+        val riverJson = JSONObject("""
+            {
+                "title": "Jordan",
+                "type": "standard",
+                "description": "fiume del Medio Oriente",
+                "extract": "Il Giordano è un fiume storico del Medio Oriente che sfocia nel Mar Morto."
+            }
+        """.trimIndent())
+        assertFalse(isReliableMusicWikipediaPage(riverJson, "Jordan"))
+
+        val birdJson = JSONObject("""
+            {
+                "title": "Pitta",
+                "type": "standard",
+                "description": "famiglia di uccelli passeriformi",
+                "extract": "I Pittidi sono una famiglia di uccelli passeriformi diffusi nelle foreste tropicali."
+            }
+        """.trimIndent())
+        assertFalse(isReliableMusicWikipediaPage(birdJson, "Pitta"))
+
+        val squareJson = JSONObject("""
+            {
+                "title": "Piazza Pitti",
+                "type": "standard",
+                "description": "piazza di Firenze",
+                "extract": "Piazza Pitti è una piazza di Firenze dominata dalla mole di Palazzo Pitti."
+            }
+        """.trimIndent())
+        assertFalse(isReliableMusicWikipediaPage(squareJson, "Pitta"))
+    }
+
+    @Test
+    fun testIsReliableMusicText() {
+        val nonMusicText = "La corona solare è la parte più esterna dell'atmosfera del Sole, visibile durante un'eclissi totale."
+        assertFalse(isReliableMusicText(nonMusicText))
+
+        val musicText = "Antonio Serretti, in arte Tony Boy, è un rapper e cantante italiano che ha pubblicato vari album e singoli."
+        assertTrue(isReliableMusicText(musicText))
     }
 
     @Test

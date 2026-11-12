@@ -218,8 +218,11 @@ fun MainScreen(
     val isUpdateDialogVisible by viewModel.isUpdateDialogVisible.collectAsStateWithLifecycle()
 
     // Navigazione schede e viste di dettaglio
-    var selectedTabIndex by remember { mutableIntStateOf(0) }
-    val pagerState = rememberPagerState(pageCount = { 3 })
+    var selectedTabIndex by rememberSaveable { mutableIntStateOf(0) }
+    val pagerState = rememberPagerState(
+        initialPage = selectedTabIndex,
+        pageCount = { 3 }
+    )
 
     LaunchedEffect(pagerState.currentPage) {
         selectedTabIndex = pagerState.currentPage
@@ -715,8 +718,10 @@ fun MainScreen(
         if (!hasPermissions) {
             permissionLauncher.launch(requiredPermissions)
         } else {
-            viewModel.loadTracks()
-            viewModel.loadPlaylists()
+            if (tracks.isEmpty()) {
+                viewModel.loadTracks()
+                viewModel.loadPlaylists()
+            }
         }
         viewModel.checkForUpdates(isManual = false)
     }

@@ -14,10 +14,33 @@ data class AppUpdateInfo(
     val latestVersion: String,
     val releaseName: String,
     val releaseNotes: String,
+    val releaseNotesIt: String? = null,
+    val releaseNotesEn: String? = null,
     val htmlUrl: String,
     val apkDownloadUrl: String?,
     val isUpdateAvailable: Boolean
-)
+) {
+    /**
+     * Indica se la release contiene note distinte in entrambe le lingue.
+     */
+    val hasBothLanguages: Boolean
+        get() = !releaseNotesIt.isNullOrBlank() && !releaseNotesEn.isNullOrBlank()
+
+    /**
+     * Restituisce le note di rilascio più appropriate in base alla lingua desiderata.
+     */
+    fun getReleaseNotesForLanguage(isEnglish: Boolean): String {
+        return if (isEnglish) {
+            releaseNotesEn?.takeIf { it.isNotBlank() }
+                ?: releaseNotesIt?.takeIf { it.isNotBlank() }
+                ?: releaseNotes
+        } else {
+            releaseNotesIt?.takeIf { it.isNotBlank() }
+                ?: releaseNotesEn?.takeIf { it.isNotBlank() }
+                ?: releaseNotes
+        }
+    }
+}
 
 /**
  * Gestore del controllo degli aggiornamenti dell'applicazione tramite le API pubbliche di GitHub Releases.
@@ -79,11 +102,14 @@ class GithubUpdateChecker(
                     }
 
                     val isUpdateAvailable = isRemoteNewer(cleanVersion, currentVersion)
+                    val parsedNotes = ReleaseNotesParser.parse(releaseNotes)
 
                     val updateInfo = AppUpdateInfo(
                         latestVersion = cleanVersion,
                         releaseName = releaseName,
                         releaseNotes = releaseNotes,
+                        releaseNotesIt = parsedNotes.italianNotes,
+                        releaseNotesEn = parsedNotes.englishNotes,
                         htmlUrl = htmlUrl,
                         apkDownloadUrl = apkDownloadUrl,
                         isUpdateAvailable = isUpdateAvailable

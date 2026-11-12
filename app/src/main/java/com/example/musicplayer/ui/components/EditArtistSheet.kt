@@ -26,17 +26,13 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.foundation.text.KeyboardActions
-import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Image
 import androidx.compose.material.icons.filled.Person
-import androidx.compose.material.icons.filled.Search
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
-import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.Icon
@@ -52,25 +48,21 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.layout.ContentScale
-import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.unit.dp
 import coil.compose.AsyncImage
 import com.example.musicplayer.R
 import com.example.musicplayer.data.Album
-import kotlinx.coroutines.launch
 
 /**
  * Bottom sheet compatto e minimale per la personalizzazione dell'artista (foto da galleria o copertina album,
- * e modifica/ricerca mirata della biografia). Privo di scritte o istruzioni ridondanti.
+ * e modifica diretta della biografia). Privo di scritte o istruzioni ridondanti.
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -83,12 +75,9 @@ fun EditArtistSheet(
     artistAlbums: List<Album>,
     onDismissRequest: () -> Unit,
     onSavePhoto: ((photoUri: Uri?, albumArtUri: Uri?, resetPhoto: Boolean) -> Unit),
-    onSaveBio: ((newBio: String?, resetBio: Boolean) -> Unit),
-    onSearchWikipedia: suspend (query: String) -> String?
+    onSaveBio: ((newBio: String?, resetBio: Boolean) -> Unit)
 ) {
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
-    val coroutineScope = rememberCoroutineScope()
-    val keyboardController = LocalSoftwareKeyboardController.current
 
     var selectedPhotoUri by remember { mutableStateOf<Uri?>(null) }
     var selectedAlbumArtUri by remember { mutableStateOf<Uri?>(null) }
@@ -96,9 +85,6 @@ fun EditArtistSheet(
 
     var bioText by remember { mutableStateOf(currentBio.orEmpty()) }
     var resetBioFlag by remember { mutableStateOf(false) }
-
-    var wikiQuery by remember { mutableStateOf("") }
-    var isSearchingWiki by remember { mutableStateOf(false) }
 
     val photoPickerLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.PickVisualMedia()
@@ -323,67 +309,6 @@ fun EditArtistSheet(
                         }
                     }
                 }
-
-                Spacer(modifier = Modifier.height(14.dp))
-
-                // Barra ricerca mirata su Wikipedia (per omonimie o nomi alternativi)
-                OutlinedTextField(
-                    value = wikiQuery,
-                    onValueChange = { wikiQuery = it },
-                    placeholder = { Text(stringResource(R.string.edit_artist_search_wiki_placeholder)) },
-                    singleLine = true,
-                    modifier = Modifier.fillMaxWidth(),
-                    shape = RoundedCornerShape(12.dp),
-                    keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
-                    keyboardActions = KeyboardActions(
-                        onSearch = {
-                            if (wikiQuery.isNotBlank() && !isSearchingWiki) {
-                                keyboardController?.hide()
-                                isSearchingWiki = true
-                                coroutineScope.launch {
-                                    val result = onSearchWikipedia(wikiQuery)
-                                    if (!result.isNullOrBlank()) {
-                                        bioText = result
-                                        resetBioFlag = false
-                                    }
-                                    isSearchingWiki = false
-                                }
-                            }
-                        }
-                    ),
-                    trailingIcon = {
-                        if (isSearchingWiki) {
-                            CircularProgressIndicator(
-                                modifier = Modifier.size(20.dp),
-                                strokeWidth = 2.dp,
-                                color = MaterialTheme.colorScheme.primary
-                            )
-                        } else {
-                            IconButton(
-                                onClick = {
-                                    if (wikiQuery.isNotBlank() && !isSearchingWiki) {
-                                        keyboardController?.hide()
-                                        isSearchingWiki = true
-                                        coroutineScope.launch {
-                                            val result = onSearchWikipedia(wikiQuery)
-                                            if (!result.isNullOrBlank()) {
-                                                bioText = result
-                                                resetBioFlag = false
-                                            }
-                                            isSearchingWiki = false
-                                        }
-                                    }
-                                }
-                            ) {
-                                Icon(
-                                    imageVector = Icons.Default.Search,
-                                    contentDescription = null,
-                                    tint = MaterialTheme.colorScheme.primary
-                                )
-                            }
-                        }
-                    }
-                )
 
                 Spacer(modifier = Modifier.height(16.dp))
             }

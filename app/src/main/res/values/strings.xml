@@ -165,6 +165,8 @@
     <string name="update_dialog_title">Aggiornamento disponibile</string>
     <string name="update_dialog_whats_new">Novità di questa versione:</string>
     <string name="update_dialog_fallback_text">È disponibile una nuova versione su GitHub con miglioramenti e correzioni.</string>
+    <string name="update_dialog_notes_only_it">Note di rilascio attualmente disponibili solo in italiano</string>
+    <string name="update_dialog_notes_only_en">Note di rilascio attualmente disponibili solo in inglese</string>
     <string name="update_dialog_download_now">Scarica ora</string>
     <string name="update_dialog_ignore">Ignora</string>
     <string name="update_dialog_later">Più tardi</string>
@@ -219,7 +221,6 @@
     <string name="edit_artist_album_covers">Copertine album</string>
     <string name="edit_artist_reset_photo">Ripristina foto</string>
     <string name="edit_artist_bio_placeholder">Biografia…</string>
-    <string name="edit_artist_search_wiki_placeholder">Cerca su Wikipedia…</string>
     <string name="edit_artist_reset_bio">Ripristina biografia</string>
 
     <!-- Album &amp; Viste Correlate -->

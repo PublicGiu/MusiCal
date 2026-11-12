@@ -93,10 +93,26 @@ class ArtistInfoRepository(
 
         val cached = memoryCache[clean.lowercase()]
         val preferredLang = getPreferredLanguageCode()
-        val isLangMismatched = preferredLang == "it" && cached?.source == "Last.fm" && !cached.isCustomBio
+
+        // Verifica se la cache necessita di aggiornamento:
+        // 1. Se la biografia proviene da Wikipedia (non personalizzata), Last.fm è la nuova fonte primaria
+        // 2. Se la biografia memorizzata non è affidabile (non musicale) o troncata in modo incompleto ("...")
+        // 3. Se la biografia o la foto mancano
+        val isBogusBio = cached?.biography != null && !cached.isCustomBio && !isReliableMusicText(cached.biography)
+        val isOldWikipediaBio = cached?.source == "Wikipedia" && !cached.isCustomBio
+        val isTruncatedBio = cached?.biography != null && !cached.isCustomBio && cached.biography.endsWith("...")
+        val needsBioRefresh = cached == null || isBogusBio || isOldWikipediaBio || isTruncatedBio || cached.biography.isNullOrBlank()
+        val needsPhotoRefresh = cached == null || (!cached.isCustomPhoto && cached.photoUrl == null)
+
         if (cached != null) {
-            emit(cached)
-            if (!forceRefresh && !isLangMismatched && (cached.isCustomPhoto || cached.isCustomBio || (cached.photoUrl != null && !cached.biography.isNullOrBlank()))) {
+            // Se la biografia era palesemente errata o non musicale, emetti subito la versione depurata
+            if (isBogusBio) {
+                emit(cached.copy(biography = null, source = null))
+            } else {
+                emit(cached)
+            }
+
+            if (!forceRefresh && !needsBioRefresh && !needsPhotoRefresh) {
                 artistUpdates.filter { it.equals(clean, ignoreCase = true) }.collect {
                     memoryCache[clean.lowercase()]?.let { emit(it) }
                 }
@@ -122,9 +138,13 @@ class ArtistInfoRepository(
         if (clean.isBlank()) return@withContext ArtistInfo(name = artistName)
 
         val cached = memoryCache[clean.lowercase()]
-        val preferredLang = getPreferredLanguageCode()
-        val isLangMismatched = preferredLang == "it" && cached?.source == "Last.fm" && !cached.isCustomBio
-        if (cached != null && !forceRefresh && !isLangMismatched && (cached.isCustomPhoto || cached.isCustomBio || (cached.photoUrl != null && !cached.biography.isNullOrBlank()))) {
+        val isBogusBio = cached?.biography != null && !cached.isCustomBio && !isReliableMusicText(cached.biography)
+        val isOldWikipediaBio = cached?.source == "Wikipedia" && !cached.isCustomBio
+        val isTruncatedBio = cached?.biography != null && !cached.isCustomBio && cached.biography.endsWith("...")
+        val needsBioRefresh = cached == null || isBogusBio || isOldWikipediaBio || isTruncatedBio || cached.biography.isNullOrBlank()
+        val needsPhotoRefresh = cached == null || (!cached.isCustomPhoto && cached.photoUrl == null)
+
+        if (cached != null && !forceRefresh && !needsBioRefresh && !needsPhotoRefresh) {
             return@withContext cached
         }
 
@@ -279,44 +299,62 @@ class ArtistInfoRepository(
 
         var wikiResponse: JSONObject? = null
 
-        // 1. Prova prima con il titolo esatto del query
+        // 1. Prova prima con il titolo esatto del query su Wikipedia IT
         val wikiTitle = cleanQuery.replace(' ', '_')
         val encodedWiki = URLEncoder.encode(wikiTitle, "UTF-8")
         val itWikiUrl = "https://it.wikipedia.org/api/rest_v1/page/summary/$encodedWiki"
-        wikiResponse = executeGet(itWikiUrl)
-
-        if (wikiResponse == null || wikiResponse.optString("extract").isBlank()) {
-            val enWikiUrl = "https://en.wikipedia.org/api/rest_v1/page/summary/$encodedWiki"
-            wikiResponse = executeGet(enWikiUrl)
+        var candidateResp = executeGet(itWikiUrl)
+        if (candidateResp != null && isReliableMusicWikipediaPage(candidateResp, cleanQuery, "it")) {
+            wikiResponse = candidateResp
         }
 
-        // 2. Se non trova la pagina diretta, usa l'API di ricerca MediaWiki OpenSearch
-        if (wikiResponse == null || wikiResponse.optString("extract").isBlank()) {
-            try {
-                val openSearchUrl = "https://it.wikipedia.org/w/api.php?action=opensearch&search=${URLEncoder.encode(cleanQuery, "UTF-8")}&limit=3&namespace=0&format=json"
-                val searchReq = Request.Builder()
-                    .url(openSearchUrl)
-                    .header("User-Agent", "MusiCal/0.2.0 (music player app; Android 16)")
-                    .build()
-                client.newCall(searchReq).execute().use { resp ->
-                    if (resp.isSuccessful) {
-                        val body = resp.body?.string().orEmpty()
-                        if (body.isNotBlank()) {
-                            val jsonArray = org.json.JSONArray(body)
-                            if (jsonArray.length() >= 2) {
-                                val titlesArray = jsonArray.optJSONArray(1)
-                                if (titlesArray != null && titlesArray.length() > 0) {
-                                    val firstTitle = titlesArray.optString(0)
-                                    if (firstTitle.isNotBlank()) {
-                                        val firstEncoded = URLEncoder.encode(firstTitle.replace(' ', '_'), "UTF-8")
-                                        wikiResponse = executeGet("https://it.wikipedia.org/api/rest_v1/page/summary/$firstEncoded")
+        // Se non trovato su IT, prova su EN
+        if (wikiResponse == null) {
+            val enWikiUrl = "https://en.wikipedia.org/api/rest_v1/page/summary/$encodedWiki"
+            candidateResp = executeGet(enWikiUrl)
+            if (candidateResp != null && isReliableMusicWikipediaPage(candidateResp, cleanQuery, "en")) {
+                wikiResponse = candidateResp
+            }
+        }
+
+        // 2. Se non trova la pagina diretta o non era affidabile, usa OpenSearch
+        if (wikiResponse == null) {
+            val searchDomains = listOf("it.wikipedia.org", "en.wikipedia.org")
+            for (domain in searchDomains) {
+                val lang = if (domain.startsWith("it")) "it" else "en"
+                try {
+                    val openSearchUrl = "https://$domain/w/api.php?action=opensearch&search=${URLEncoder.encode(cleanQuery, "UTF-8")}&limit=6&namespace=0&format=json"
+                    val searchReq = Request.Builder()
+                        .url(openSearchUrl)
+                        .header("User-Agent", "MusiCal/0.2.1 (music player app; Android 16)")
+                        .build()
+                    client.newCall(searchReq).execute().use { resp ->
+                        if (resp.isSuccessful) {
+                            val body = resp.body?.string().orEmpty()
+                            if (body.isNotBlank()) {
+                                val jsonArray = org.json.JSONArray(body)
+                                if (jsonArray.length() >= 2) {
+                                    val titlesArray = jsonArray.optJSONArray(1)
+                                    if (titlesArray != null) {
+                                        for (i in 0 until titlesArray.length()) {
+                                            val candTitle = titlesArray.optString(i)
+                                            if (candTitle.isNotBlank()) {
+                                                val candEncoded = URLEncoder.encode(candTitle.replace(' ', '_'), "UTF-8")
+                                                val candResp = executeGet("https://$domain/api/rest_v1/page/summary/$candEncoded")
+                                                if (candResp != null && isReliableMusicWikipediaPage(candResp, cleanQuery, lang)) {
+                                                    wikiResponse = candResp
+                                                    break
+                                                }
+                                            }
+                                        }
                                     }
                                 }
                             }
                         }
                     }
-                }
-            } catch (_: Exception) {}
+                } catch (_: Exception) {}
+                if (wikiResponse != null) break
+            }
         }
 
         val extract = wikiResponse?.optString("extract")?.trim()
@@ -338,26 +376,52 @@ class ArtistInfoRepository(
     }
 
     /**
-     * Interroga Wikipedia (summary REST API + MediaWiki OpenSearch di riserva)
+     * Interroga Wikipedia (summary REST API + tentativi disambiguati + OpenSearch di riserva)
      * per recuperare l'estratto biografico e l'eventuale foto promozionale.
+     * Applica controlli rigorosi di affidabilità (isReliableMusicWikipediaPage)
+     * per garantire che la pagina appartenga effettivamente a un artista/progetto musicale.
      */
     private fun fetchWikipediaSummary(title: String, lang: String = "it"): Pair<String?, String?> {
         var biography: String? = null
         var photoUrl: String? = null
         val domain = if (lang.equals("it", ignoreCase = true)) "it.wikipedia.org" else "en.wikipedia.org"
-        val wikiTitle = title.trim().replace(' ', '_')
+        val cleanTitle = title.trim()
+        val wikiTitle = cleanTitle.replace(' ', '_')
         val encodedWiki = URLEncoder.encode(wikiTitle, "UTF-8")
 
-        // 1. Prova prima con il titolo esatto
-        var wikiResponse = executeGet("https://$domain/api/rest_v1/page/summary/$encodedWiki")
+        var verifiedResponse: JSONObject? = null
 
-        // 2. Se non trova nulla, prova con OpenSearch su quel dominio
-        if (wikiResponse == null || wikiResponse.optString("extract").isBlank()) {
+        // 1. Prova prima con il titolo esatto
+        val directResponse = executeGet("https://$domain/api/rest_v1/page/summary/$encodedWiki")
+        if (directResponse != null && isReliableMusicWikipediaPage(directResponse, cleanTitle, lang)) {
+            verifiedResponse = directResponse
+        }
+
+        // 2. Se non è affidabile (es. pagina di disambiguazione o termine comune come "Corona", "Genesis", "Kiss"),
+        // prova le forme disambiguate musicali tipiche di Wikipedia
+        if (verifiedResponse == null) {
+            val suffixes = if (lang.equals("it", ignoreCase = true)) {
+                listOf("(cantante)", "(gruppo musicale)", "(rapper)", "(cantautore)", "(cantautrice)", "(musicista)", "(disc jockey)", "(band)")
+            } else {
+                listOf("(musician)", "(singer)", "(band)", "(rapper)", "(musical group)", "(songwriter)", "(DJ)")
+            }
+            for (suffix in suffixes) {
+                val disambiguatedTitle = "${cleanTitle}_$suffix".replace(' ', '_')
+                val disambiguatedResp = executeGet("https://$domain/api/rest_v1/page/summary/${URLEncoder.encode(disambiguatedTitle, "UTF-8")}")
+                if (disambiguatedResp != null && isReliableMusicWikipediaPage(disambiguatedResp, cleanTitle, lang)) {
+                    verifiedResponse = disambiguatedResp
+                    break
+                }
+            }
+        }
+
+        // 3. Se ancora non trovato, cerca tramite MediaWiki OpenSearch esaminando i candidati
+        if (verifiedResponse == null) {
             try {
-                val openSearchUrl = "https://$domain/w/api.php?action=opensearch&search=${URLEncoder.encode(title.trim(), "UTF-8")}&limit=3&namespace=0&format=json"
+                val openSearchUrl = "https://$domain/w/api.php?action=opensearch&search=${URLEncoder.encode(cleanTitle, "UTF-8")}&limit=6&namespace=0&format=json"
                 val searchReq = Request.Builder()
                     .url(openSearchUrl)
-                    .header("User-Agent", "MusiCal/0.2.0 (music player app; Android 16)")
+                    .header("User-Agent", "MusiCal/0.2.1 (music player app; Android 16)")
                     .build()
                 client.newCall(searchReq).execute().use { resp ->
                     if (resp.isSuccessful) {
@@ -366,11 +430,17 @@ class ArtistInfoRepository(
                             val jsonArray = org.json.JSONArray(body)
                             if (jsonArray.length() >= 2) {
                                 val titlesArray = jsonArray.optJSONArray(1)
-                                if (titlesArray != null && titlesArray.length() > 0) {
-                                    val firstTitle = titlesArray.optString(0)
-                                    if (firstTitle.isNotBlank()) {
-                                        val firstEncoded = URLEncoder.encode(firstTitle.replace(' ', '_'), "UTF-8")
-                                        wikiResponse = executeGet("https://$domain/api/rest_v1/page/summary/$firstEncoded")
+                                if (titlesArray != null) {
+                                    for (i in 0 until titlesArray.length()) {
+                                        val candTitle = titlesArray.optString(i)
+                                        if (candTitle.isNotBlank()) {
+                                            val candEncoded = URLEncoder.encode(candTitle.replace(' ', '_'), "UTF-8")
+                                            val candResp = executeGet("https://$domain/api/rest_v1/page/summary/$candEncoded")
+                                            if (candResp != null && isReliableMusicWikipediaPage(candResp, cleanTitle, lang)) {
+                                                verifiedResponse = candResp
+                                                break
+                                            }
+                                        }
                                     }
                                 }
                             }
@@ -380,13 +450,13 @@ class ArtistInfoRepository(
             } catch (_: Exception) {}
         }
 
-        if (wikiResponse != null) {
-            val extract = wikiResponse.optString("extract").trim()
+        if (verifiedResponse != null) {
+            val extract = verifiedResponse.optString("extract").trim()
             if (extract.isNotBlank()) {
                 biography = extract
             }
-            val originalImg = wikiResponse.optJSONObject("originalimage")?.optString("source")
-            val thumbImg = wikiResponse.optJSONObject("thumbnail")?.optString("source")
+            val originalImg = verifiedResponse.optJSONObject("originalimage")?.optString("source")
+            val thumbImg = verifiedResponse.optJSONObject("thumbnail")?.optString("source")
             photoUrl = originalImg?.takeIf { it.isNotBlank() } ?: thumbImg?.takeIf { it.isNotBlank() }
         }
         return Pair(biography, photoUrl)
@@ -418,12 +488,13 @@ class ArtistInfoRepository(
     }
 
     /**
-     * Effettua l'interrogazione delle sorgenti remote rispettando la lingua preferita dell'utente:
-     * - Se la lingua è l'italiano: priorità assoluta a Wikipedia in italiano (it.wikipedia.org) per
-     *   garantire biografie in italiano anche per artisti internazionali (es. Drake, Travis Scott),
-     *   con fallback su Last.fm (&lang=it) e poi Wikipedia EN.
-     * - Se la lingua è l'inglese: Last.fm come fonte primaria con fallback su Wikipedia EN.
-     * - Deezer rimane fonte primaria per le foto HD promozionali.
+     * Effettua l'interrogazione delle sorgenti remote rispettando la nuova gerarchia autoritativa:
+     * - Last.fm è la FONTE PRINCIPALE per la biografia di TUTTI gli artisti (musicale per definizione).
+     *   Interroga Last.fm nella lingua preferita dell'utente.
+     * - Wikipedia funge da FALLBACK con verifica preventiva di affidabilità (isReliableMusicWikipediaPage):
+     *   se la lingua è l'italiano e Last.fm non ha la biografia in italiano, consulta Wikipedia IT verificata,
+     *   poi Last.fm EN ed infine Wikipedia EN verificata.
+     * - Deezer rimane la fonte primaria per le foto HD promozionali (picture_xl 1000x1000).
      */
     private suspend fun fetchArtistInfoRemote(cleanName: String): ArtistInfo = withContext(Dispatchers.IO) {
         val existing = memoryCache[cleanName.lowercase()]
@@ -431,7 +502,7 @@ class ArtistInfoRepository(
         val isCustomBio = existing?.isCustomBio == true
         var photoUrl: String? = existing?.photoUrl.takeIf { isCustomPhoto }
         var biography: String? = existing?.biography.takeIf { isCustomBio }
-        var sourceLabel = if (isCustomBio) (existing?.source ?: "Personalizzata") else "Deezer / Wikipedia"
+        var sourceLabel = if (isCustomBio) (existing?.source ?: "Personalizzata") else "Deezer / Last.fm"
 
         // 1. Recupero Foto HD da Deezer Public API se non è personalizzata
         if (!isCustomPhoto && photoUrl == null) {
@@ -440,7 +511,7 @@ class ArtistInfoRepository(
                 val deezerUrl = "https://api.deezer.com/search/artist?q=$encodedQuery"
                 val request = Request.Builder()
                     .url(deezerUrl)
-                    .header("User-Agent", "MusiCal/0.2.0 (music player app; Android 16)")
+                    .header("User-Agent", "MusiCal/0.2.1 (music player app; Android 16)")
                     .build()
 
                 client.newCall(request).execute().use { response ->
@@ -473,62 +544,51 @@ class ArtistInfoRepository(
             }
         }
 
-        // 2. Recupero Biografia coerente con la lingua impostata se non è personalizzata
+        // 2. Recupero Biografia con Last.fm come FONTE PRINCIPALE per tutti gli artisti
         val preferredLang = getPreferredLanguageCode()
         if (!isCustomBio && biography == null) {
-            if (preferredLang == "it") {
-                // Fonte Primaria per lingua italiana: Wikipedia in italiano
+            // A. Fonte Primaria: Last.fm nella lingua preferita dell'utente
+            val lastFmPrimaryBio = fetchLastFmBio(cleanName, preferredLang)
+            if (!lastFmPrimaryBio.isNullOrBlank()) {
+                biography = limitBiographyLength(lastFmPrimaryBio)
+                sourceLabel = "Last.fm"
+            }
+
+            // B. Se la lingua è l'italiano e Last.fm non ha bio in italiano:
+            // Fallback 1: Wikipedia in italiano con verifica rigorosa di affidabilità musicale
+            if (biography.isNullOrBlank() && preferredLang == "it") {
                 val (wikiItBio, wikiItPhoto) = fetchWikipediaSummary(cleanName, "it")
                 if (!wikiItBio.isNullOrBlank()) {
                     biography = limitBiographyLength(wikiItBio)
                     sourceLabel = "Wikipedia"
+                    if (!isCustomPhoto && photoUrl == null && wikiItPhoto != null) {
+                        photoUrl = wikiItPhoto
+                    }
                 }
-                if (!isCustomPhoto && photoUrl == null && wikiItPhoto != null) {
-                    photoUrl = wikiItPhoto
-                }
+            }
 
-                // Fallback 1: Last.fm con lingua italiana
-                if (biography.isNullOrBlank()) {
-                    val lastFmBio = fetchLastFmBio(cleanName, "it")
-                    if (!lastFmBio.isNullOrBlank()) {
-                        biography = limitBiographyLength(lastFmBio)
-                        sourceLabel = "Last.fm"
-                    }
-                }
-
-                // Fallback 2: Wikipedia in lingua inglese
-                if (biography.isNullOrBlank()) {
-                    val (wikiEnBio, wikiEnPhoto) = fetchWikipediaSummary(cleanName, "en")
-                    if (!wikiEnBio.isNullOrBlank()) {
-                        biography = limitBiographyLength(wikiEnBio)
-                        sourceLabel = "Wikipedia"
-                    }
-                    if (!isCustomPhoto && photoUrl == null && wikiEnPhoto != null) {
-                        photoUrl = wikiEnPhoto
-                    }
-                }
-            } else {
-                // Per lingua inglese (o altre): Last.fm come fonte primaria
-                val lastFmBio = fetchLastFmBio(cleanName, preferredLang)
-                if (!lastFmBio.isNullOrBlank()) {
-                    biography = limitBiographyLength(lastFmBio)
+            // C. Fallback 2: Last.fm in lingua inglese (se la query primaria era in italiano ed era vuota)
+            if (biography.isNullOrBlank() && preferredLang != "en") {
+                val lastFmEnBio = fetchLastFmBio(cleanName, "en")
+                if (!lastFmEnBio.isNullOrBlank()) {
+                    biography = limitBiographyLength(lastFmEnBio)
                     sourceLabel = "Last.fm"
                 }
+            }
 
-                // Fallback: Wikipedia in lingua inglese
-                if (biography.isNullOrBlank()) {
-                    val (wikiEnBio, wikiEnPhoto) = fetchWikipediaSummary(cleanName, "en")
-                    if (!wikiEnBio.isNullOrBlank()) {
-                        biography = limitBiographyLength(wikiEnBio)
-                        sourceLabel = "Wikipedia"
-                    }
+            // D. Fallback 3: Wikipedia in lingua inglese con verifica rigorosa di affidabilità musicale
+            if (biography.isNullOrBlank()) {
+                val (wikiEnBio, wikiEnPhoto) = fetchWikipediaSummary(cleanName, "en")
+                if (!wikiEnBio.isNullOrBlank()) {
+                    biography = limitBiographyLength(wikiEnBio)
+                    sourceLabel = "Wikipedia"
                     if (!isCustomPhoto && photoUrl == null && wikiEnPhoto != null) {
                         photoUrl = wikiEnPhoto
                     }
                 }
             }
         } else if (!isCustomPhoto && photoUrl == null) {
-            // Se abbiamo già la bio ma manca la foto, prova a recuperarla da Wikipedia
+            // Se abbiamo già la bio ma manca la foto, prova a recuperarla da Wikipedia verificata
             try {
                 val (_, wikiPhoto) = fetchWikipediaSummary(cleanName, preferredLang)
                 if (wikiPhoto != null) {
@@ -551,7 +611,7 @@ class ArtistInfoRepository(
     private fun executeGet(url: String): JSONObject? {
         val request = Request.Builder()
             .url(url)
-            .header("User-Agent", "MusiCal/0.2.0 (music player app; Android 16)")
+            .header("User-Agent", "MusiCal/0.2.1 (music player app; Android 16)")
             .build()
         return try {
             client.newCall(request).execute().use { response ->
@@ -641,8 +701,12 @@ class ArtistInfoRepository(
 }
 
 /**
- * Pulisce il testo della biografia fornito da Last.fm rimuovendo tag HTML,
- * rimandi "Read more on Last.fm" e note di licenza Creative Commons in calce.
+ * Pulisce il testo della biografia fornito da Last.fm:
+ * - rimuove tag HTML
+ * - rimuove rimandi promozionali "Read more on Last.fm" e licenze Creative Commons in calce
+ * - decodifica entità HTML comuni (&quot;, &apos;, &#39;, &amp;, &lt;, &gt;)
+ * - normalizza i ritorni a capo
+ * - rimuove eventuali ellissi o puntini sospesi rimasti a fine testo
  */
 fun cleanLastFmBio(rawBio: String): String {
     var text = rawBio
@@ -652,19 +716,62 @@ fun cleanLastFmBio(rawBio: String): String {
     text = text.replace(Regex("(?i)Read more on Last\\.fm.*"), "")
     // Rimuove note di licenza Creative Commons in calce
     text = text.replace(Regex("(?i)User-contributed text is available under the Creative Commons.*"), "")
+    // Decodifica entità HTML comuni
+    text = text.replace("&quot;", "\"")
+        .replace("&apos;", "'")
+        .replace("&#39;", "'")
+        .replace("&amp;", "&")
+        .replace("&lt;", "<")
+        .replace("&gt;", ">")
+        .replace("&nbsp;", " ")
     // Normalizza ritorni a capo multipli mantenendo i paragrafi puliti
-    text = text.replace(Regex("\n{3,}"), "\n\n").trim()
+    text = text.replace(Regex("\r\n"), "\n")
+    text = text.replace(Regex("\n{3,}"), "\n\n")
+    // Rimuove eventuali puntini o ellissi lasciati in calce prima del link rimosso
+    text = text.replace(Regex("""\s*\.{2,}\s*$"""), ".").trim()
     return text
 }
 
 /**
- * Limita la lunghezza delle biografie troppo estese (es. pagine enciclopediche di Last.fm o Wikipedia),
- * troncando in modo intelligente alla fine della frase più vicina entro o nei pressi della soglia limite.
+ * Limita la lunghezza delle biografie preservando rigorosamente l'integrità dei paragrafi e dei concetti.
+ * Se il testo è strutturato in più paragrafi (separati da doppio a capo), include paragrafi completi
+ * fino alla soglia desiderata (default ~2800 caratteri) e non tronca mai a metà di un paragrafo,
+ * evitando di lasciare concetti incompiuti ("campati in aria").
+ * Se il testo è un unico blocco indiviso, tronca alla fine della frase più vicina.
  */
-fun limitBiographyLength(bio: String, maxChars: Int = 1200): String {
+fun limitBiographyLength(bio: String, maxChars: Int = 2800): String {
     val trimmed = bio.trim()
     if (trimmed.length <= maxChars) return trimmed
 
+    // 1. Se il testo è strutturato in paragrafi (separati da doppio a capo)
+    val paragraphs = trimmed.split(Regex("""\r?\n\s*\r?\n"""))
+        .map { it.trim() }
+        .filter { it.isNotBlank() }
+
+    if (paragraphs.size > 1) {
+        val keptParagraphs = mutableListOf<String>()
+        var accumulatedLength = 0
+
+        for (paragraph in paragraphs) {
+            val addedLength = if (keptParagraphs.isEmpty()) paragraph.length else paragraph.length + 2 // +2 per "\n\n"
+            // Se l'aggiunta del paragrafo rientra nel limite, oppure se è il primo paragrafo entro una soglia estesa
+            if (accumulatedLength + addedLength <= maxChars || (keptParagraphs.isEmpty() && addedLength <= maxChars + 400)) {
+                keptParagraphs.add(paragraph)
+                accumulatedLength += addedLength
+            } else {
+                // Non possiamo includere questo intero paragrafo senza superare maxChars.
+                // Se abbiamo già almeno 1 paragrafo completo, ci fermiamo qui per non lasciare
+                // il concetto campato in aria.
+                break
+            }
+        }
+
+        if (keptParagraphs.isNotEmpty()) {
+            return keptParagraphs.joinToString("\n\n").trim()
+        }
+    }
+
+    // 2. Se è un unico paragrafo lungo senza interruzioni di riga, tronchiamo a fine frase
     val sub = trimmed.substring(0, maxChars)
     val sentenceEndRegex = Regex("""[.!?](\s+|$)""")
     val matches = sentenceEndRegex.findAll(sub).toList()
@@ -674,8 +781,8 @@ fun limitBiographyLength(bio: String, maxChars: Int = 1200): String {
         return trimmed.substring(0, lastMatch.range.first + 1).trim()
     }
 
-    // Se non troviamo una chiusura prima di maxChars, prova a cercare la fine frase poco dopo (fino a maxChars + 150)
-    val extensionLimit = (maxChars + 150).coerceAtMost(trimmed.length)
+    // Se non troviamo una chiusura prima di maxChars, cerca la fine frase poco dopo (fino a maxChars + 250)
+    val extensionLimit = (maxChars + 250).coerceAtMost(trimmed.length)
     val extendedSub = trimmed.substring(0, extensionLimit)
     val extendedMatches = sentenceEndRegex.findAll(extendedSub).toList()
     val extendedMatch = extendedMatches.firstOrNull { it.range.first >= maxChars }
@@ -690,4 +797,145 @@ fun limitBiographyLength(bio: String, maxChars: Int = 1200): String {
     } else {
         sub.trim() + "..."
     }
+}
+
+/**
+ * Verifica l'affidabilità di una pagina Wikipedia rispetto all'artista musicale richiesto:
+ * 1. Esclude categoricamente pagine di disambiguazione ("type == disambiguation" o testo "può riferirsi a:")
+ * 2. Esclude pagine chiaramente appartenenti ad altri domini semantici (comuni, fiumi, fenomeni astronomici, chimica,
+ *    specie botaniche/zoologiche, film, videogiochi, politici, atleti) che non contengono ruoli musicali
+ * 3. Richiede la presenza di specifici indicatori musicali (suffissi nel titolo, descrizione di Wikidata musicale,
+ *    o lemmi musicali espliciti nell'estratto come cantante, rapper, gruppo musicale, band, album, discografia, singoli)
+ * 4. Verifica che il titolo della pagina corrisponda all'artista (o che il nome dell'artista sia citato nell'estratto in caso di redirect a nome anagrafico).
+ */
+fun isReliableMusicWikipediaPage(
+    json: JSONObject,
+    artistName: String,
+    lang: String = "it"
+): Boolean {
+    val type = json.optString("type").trim()
+    if (type.equals("disambiguation", ignoreCase = true) || type.equals("no-extract", ignoreCase = true)) {
+        return false
+    }
+
+    val extract = json.optString("extract").trim()
+    if (extract.isBlank()) return false
+    val lowerExtract = extract.lowercase()
+
+    // Controllo frasi tipiche di disambiguazione
+    if (lowerExtract.startsWith("può riferirsi a:") ||
+        lowerExtract.contains("può indicare:") ||
+        lowerExtract.startsWith("may refer to:") ||
+        lowerExtract.contains("may also refer to:")
+    ) {
+        return false
+    }
+
+    val rawTitle = json.optString("title").trim()
+    val lowerTitle = rawTitle.lowercase()
+    val description = json.optString("description").trim().lowercase()
+
+    // 1. Riconoscimento suffissi disambiguati musicali nel titolo
+    val hasMusicTitleSuffix = lowerTitle.contains("(cantante)") ||
+        lowerTitle.contains("(cantautore)") ||
+        lowerTitle.contains("(cantautrice)") ||
+        lowerTitle.contains("(rapper)") ||
+        lowerTitle.contains("(trapper)") ||
+        lowerTitle.contains("(gruppo musicale)") ||
+        lowerTitle.contains("(musicista)") ||
+        lowerTitle.contains("(compositore)") ||
+        lowerTitle.contains("(disc jockey)") ||
+        lowerTitle.contains("(band)") ||
+        lowerTitle.contains("(musician)") ||
+        lowerTitle.contains("(singer)") ||
+        lowerTitle.contains("(musical group)") ||
+        lowerTitle.contains("(record producer)") ||
+        lowerTitle.contains("(songwriter)") ||
+        lowerTitle.contains("(dj)")
+
+    // 2. Ruoli musicali primari
+    val musicRoles = listOf(
+        "cantante", "cantautore", "cantautrice", "rapper", "trapper", "gruppo musicale", "band",
+        "musicista", "compositore", "compositrice", "disc jockey", "dj", "chitarrista", "batterista",
+        "bassista", "pianista", "tastierista", "sassofonista", "produttore discografico", "beatmaker",
+        "singer", "songwriter", "musician", "musical group", "record producer", "guitarist",
+        "drummer", "bassist", "pianist", "keyboardist"
+    )
+
+    val hasMusicRoleInDescription = musicRoles.any { description.contains(it) }
+
+    // 3. Filtro negativo: domini palesemente non musicali
+    val nonMusicCategories = listOf(
+        "comune", "città", "frazione", "provincia", "regione", "stato", "fiume", "lago", "valle",
+        "montagna", "monte", "isola", "arcipelago", "municipality", "city", "town", "village",
+        "river", "lake", "mountain", "island", "distretto",
+        "costellazione", "stella", "galassia", "pianeta", "satellite", "asteroide", "minerale",
+        "elemento chimico", "specie", "pianta", "albero", "fiore", "animale", "uccello", "pesce",
+        "mammifero", "insetto", "constellation", "star", "galaxy", "planet", "species",
+        "azienda", "società", "veicolo", "autovettura", "moneta", "valuta", "copricapo", "indumento",
+        "film", "serie televisiva", "programma televisivo", "romanzo", "fumetto", "videogioco",
+        "personaggio fittizio", "personaggio immaginario", "fictional character", "video game",
+        "calciatore", "cestista", "nuotatore", "ciclista", "pilota", "atleta", "sportivo", "politico",
+        "militare", "generale", "vescovo", "papa", "santo", "filosofo", "matematico", "fisico",
+        "chimico", "astronomo", "architetto", "pittore", "scultore", "footballer", "basketball player",
+        "politician", "painter", "sculptor"
+    )
+
+    if (nonMusicCategories.any { description.contains(it) } && !hasMusicRoleInDescription && !hasMusicTitleSuffix) {
+        return false
+    }
+
+    // 4. Indicatori musicali generali nell'estratto
+    val musicKeywords = listOf(
+        "cantante", "cantautore", "cantautrice", "rapper", "trapper", "gruppo musicale", "band",
+        "musicista", "compositore", "compositrice", "disc jockey", "dj", "chitarrista", "batterista",
+        "bassista", "pianista", "tastierista", "sassofonista", "produttore discografico", "beatmaker",
+        "album in studio", "studio album", "discografia", "discography", "singolo discografico", "singoli",
+        "brano musicale", "brani", "canzone", "canzoni", "casa discografica", "etichetta discografica",
+        "record label", "genere musicale", "classifica fimi", "billboard", "grammy",
+        "festival di sanremo", "tournée", "concerto", "concerti", "musica pop", "musica rock",
+        "musica rap", "musica trap", "musica hip hop", "musica elettronica", "musica jazz", "musica metal",
+        "singer", "songwriter", "musician", "musical group", "record producer"
+    )
+
+    val hasMusicKeywordsInExtract = musicKeywords.any { lowerExtract.contains(it) }
+
+    // Almeno uno tra suffisso titolo, descrizione musicale o keyword nell'estratto DEVE essere presente
+    if (!hasMusicTitleSuffix && !hasMusicRoleInDescription && !hasMusicKeywordsInExtract) {
+        return false
+    }
+
+    // 5. Verifica corrispondenza con il nome dell'artista
+    val cleanArtist = artistName.trim().lowercase()
+    val baseTitle = rawTitle.replace(Regex("""\s*\(.*?\)\s*"""), "").trim().lowercase()
+
+    val titleMatches = baseTitle == cleanArtist ||
+        baseTitle.replace("'", "").replace("-", " ") == cleanArtist.replace("'", "").replace("-", " ") ||
+        baseTitle.startsWith("$cleanArtist ") ||
+        cleanArtist.startsWith("$baseTitle ")
+
+    val extractMentionsArtist = lowerExtract.contains(cleanArtist) ||
+        (cleanArtist.contains(" ") && cleanArtist.split(" ").all { it.length > 2 && lowerExtract.contains(it) })
+
+    return titleMatches || extractMentionsArtist
+}
+
+/**
+ * Verifica sintetica se una stringa di testo contiene riferimenti a contenuti musicali.
+ */
+fun isReliableMusicText(text: String?): Boolean {
+    if (text.isNullOrBlank()) return false
+    val lower = text.lowercase()
+    val musicKeywords = listOf(
+        "cantante", "cantautore", "cantautrice", "rapper", "trapper", "gruppo musicale", "band",
+        "musicista", "compositore", "compositrice", "disc jockey", "dj", "chitarrista", "batterista",
+        "bassista", "pianista", "tastierista", "sassofonista", "produttore discografico", "beatmaker",
+        "album", "singolo", "singoli", "discografia", "canzone", "canzoni", "brano", "brani",
+        "casa discografica", "etichetta discografica", "genere musicale", "classifica fimi",
+        "festival di sanremo", "tournée", "concerto", "concerti", "musica",
+        "singer", "songwriter", "musician", "musical group", "record producer", "guitarist",
+        "drummer", "bassist", "pianist", "discography", "studio album", "record label",
+        "billboard", "grammy", "single", "singles", "song", "songs", "tour", "music"
+    )
+    return musicKeywords.any { lower.contains(it) }
 }

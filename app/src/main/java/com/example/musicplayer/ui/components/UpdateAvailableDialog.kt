@@ -29,6 +29,7 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
@@ -50,6 +51,14 @@ fun UpdateAvailableDialog(
 ) {
     val context = LocalContext.current
     val targetUrl = updateInfo.apkDownloadUrl ?: updateInfo.htmlUrl
+
+    // Determina la lingua di riferimento dell'interfaccia corrente
+    val currentLocale = context.resources.configuration.locales[0] ?: java.util.Locale.getDefault()
+    val isEnglish = !currentLocale.language.equals("it", ignoreCase = true)
+
+    val currentNotes = remember(updateInfo, isEnglish) {
+        updateInfo.getReleaseNotesForLanguage(isEnglish)
+    }
 
     AlertDialog(
         onDismissRequest = onDismiss,
@@ -80,11 +89,27 @@ fun UpdateAvailableDialog(
                 modifier = Modifier.fillMaxWidth(),
                 verticalArrangement = Arrangement.spacedBy(10.dp)
             ) {
-                if (updateInfo.releaseNotes.isNotBlank()) {
+                if (currentNotes.isNotBlank()) {
                     Text(
                         text = stringResource(R.string.update_dialog_whats_new),
                         style = MaterialTheme.typography.labelLarge.copy(fontWeight = FontWeight.SemiBold)
                     )
+
+                    if (!updateInfo.hasBothLanguages) {
+                        if (isEnglish && updateInfo.releaseNotesEn.isNullOrBlank() && !updateInfo.releaseNotesIt.isNullOrBlank()) {
+                            Text(
+                                text = stringResource(R.string.update_dialog_notes_only_it),
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.8f)
+                            )
+                        } else if (!isEnglish && updateInfo.releaseNotesIt.isNullOrBlank() && !updateInfo.releaseNotesEn.isNullOrBlank()) {
+                            Text(
+                                text = stringResource(R.string.update_dialog_notes_only_en),
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.8f)
+                            )
+                        }
+                    }
 
                     Surface(
                         shape = RoundedCornerShape(12.dp),
@@ -99,7 +124,7 @@ fun UpdateAvailableDialog(
                                 .verticalScroll(rememberScrollState())
                         ) {
                             MarkdownContent(
-                                markdown = updateInfo.releaseNotes,
+                                markdown = currentNotes,
                                 modifier = Modifier.fillMaxWidth()
                             )
                         }

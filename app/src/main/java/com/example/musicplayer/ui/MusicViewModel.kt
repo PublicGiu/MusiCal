@@ -495,6 +495,7 @@ class MusicViewModel(application: Application) : AndroidViewModel(application) {
 
     private fun initAppLanguage() {
         try {
+            val saved = appPreferences.getAppLanguage()
             val localeManager = getApplication<Application>().getSystemService(LocaleManager::class.java)
             val currentLocales = localeManager?.applicationLocales
             if (currentLocales != null && !currentLocales.isEmpty) {
@@ -505,6 +506,13 @@ class MusicViewModel(application: Application) : AndroidViewModel(application) {
                     else -> AppLanguage.SYSTEM
                 }
                 _appLanguage.value = detected
+            } else if (saved != AppLanguage.SYSTEM) {
+                localeManager?.applicationLocales = when (saved) {
+                    AppLanguage.ITALIAN -> LocaleList.forLanguageTags("it")
+                    AppLanguage.ENGLISH -> LocaleList.forLanguageTags("en")
+                    AppLanguage.SYSTEM -> LocaleList.getEmptyLocaleList()
+                }
+                _appLanguage.value = saved
             }
         } catch (_: Exception) {}
     }
@@ -1568,6 +1576,7 @@ class MusicViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     fun setAppLanguage(language: AppLanguage) {
+        if (_appLanguage.value == language) return
         _appLanguage.value = language
         appPreferences.setAppLanguage(language)
         try {
@@ -1617,7 +1626,13 @@ class MusicViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
+    private var hasCheckedForUpdatesOnStartup = false
+
     fun checkForUpdates(isManual: Boolean = false) {
+        if (!isManual && hasCheckedForUpdatesOnStartup) return
+        if (!isManual) {
+            hasCheckedForUpdatesOnStartup = true
+        }
         viewModelScope.launch {
             if (!isManual) {
                 delay(3000L) // Differito di 3 secondi all'avvio per non intasare le risorse durante il cold start

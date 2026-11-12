@@ -3,7 +3,9 @@ package com.example.musicplayer.ui.components
 import android.net.Uri
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -57,6 +59,8 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.nestedscroll.NestedScrollConnection
 import androidx.compose.ui.input.nestedscroll.NestedScrollSource
@@ -82,6 +86,7 @@ import com.example.musicplayer.data.isCollabArtist
 import com.example.musicplayer.data.isPartnerInCollab
 import com.example.musicplayer.data.matchesArtist
 import com.example.musicplayer.data.matchesCollabArtist
+import com.example.musicplayer.ui.theme.LocalMusicVioletNeon
 import kotlinx.coroutines.launch
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -532,25 +537,117 @@ fun ArtistDetailSheet(
                 itemsIndexed(
                     items = displayedTracks,
                     key = { index, track -> "${track.id}_$index" }
-                ) { _, track ->
-                    SwipeToQueueTrackItem(
-                        track = track,
-                        onSwipeToQueue = { onAddToQueueClick?.invoke(track) }
+                ) { index, track ->
+                    val isTenthItem = index == 9
+                    val isPeekItem = !isTracksExpanded && isTenthItem && artistTracks.size > 10
+
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .animateItem()
                     ) {
-                        TrackListItem(
+                        SwipeToQueueTrackItem(
                             track = track,
-                            isSelected = currentTrack?.id == track.id,
-                            isPlaying = isPlaying && currentTrack?.id == track.id,
-                            onClick = {
-                                val actualIndex = artistTracks.indexOfFirst { it.id == track.id }.coerceAtLeast(0)
-                                onPlayTrackIndex(actualIndex)
-                            },
-                            onAddToQueueClick = onAddToQueueClick,
-                            onAddToPlaylistClick = onAddToPlaylistClick,
-                            onAddToFavoritesClick = onAddToFavoritesClick?.let { cb -> { cb(track) } },
-                            isFavorite = track.id in favoriteTrackIds,
-                            onAutoTagClick = onAutoTagTrackClick
-                        )
+                            onSwipeToQueue = { onAddToQueueClick?.invoke(track) }
+                        ) {
+                            TrackListItem(
+                                track = track,
+                                isSelected = currentTrack?.id == track.id,
+                                isPlaying = isPlaying && currentTrack?.id == track.id,
+                                onClick = {
+                                    val actualIndex = artistTracks.indexOfFirst { it.id == track.id }.coerceAtLeast(0)
+                                    onPlayTrackIndex(actualIndex)
+                                },
+                                onAddToQueueClick = onAddToQueueClick,
+                                onAddToPlaylistClick = onAddToPlaylistClick,
+                                onAddToFavoritesClick = onAddToFavoritesClick?.let { cb -> { cb(track) } },
+                                isFavorite = track.id in favoriteTrackIds,
+                                onAutoTagClick = onAutoTagTrackClick
+                            )
+                        }
+
+                        if (isPeekItem) {
+                            Box(
+                                modifier = Modifier
+                                    .matchParentSize()
+                                    .background(
+                                        Brush.verticalGradient(
+                                            0.0f to Color.Transparent,
+                                            0.20f to Color.Transparent,
+                                            0.75f to MaterialTheme.colorScheme.surface.copy(alpha = 0.92f),
+                                            1.0f to MaterialTheme.colorScheme.surface
+                                        )
+                                    )
+                                    .clickable(
+                                        interactionSource = remember { MutableInteractionSource() },
+                                        indication = null,
+                                        onClick = { isTracksExpanded = true }
+                                    ),
+                                contentAlignment = Alignment.BottomCenter
+                            ) {
+                                Surface(
+                                    modifier = Modifier
+                                        .padding(bottom = 6.dp)
+                                        .border(
+                                            width = 1.dp,
+                                            color = LocalMusicVioletNeon.copy(alpha = 0.5f),
+                                            shape = CircleShape
+                                        ),
+                                    shape = CircleShape,
+                                    color = MaterialTheme.colorScheme.surfaceContainerHighest.copy(alpha = 0.85f),
+                                    shadowElevation = 4.dp
+                                ) {
+                                    Icon(
+                                        painter = painterResource(R.drawable.keyboard_arrow_down_24),
+                                        contentDescription = stringResource(R.string.expand),
+                                        tint = LocalMusicVioletNeon,
+                                        modifier = Modifier
+                                            .padding(horizontal = 14.dp, vertical = 4.dp)
+                                            .size(20.dp)
+                                    )
+                                }
+                            }
+                        }
+                    }
+                }
+
+                if (isTracksExpanded && artistTracks.size > 10) {
+                    item(key = "collapse_tracks_pill") {
+                        Box(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .animateItem()
+                                .padding(top = 6.dp, bottom = 12.dp)
+                                .clickable(
+                                    interactionSource = remember { MutableInteractionSource() },
+                                    indication = null,
+                                    onClick = { isTracksExpanded = false }
+                                ),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Surface(
+                                onClick = { isTracksExpanded = false },
+                                modifier = Modifier
+                                    .border(
+                                        width = 1.dp,
+                                        color = LocalMusicVioletNeon.copy(alpha = 0.5f),
+                                        shape = CircleShape
+                                    ),
+                                shape = CircleShape,
+                                color = MaterialTheme.colorScheme.surfaceContainerHighest.copy(alpha = 0.85f),
+                                shadowElevation = 4.dp
+                            ) {
+                                Icon(
+                                    painter = painterResource(R.drawable.keyboard_arrow_down_24),
+                                    contentDescription = stringResource(R.string.collapse),
+                                    tint = LocalMusicVioletNeon,
+                                    modifier = Modifier
+                                        .graphicsLayer { rotationZ = 180f }
+                                        .padding(horizontal = 14.dp, vertical = 4.dp)
+                                        .size(20.dp)
+                                )
+                            }
+                        }
                     }
                 }
 
@@ -617,9 +714,6 @@ fun ArtistDetailSheet(
                         artistInfoRepository?.setCustomArtistBio(displayArtistName, newBio)
                     }
                 }
-            },
-            onSearchWikipedia = { query ->
-                artistInfoRepository?.searchArtistBioOnWikipedia(displayArtistName, query)?.biography
             }
         )
     }

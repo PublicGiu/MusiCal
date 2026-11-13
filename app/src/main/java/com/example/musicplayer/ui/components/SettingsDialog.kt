@@ -273,7 +273,14 @@ fun SettingsDialog(
                     )
                 )
             },
-            snackbarHost = { SnackbarHost(hostState = snackbarHostState) }
+            snackbarHost = {
+                SnackbarHost(
+                    hostState = snackbarHostState,
+                    modifier = Modifier
+                        .navigationBarsPadding()
+                        .padding(bottom = 8.dp)
+                )
+            }
         ) { innerPadding ->
             Column(
                 modifier = Modifier

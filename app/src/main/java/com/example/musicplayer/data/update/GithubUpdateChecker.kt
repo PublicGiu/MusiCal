@@ -1,11 +1,11 @@
 package com.example.musicplayer.data.update
 
+import com.example.musicplayer.data.network.SharedHttpClient
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import org.json.JSONObject
-import java.util.concurrent.TimeUnit
 
 /**
  * Informazioni relative allo stato di aggiornamento dell'applicazione su GitHub.
@@ -46,10 +46,7 @@ data class AppUpdateInfo(
  * Gestore del controllo degli aggiornamenti dell'applicazione tramite le API pubbliche di GitHub Releases.
  */
 class GithubUpdateChecker(
-    private val client: OkHttpClient = OkHttpClient.Builder()
-        .connectTimeout(10, TimeUnit.SECONDS)
-        .readTimeout(10, TimeUnit.SECONDS)
-        .build()
+    private val client: OkHttpClient = SharedHttpClient.withTimeouts(connectSeconds = 10, readSeconds = 10)
 ) {
     companion object {
         const val GITHUB_REPO_URL = "https://github.com/PublicGiu/MusiCal"

@@ -1,11 +1,14 @@
 package com.example.musicplayer.playback
 
 import android.app.PendingIntent
+import android.content.Context
 import android.content.Intent
+import android.media.AudioManager
 import android.os.Process
 import androidx.annotation.OptIn
 import androidx.media3.common.ForwardingPlayer
 import androidx.media3.common.Player
+import androidx.media3.common.TrackSelectionParameters
 import androidx.media3.common.util.UnstableApi
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.session.MediaSession
@@ -34,16 +37,30 @@ class PlaybackService : MediaSessionService() {
             .setUsage(androidx.media3.common.C.USAGE_MEDIA)
             .build()
 
+        // Pre-allocazione deterministica della sessione audio di sistema
+        val audioManager = getSystemService(Context.AUDIO_SERVICE) as AudioManager
+        val allocatedAudioSessionId = audioManager.generateAudioSessionId()
+
         // Creazione dell'istanza di ExoPlayer con gestione Audio Focus e disconnessione cuffie
         val exoPlayer = ExoPlayer.Builder(this)
             .setAudioAttributes(audioAttributes, true)
             .setHandleAudioBecomingNoisy(true)
             .setWakeMode(androidx.media3.common.C.WAKE_MODE_LOCAL)
             .build()
+
+        exoPlayer.setAudioSessionId(allocatedAudioSessionId)
+        exoPlayer.trackSelectionParameters = exoPlayer.trackSelectionParameters
+            .buildUpon()
+            .setAudioOffloadPreferences(
+                TrackSelectionParameters.AudioOffloadPreferences.Builder()
+                    .setAudioOffloadMode(TrackSelectionParameters.AudioOffloadPreferences.AUDIO_OFFLOAD_MODE_DISABLED)
+                    .build()
+            )
+            .build()
         player = exoPlayer
 
-        // Inizializzazione equalizzatore ed effetti hardware collegati alla sessione audio
-        EqualizerManager.init(this, exoPlayer.audioSessionId)
+        // Inizializzazione immediata di equalizzatore ed effetti hardware collegati alla sessione audio pre-allocata
+        EqualizerManager.init(this, allocatedAudioSessionId)
         exoPlayer.addListener(object : androidx.media3.common.Player.Listener {
             override fun onAudioSessionIdChanged(audioSessionId: Int) {
                 if (audioSessionId != androidx.media3.common.C.AUDIO_SESSION_ID_UNSET && audioSessionId != 0) {

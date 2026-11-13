@@ -1,5 +1,6 @@
 package com.example.musicplayer.data.tagger.client
 
+import com.example.musicplayer.data.network.SharedHttpClient
 import com.example.musicplayer.data.tagger.model.LrclibResponse
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -9,18 +10,13 @@ import org.json.JSONArray
 import org.json.JSONObject
 import java.io.IOException
 import java.net.URLEncoder
-import java.util.concurrent.TimeUnit
 
 /**
  * Client HTTP per le API pubbliche di LRCLIB (nessuna chiave richiesta).
  * Fornisce testi sincronizzati (.lrc con timestamp [mm:ss.xx]) e testi normali.
  */
 class LrclibApiClient(
-    private val client: OkHttpClient = OkHttpClient.Builder()
-        .connectTimeout(15, TimeUnit.SECONDS)
-        .readTimeout(15, TimeUnit.SECONDS)
-        .writeTimeout(15, TimeUnit.SECONDS)
-        .build()
+    private val client: OkHttpClient = SharedHttpClient.instance
 ) {
 
     private val baseUrl = "https://lrclib.net/api"

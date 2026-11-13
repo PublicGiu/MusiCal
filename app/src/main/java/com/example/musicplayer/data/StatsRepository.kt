@@ -16,10 +16,15 @@ class StatsRepository(context: Context) {
 
     private val statsFile = File(context.filesDir, "track_stats.json")
     private val atomicFile = AtomicFile(statsFile)
+    private var cachedStats: MutableMap<Long, TrackStats>? = null
 
     @Synchronized
     fun loadStats(): Map<Long, TrackStats> {
-        if (!statsFile.exists()) return emptyMap()
+        cachedStats?.let { return it.toMap() }
+        if (!statsFile.exists()) {
+            cachedStats = mutableMapOf()
+            return emptyMap()
+        }
 
         return try {
             val content = atomicFile.openRead().use { input ->
@@ -41,7 +46,8 @@ class StatsRepository(context: Context) {
                     )
                 }
             }
-            map
+            cachedStats = map
+            map.toMap()
         } catch (e: Exception) {
             Log.e("StatsRepository", "Errore durante la lettura delle statistiche", e)
             emptyMap()
@@ -50,6 +56,7 @@ class StatsRepository(context: Context) {
 
     @Synchronized
     fun saveStats(statsMap: Map<Long, TrackStats>) {
+        cachedStats = statsMap.toMutableMap()
         val jsonArray = JSONArray()
         for ((_, stat) in statsMap) {
             val obj = JSONObject()

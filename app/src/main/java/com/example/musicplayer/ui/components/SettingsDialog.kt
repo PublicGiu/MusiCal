@@ -2,6 +2,8 @@ package com.example.musicplayer.ui.components
 
 import android.content.Intent
 import android.net.Uri
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.Spring
@@ -48,7 +50,10 @@ import androidx.compose.material.icons.filled.QueryStats
 import androidx.compose.material.icons.filled.Radio
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Restore
+import androidx.compose.material.icons.filled.Save
 import androidx.compose.material.icons.filled.Timer
+import androidx.compose.material.icons.filled.Upload
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
@@ -64,15 +69,19 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.RadioButton
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.SnackbarHost
+import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
@@ -93,6 +102,9 @@ import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 import com.example.musicplayer.R
 import com.example.musicplayer.data.AppLanguage
+import com.example.musicplayer.data.backup.BackupErrorCode
+import com.example.musicplayer.data.backup.BackupException
+import com.example.musicplayer.data.backup.ImportSummary
 import com.example.musicplayer.data.AudioSourceMode
 import com.example.musicplayer.data.ThemeMode
 import com.example.musicplayer.data.update.GithubUpdateChecker
@@ -133,6 +145,57 @@ fun SettingsDialog(
     val appLanguage by viewModel.appLanguage.collectAsState()
 
     val coroutineScope = rememberCoroutineScope()
+    val snackbarHostState = remember { SnackbarHostState() }
+    var isBackupBusy by remember { mutableStateOf(false) }
+    var importSummaryState by remember { mutableStateOf<ImportSummary?>(null) }
+
+    val exportBackupLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.CreateDocument("application/json")
+    ) { uri ->
+        if (uri != null) {
+            isBackupBusy = true
+            viewModel.exportListeningData(uri) { result ->
+                isBackupBusy = false
+                coroutineScope.launch {
+                    val msg = result.fold(
+                        onSuccess = { context.getString(R.string.backup_export_success) },
+                        onFailure = { err ->
+                            context.getString(
+                                R.string.backup_export_error,
+                                mapBackupErrorMessage(context, err)
+                            )
+                        }
+                    )
+                    snackbarHostState.showSnackbar(msg)
+                }
+            }
+        }
+    }
+
+    val importBackupLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.OpenDocument()
+    ) { uri ->
+        if (uri != null) {
+            isBackupBusy = true
+            viewModel.importListeningData(uri) { result ->
+                isBackupBusy = false
+                result.fold(
+                    onSuccess = { summary -> importSummaryState = summary },
+                    onFailure = { err ->
+                        coroutineScope.launch {
+                            snackbarHostState.showSnackbar(
+                                context.getString(
+                                    R.string.backup_import_error,
+                                    mapBackupErrorMessage(context, err)
+                                )
+                            )
+                        }
+                    }
+                )
+            }
+        }
+    }
+
     val offsetX = remember { Animatable(0f) }
     var containerWidthPx by remember { mutableFloatStateOf(1080f) }
 
@@ -209,7 +272,8 @@ fun SettingsDialog(
                         containerColor = MaterialTheme.colorScheme.surface
                     )
                 )
-            }
+            },
+            snackbarHost = { SnackbarHost(hostState = snackbarHostState) }
         ) { innerPadding ->
             Column(
                 modifier = Modifier
@@ -758,6 +822,72 @@ fun SettingsDialog(
                     }
                 }
 
+                // 4b. Backup e Ripristino Locale
+                SettingsSectionHeader(
+                    icon = Icons.Default.Save,
+                    title = stringResource(R.string.settings_section_backup)
+                )
+                Card(
+                    modifier = Modifier.fillMaxWidth(),
+                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f))
+                ) {
+                    Column(modifier = Modifier.padding(16.dp)) {
+                        Text(
+                            text = stringResource(R.string.backup_section_description),
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                        Spacer(modifier = Modifier.height(14.dp))
+
+                        Button(
+                            onClick = {
+                                val defaultFileName = "musical_backup_${java.time.LocalDate.now()}.json"
+                                exportBackupLauncher.launch(defaultFileName)
+                            },
+                            enabled = !isBackupBusy,
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.Upload,
+                                contentDescription = null,
+                                modifier = Modifier.size(18.dp)
+                            )
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Text(stringResource(R.string.backup_export_button))
+                        }
+
+                        Spacer(modifier = Modifier.height(10.dp))
+
+                        OutlinedButton(
+                            onClick = {
+                                importBackupLauncher.launch(
+                                    arrayOf("application/json", "application/octet-stream", "*/*")
+                                )
+                            },
+                            enabled = !isBackupBusy,
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.Download,
+                                contentDescription = null,
+                                modifier = Modifier.size(18.dp)
+                            )
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Text(stringResource(R.string.backup_import_button))
+                        }
+
+                        if (isBackupBusy) {
+                            Spacer(modifier = Modifier.height(10.dp))
+                            CircularProgressIndicator(
+                                modifier = Modifier
+                                    .size(22.dp)
+                                    .align(Alignment.CenterHorizontally),
+                                strokeWidth = 2.dp
+                            )
+                        }
+                    }
+                }
+
                 // 5. Informazioni sull'applicazione & Aggiornamenti GitHub
                 SettingsSectionHeader(
                     icon = Icons.Default.Info,
@@ -927,6 +1057,103 @@ fun SettingsDialog(
                 Spacer(modifier = Modifier.height(48.dp))
             }
         }
+
+        importSummaryState?.let { summary ->
+            AlertDialog(
+                onDismissRequest = { importSummaryState = null },
+                title = {
+                    Text(
+                        text = stringResource(R.string.backup_import_summary_title),
+                        fontWeight = FontWeight.Bold
+                    )
+                },
+                text = {
+                    Column(
+                        modifier = Modifier.verticalScroll(rememberScrollState()),
+                        verticalArrangement = Arrangement.spacedBy(6.dp)
+                    ) {
+                        Text(
+                            text = stringResource(
+                                R.string.backup_import_summary_playlists_created,
+                                summary.importedPlaylistsCount
+                            ),
+                            style = MaterialTheme.typography.bodyMedium
+                        )
+                        Text(
+                            text = stringResource(
+                                R.string.backup_import_summary_playlists_updated,
+                                summary.updatedPlaylistsCount
+                            ),
+                            style = MaterialTheme.typography.bodyMedium
+                        )
+                        Text(
+                            text = stringResource(
+                                R.string.backup_import_summary_favorites_added,
+                                summary.favoritesAddedCount
+                            ),
+                            style = MaterialTheme.typography.bodyMedium
+                        )
+                        Text(
+                            text = stringResource(
+                                R.string.backup_import_summary_stats_restored,
+                                summary.restoredStatsCount
+                            ),
+                            style = MaterialTheme.typography.bodyMedium
+                        )
+                        Text(
+                            text = stringResource(
+                                R.string.backup_import_summary_scrobbles_restored,
+                                summary.restoredPendingScrobblesCount
+                            ),
+                            style = MaterialTheme.typography.bodyMedium
+                        )
+                        if (summary.preferencesRestored) {
+                            Text(
+                                text = stringResource(R.string.backup_import_summary_prefs_restored),
+                                style = MaterialTheme.typography.bodyMedium
+                            )
+                        }
+                        if (summary.unmatchedTrackLabels.isNotEmpty()) {
+                            Spacer(modifier = Modifier.height(6.dp))
+                            HorizontalDivider()
+                            Spacer(modifier = Modifier.height(6.dp))
+                            Text(
+                                text = stringResource(
+                                    R.string.backup_import_summary_unmatched_header,
+                                    summary.totalUnmatchedCount
+                                ),
+                                style = MaterialTheme.typography.titleSmall,
+                                color = MaterialTheme.colorScheme.error
+                            )
+                            val previewItems = summary.unmatchedTrackLabels.take(12)
+                            previewItems.forEach { label ->
+                                Text(
+                                    text = "• $label",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                            }
+                            val remaining = summary.totalUnmatchedCount - previewItems.size
+                            if (remaining > 0) {
+                                Text(
+                                    text = stringResource(
+                                        R.string.backup_import_summary_unmatched_more,
+                                        remaining
+                                    ),
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                            }
+                        }
+                    }
+                },
+                confirmButton = {
+                    TextButton(onClick = { importSummaryState = null }) {
+                        Text(stringResource(R.string.close))
+                    }
+                }
+            )
+        }
     }
 }
 }
@@ -959,4 +1186,15 @@ private fun SettingsSectionHeader(
             color = MaterialTheme.colorScheme.primary
         )
     }
+}
+
+private fun mapBackupErrorMessage(context: android.content.Context, error: Throwable): String {
+    val code = (error as? BackupException)?.code
+    val resId = when (code) {
+        BackupErrorCode.FILE_TOO_LARGE -> R.string.backup_error_file_too_large
+        BackupErrorCode.UNSUPPORTED_VERSION -> R.string.backup_error_unsupported_version
+        BackupErrorCode.INVALID_FORMAT -> R.string.backup_error_invalid_format
+        BackupErrorCode.IO_ERROR, null -> R.string.backup_error_io
+    }
+    return context.getString(resId)
 }

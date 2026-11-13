@@ -16,6 +16,7 @@ import com.example.musicplayer.data.tagger.sanitizer.QuerySanitizer
 import com.example.musicplayer.data.tagger.writer.StorageWriteManager
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.coroutineScope
@@ -25,6 +26,7 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.io.File
+import java.util.concurrent.ConcurrentHashMap
 
 /**
  * Coordinatore per l'arricchimento dei metadati (Smart Auto-Tagger) e la gestione dei testi (.lrc).
@@ -50,15 +52,35 @@ class MetadataEnricherCoordinator(
     private val _currentLyrics = MutableStateFlow<LyricsData?>(null)
     val currentLyrics: StateFlow<LyricsData?> = _currentLyrics.asStateFlow()
 
-    private val pendingWrites = mutableMapOf<AudioTrack, Pair<File, EnrichedMetadata>>()
+    private val pendingWrites = ConcurrentHashMap<AudioTrack, Pair<File, EnrichedMetadata>>()
+    private var activeSearchJob: Job? = null
+    private var lyricsLoadJob: Job? = null
+
+    private fun clearPendingWrites() {
+        pendingWrites.values.forEach { (file, _) ->
+            try {
+                if (file.exists()) file.delete()
+            } catch (_: Exception) {}
+        }
+        pendingWrites.clear()
+    }
 
     fun updateCurrentLyricsForTrack(track: AudioTrack?) {
-        _currentLyrics.value = track?.let { lyricsRepository.getLyricsForTrack(it.id) }
+        lyricsLoadJob?.cancel()
+        if (track == null) {
+            _currentLyrics.value = null
+            return
+        }
+        lyricsLoadJob = scope.launch(Dispatchers.IO) {
+            val loaded = lyricsRepository.getLyricsForTrack(track.id)
+            _currentLyrics.value = loaded
+        }
     }
 
     fun startTrackEnrichment(track: AudioTrack) {
+        activeSearchJob?.cancel()
         _enricherState.value = EnricherUiState.Loading("Ricerca metadati Deezer e testi LRCLIB...")
-        scope.launch {
+        activeSearchJob = scope.launch {
             val result = enricherRepository.enrichTrackWithCandidates(track, EnricherOptions())
             result.onSuccess { (enriched, candidates) ->
                 _enricherState.value = EnricherUiState.ReviewTrack(
@@ -80,9 +102,10 @@ class MetadataEnricherCoordinator(
         candidate: DeezerSearchTrack,
         options: EnricherOptions
     ) {
+        activeSearchJob?.cancel()
         val currentCandidates = (_enricherState.value as? EnricherUiState.ReviewTrack)?.candidates.orEmpty()
         _enricherState.value = EnricherUiState.Loading("Caricamento dettagli da Deezer...")
-        scope.launch {
+        activeSearchJob = scope.launch {
             val res = enricherRepository.enrichFromCandidate(track, candidate, options)
             res.fold(
                 onSuccess = { enriched ->
@@ -107,8 +130,9 @@ class MetadataEnricherCoordinator(
         customTitle: String,
         customArtist: String
     ) {
+        activeSearchJob?.cancel()
         _enricherState.value = EnricherUiState.Loading("Ricerca personalizzata...")
-        scope.launch {
+        activeSearchJob = scope.launch {
             val candidatesRes = enricherRepository.searchCustom(customTitle, customArtist)
             candidatesRes.fold(
                 onSuccess = { candidates ->
@@ -138,19 +162,22 @@ class MetadataEnricherCoordinator(
 
     fun adjustLyricsOffset(currentTrack: AudioTrack?, offsetDeltaMs: Long) {
         val track = currentTrack ?: return
-        val updated = lyricsRepository.adjustOffset(track.id, offsetDeltaMs)
-        if (updated != null) {
-            _currentLyrics.value = updated
+        scope.launch(Dispatchers.IO) {
+            val updated = lyricsRepository.adjustOffset(track.id, offsetDeltaMs)
+            if (updated != null) {
+                _currentLyrics.value = updated
+            }
         }
     }
 
     fun startAlbumEnrichment(album: Album, separateAlbums: Boolean? = null) {
+        activeSearchJob?.cancel()
         val shouldSeparate = separateAlbums ?: album.isMixedOrGeneric()
         _enricherState.value = EnricherUiState.Loading(
             if (shouldSeparate) "Analisi brani e separazione in album distinti..."
             else "Analisi album e unificazione tracce..."
         )
-        scope.launch {
+        activeSearchJob = scope.launch {
             val firstTrack = album.tracks.firstOrNull() ?: run {
                 _enricherState.value = EnricherUiState.Error("L'album selezionato non contiene tracce.")
                 return@launch
@@ -274,7 +301,7 @@ class MetadataEnricherCoordinator(
                 return@launch
             }
 
-            pendingWrites.clear()
+            clearPendingWrites()
             pendingWrites[track] = Pair(preparedFile, metadata)
 
             val intentSender = storageWriteManager.createWriteRequestIntentSender(listOf(track.uri))
@@ -293,7 +320,7 @@ class MetadataEnricherCoordinator(
     ) {
         _enricherState.value = EnricherUiState.Writing(1, album.tracks.size, "Elaborazione file...")
         scope.launch {
-            pendingWrites.clear()
+            clearPendingWrites()
             val urisToAuthorize = mutableListOf<Uri>()
 
             album.tracks.forEach { track ->
@@ -326,27 +353,26 @@ class MetadataEnricherCoordinator(
                 executePendingWrites()
             }
         } else {
-            pendingWrites.values.forEach { (file, _) -> file.delete() }
-            pendingWrites.clear()
+            clearPendingWrites()
             _enricherState.value = EnricherUiState.Error("Permesso di scrittura negato dall'utente.")
         }
     }
 
     private suspend fun executePendingWrites() = withContext(Dispatchers.IO) {
-        val total = pendingWrites.size
+        val snapshot = pendingWrites.toMap()
+        pendingWrites.clear()
+        val total = snapshot.size
         var current = 0
         var successCount = 0
-        val appliedMetadataMap = pendingWrites.map { (track, pair) -> track.id to pair.second }.toMap()
+        val appliedMetadataMap = snapshot.map { (track, pair) -> track.id to pair.second }.toMap()
 
-        pendingWrites.forEach { (track, pair) ->
+        snapshot.forEach { (track, pair) ->
             val (file, metadata) = pair
             current++
             _enricherState.value = EnricherUiState.Writing(current, total, metadata.title)
             val ok = storageWriteManager.commitTrackWrite(track, file, metadata)
             if (ok) successCount++
         }
-
-        pendingWrites.clear()
 
         // Notifica il ViewModel per l'aggiornamento ottimistico in memoria e il ricaricamento asincrono della libreria
         onReloadLibrary(appliedMetadataMap)
@@ -357,6 +383,9 @@ class MetadataEnricherCoordinator(
     }
 
     fun closeEnricher() {
+        activeSearchJob?.cancel()
+        activeSearchJob = null
+        clearPendingWrites()
         _enricherState.value = EnricherUiState.Idle
         _writeRequestIntentSender.value = null
     }

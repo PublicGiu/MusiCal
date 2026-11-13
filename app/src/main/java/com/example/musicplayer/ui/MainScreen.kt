@@ -179,12 +179,8 @@ fun MainScreen(
     val isShuffleEnabled by viewModel.isShuffleEnabled.collectAsStateWithLifecycle()
     val repeatMode by viewModel.repeatMode.collectAsStateWithLifecycle()
     val isAutoplayEnabled by viewModel.isAutoplayEnabled.collectAsStateWithLifecycle()
-    val playbackContext by viewModel.playbackContext.collectAsStateWithLifecycle()
-    val sleepTimerState by viewModel.sleepTimerState.collectAsStateWithLifecycle()
 
     // Coda di riproduzione
-    val userQueue by viewModel.userQueue.collectAsStateWithLifecycle()
-    val autoplayQueue by viewModel.autoplayQueue.collectAsStateWithLifecycle()
     val queue by viewModel.queue.collectAsStateWithLifecycle()
     val currentQueueIndex by viewModel.currentQueueIndex.collectAsStateWithLifecycle()
     var showQueueSheet by remember { mutableStateOf(false) }
@@ -212,10 +208,6 @@ fun MainScreen(
     val matchingAlbums by viewModel.matchingAlbums.collectAsStateWithLifecycle()
     val matchingPlaylists by viewModel.matchingPlaylists.collectAsStateWithLifecycle()
     val matchingArtists by viewModel.matchingArtists.collectAsStateWithLifecycle()
-
-    // Aggiornamenti GitHub
-    val updateInfo by viewModel.updateInfo.collectAsStateWithLifecycle()
-    val isUpdateDialogVisible by viewModel.isUpdateDialogVisible.collectAsStateWithLifecycle()
 
     // Navigazione schede e viste di dettaglio
     var selectedTabIndex by rememberSaveable { mutableIntStateOf(0) }
@@ -290,9 +282,8 @@ fun MainScreen(
         }
     }
 
-    // Auto-Tagger & Testi Sincronizzati
+    // Auto-Tagger
     val enricherState by viewModel.enricherState.collectAsStateWithLifecycle()
-    val currentLyrics by viewModel.currentLyrics.collectAsStateWithLifecycle()
     val writeRequestIntentSender by viewModel.writeRequestIntentSender.collectAsStateWithLifecycle()
 
     val writePermissionLauncher = rememberLauncherForActivityResult(
@@ -340,14 +331,7 @@ fun MainScreen(
     }
 
     // Last.fm Scrobbler
-    val isLastFmLoggedIn by viewModel.isLastFmLoggedIn.collectAsStateWithLifecycle()
-    val lastFmUsername by viewModel.lastFmUsername.collectAsStateWithLifecycle()
-    val lastFmAuthLoading by viewModel.lastFmAuthLoading.collectAsStateWithLifecycle()
-    val lastFmAuthError by viewModel.lastFmAuthError.collectAsStateWithLifecycle()
     val lastFmStatusMessage by viewModel.lastFmStatusMessage.collectAsStateWithLifecycle()
-    val lastFmCustomApiKey by viewModel.lastFmCustomApiKey.collectAsStateWithLifecycle()
-    val lastFmCustomSharedSecret by viewModel.lastFmCustomSharedSecret.collectAsStateWithLifecycle()
-    val pendingScrobblesCount by viewModel.pendingScrobblesCount.collectAsStateWithLifecycle()
     val ignoredDuplicateKeys by viewModel.ignoredDuplicateKeys.collectAsStateWithLifecycle()
     var showLastFmDialog by remember { mutableStateOf(false) }
     var showSettingsDialog by rememberSaveable { mutableStateOf(false) }

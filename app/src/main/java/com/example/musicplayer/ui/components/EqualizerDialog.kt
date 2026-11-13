@@ -71,6 +71,7 @@ fun EqualizerDialog(
                 Switch(
                     checked = eqState.isEnabled,
                     onCheckedChange = { EqualizerManager.setEnabled(it) },
+                    enabled = eqState.isAvailable,
                     colors = SwitchDefaults.colors(
                         checkedThumbColor = MaterialTheme.colorScheme.primary,
                         checkedTrackColor = MaterialTheme.colorScheme.primaryContainer
@@ -159,7 +160,10 @@ fun EqualizerDialog(
                             Slider(
                                 value = band.levelMb.toFloat(),
                                 onValueChange = { newLevel ->
-                                    EqualizerManager.setBandLevel(band.bandIndex, newLevel.toInt())
+                                    EqualizerManager.setBandLevel(band.bandIndex, newLevel.toInt(), persist = false)
+                                },
+                                onValueChangeFinished = {
+                                    EqualizerManager.persistBandLevels()
                                 },
                                 valueRange = eqState.minLevelMb.toFloat()..eqState.maxLevelMb.toFloat(),
                                 enabled = isEnabled,
@@ -197,7 +201,10 @@ fun EqualizerDialog(
                         ) {
                             Slider(
                                 value = eqState.bassBoostStrength.toFloat(),
-                                onValueChange = { EqualizerManager.setBassBoostStrength(it.toInt()) },
+                                onValueChange = { EqualizerManager.setBassBoostStrength(it.toInt(), persist = false) },
+                                onValueChangeFinished = {
+                                    EqualizerManager.persistBassBoostStrength(eqState.bassBoostStrength)
+                                },
                                 valueRange = 0f..1000f,
                                 enabled = isEnabled,
                                 modifier = Modifier.weight(1f),
@@ -234,7 +241,10 @@ fun EqualizerDialog(
                         ) {
                             Slider(
                                 value = eqState.virtualizerStrength.toFloat(),
-                                onValueChange = { EqualizerManager.setVirtualizerStrength(it.toInt()) },
+                                onValueChange = { EqualizerManager.setVirtualizerStrength(it.toInt(), persist = false) },
+                                onValueChangeFinished = {
+                                    EqualizerManager.persistVirtualizerStrength(eqState.virtualizerStrength)
+                                },
                                 valueRange = 0f..1000f,
                                 enabled = isEnabled,
                                 modifier = Modifier.weight(1f),

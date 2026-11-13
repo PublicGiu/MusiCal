@@ -1,6 +1,7 @@
 package com.example.musicplayer.data.lastfm
 
 import com.example.musicplayer.data.AudioTrack
+import com.example.musicplayer.data.network.SharedHttpClient
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import okhttp3.FormBody
@@ -9,7 +10,6 @@ import okhttp3.OkHttpClient
 import okhttp3.Request
 import org.json.JSONObject
 import java.io.IOException
-import java.util.concurrent.TimeUnit
 
 sealed class UserAvatarResult {
     data object NoAvatar : UserAvatarResult()
@@ -21,11 +21,7 @@ sealed class UserAvatarResult {
  * Client HTTP per interagire con le API REST di Last.fm.
  */
 class LastFmClient(
-    private val client: OkHttpClient = OkHttpClient.Builder()
-        .connectTimeout(15, TimeUnit.SECONDS)
-        .readTimeout(15, TimeUnit.SECONDS)
-        .writeTimeout(15, TimeUnit.SECONDS)
-        .build()
+    private val client: OkHttpClient = SharedHttpClient.instance
 ) {
 
     /**

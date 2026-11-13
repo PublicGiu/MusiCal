@@ -423,4 +423,26 @@
     <string name="hide_password">Hide password</string>
     <string name="cover_content_desc">Cover %s</string>
     <string name="album_cover_content_desc">Album cover %s</string>
+
+    <!-- Local Backup and Restore -->
+    <string name="settings_section_backup">Backup &amp; Restore</string>
+    <string name="backup_section_description">Export or restore playlists, favorites, listening history, and app preferences to a local JSON file. Last.fm credentials remain protected on-device.</string>
+    <string name="backup_export_button">Save listening data</string>
+    <string name="backup_import_button">Import listening data</string>
+    <string name="backup_export_success">Backup saved successfully</string>
+    <string name="backup_export_error">Error saving backup: %s</string>
+    <string name="backup_import_error">Error importing backup: %s</string>
+    <string name="backup_error_file_too_large">file exceeds the 10 MB limit</string>
+    <string name="backup_error_unsupported_version">unsupported backup version</string>
+    <string name="backup_error_invalid_format">invalid or corrupted JSON format</string>
+    <string name="backup_error_io">unable to access the selected file</string>
+    <string name="backup_import_summary_title">Import summary</string>
+    <string name="backup_import_summary_playlists_created">Playlists imported: %d</string>
+    <string name="backup_import_summary_playlists_updated">Playlists updated: %d</string>
+    <string name="backup_import_summary_favorites_added">Favorites added: %d</string>
+    <string name="backup_import_summary_stats_restored">Listening stats restored: %d</string>
+    <string name="backup_import_summary_scrobbles_restored">Pending scrobbles restored: %d</string>
+    <string name="backup_import_summary_prefs_restored">Preferences restored: Yes</string>
+    <string name="backup_import_summary_unmatched_header">Tracks not found on device (%d):</string>
+    <string name="backup_import_summary_unmatched_more">…and %d more tracks</string>
 </resources>

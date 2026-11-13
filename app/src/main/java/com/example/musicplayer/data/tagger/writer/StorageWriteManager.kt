@@ -211,8 +211,28 @@ fun loadResizedJpegBytesFromUri(context: Context, uri: Uri, maxDimension: Int = 
             ExifInterface.ORIENTATION_NORMAL
         }
 
+        val boundsOptions = BitmapFactory.Options().apply {
+            inJustDecodeBounds = true
+        }
         context.contentResolver.openInputStream(uri)?.use { stream ->
-            val original = BitmapFactory.decodeStream(stream) ?: return null
+            BitmapFactory.decodeStream(stream, null, boundsOptions)
+        }
+
+        var inSampleSize = 1
+        if (boundsOptions.outWidth > maxDimension || boundsOptions.outHeight > maxDimension) {
+            val halfWidth = boundsOptions.outWidth / 2
+            val halfHeight = boundsOptions.outHeight / 2
+            while ((halfWidth / inSampleSize) >= maxDimension && (halfHeight / inSampleSize) >= maxDimension) {
+                inSampleSize *= 2
+            }
+        }
+
+        val decodeOptions = BitmapFactory.Options().apply {
+            this.inSampleSize = inSampleSize
+        }
+
+        context.contentResolver.openInputStream(uri)?.use { stream ->
+            val original = BitmapFactory.decodeStream(stream, null, decodeOptions) ?: return null
             val rotated = when (orientation) {
                 ExifInterface.ORIENTATION_ROTATE_90 -> {
                     val m = android.graphics.Matrix().apply { postRotate(90f) }

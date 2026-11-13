@@ -1,5 +1,6 @@
 package com.example.musicplayer.data.tagger.client
 
+import com.example.musicplayer.data.network.SharedHttpClient
 import com.example.musicplayer.data.tagger.model.DeezerAlbumDetail
 import com.example.musicplayer.data.tagger.model.DeezerAlbumTrackInfo
 import com.example.musicplayer.data.tagger.model.DeezerSearchTrack
@@ -11,18 +12,13 @@ import okhttp3.Request
 import org.json.JSONObject
 import java.io.IOException
 import java.net.URLEncoder
-import java.util.concurrent.TimeUnit
 
 /**
  * Client HTTP per le API pubbliche di Deezer (senza chiave API).
  * Permette di effettuare ricerche brani, scaricare dettagli dell'album e la copertina in formato HD (1000x1000).
  */
 class DeezerApiClient(
-    private val client: OkHttpClient = OkHttpClient.Builder()
-        .connectTimeout(15, TimeUnit.SECONDS)
-        .readTimeout(15, TimeUnit.SECONDS)
-        .writeTimeout(15, TimeUnit.SECONDS)
-        .build()
+    private val client: OkHttpClient = SharedHttpClient.instance
 ) {
 
     private val baseUrl = "https://api.deezer.com"

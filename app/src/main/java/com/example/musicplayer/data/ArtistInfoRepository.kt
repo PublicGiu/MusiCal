@@ -5,6 +5,7 @@ import android.net.Uri
 import android.util.Log
 import androidx.core.util.AtomicFile
 import com.example.musicplayer.data.lastfm.LastFmConfig
+import com.example.musicplayer.data.network.SharedHttpClient
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableSharedFlow
@@ -28,10 +29,7 @@ import java.util.concurrent.TimeUnit
  */
 class ArtistInfoRepository(
     private val context: Context,
-    private val client: OkHttpClient = OkHttpClient.Builder()
-        .connectTimeout(10, TimeUnit.SECONDS)
-        .readTimeout(10, TimeUnit.SECONDS)
-        .build()
+    private val client: OkHttpClient = SharedHttpClient.withTimeouts(connectSeconds = 10, readSeconds = 10)
 ) {
 
     private val tag = "ArtistInfoRepository"
@@ -40,8 +38,22 @@ class ArtistInfoRepository(
     private val atomicFile = AtomicFile(cacheFile)
     private val artistUpdates = MutableSharedFlow<String>(extraBufferCapacity = 8)
 
-    init {
-        loadCacheFromDisk()
+    @Volatile
+    private var isCacheLoaded = false
+    private val cacheLoadLock = Any()
+
+    /**
+     * Carica la cache degli artisti da disco una sola volta in modo thread-safe.
+     * Deve essere invocato su un thread di background (IO/Default).
+     */
+    fun ensureCacheLoaded() {
+        if (isCacheLoaded) return
+        synchronized(cacheLoadLock) {
+            if (!isCacheLoaded) {
+                loadCacheFromDisk()
+                isCacheLoaded = true
+            }
+        }
     }
 
     /**
@@ -74,6 +86,7 @@ class ArtistInfoRepository(
      * altrimenti null.
      */
     fun getCachedArtistInfo(artistName: String): ArtistInfo? {
+        ensureCacheLoaded()
         val clean = cleanArtistName(artistName)
         if (clean.isBlank()) return null
         return memoryCache[clean.lowercase()]
@@ -85,6 +98,7 @@ class ArtistInfoRepository(
      * aggiornamenti manuali per emetterli tempestivamente.
      */
     fun getArtistInfoFlow(artistName: String, forceRefresh: Boolean = false): Flow<ArtistInfo> = flow {
+        ensureCacheLoaded()
         val clean = cleanArtistName(artistName)
         if (clean.isBlank()) {
             emit(ArtistInfo(name = artistName))
@@ -134,6 +148,7 @@ class ArtistInfoRepository(
      * Recupera le informazioni dell'artista in modo asincrono.
      */
     suspend fun getArtistInfo(artistName: String, forceRefresh: Boolean = false): ArtistInfo = withContext(Dispatchers.IO) {
+        ensureCacheLoaded()
         val clean = cleanArtistName(artistName)
         if (clean.isBlank()) return@withContext ArtistInfo(name = artistName)
 
@@ -159,6 +174,7 @@ class ArtistInfoRepository(
      * L'immagine viene copiata nello storage interno dell'app per garantire persistenza permanente.
      */
     suspend fun setCustomArtistPhoto(artistName: String, uri: Uri): ArtistInfo = withContext(Dispatchers.IO) {
+        ensureCacheLoaded()
         val clean = cleanArtistName(artistName)
         val customDir = File(context.filesDir, "custom_artists").apply { if (!exists()) mkdirs() }
         val customFile = File(customDir, "${clean.lowercase().hashCode()}_photo.jpg")
@@ -189,6 +205,7 @@ class ArtistInfoRepository(
      * Imposta come foto profilo dell'artista la copertina di uno dei suoi album locali.
      */
     suspend fun setCustomArtistAlbumCover(artistName: String, albumArtUri: Uri): ArtistInfo = withContext(Dispatchers.IO) {
+        ensureCacheLoaded()
         val clean = cleanArtistName(artistName)
         val customDir = File(context.filesDir, "custom_artists").apply { if (!exists()) mkdirs() }
         val customFile = File(customDir, "${clean.lowercase().hashCode()}_photo.jpg")
@@ -225,6 +242,7 @@ class ArtistInfoRepository(
      * e rieseguendo la ricerca automatica.
      */
     suspend fun resetCustomArtistPhoto(artistName: String): ArtistInfo = withContext(Dispatchers.IO) {
+        ensureCacheLoaded()
         val clean = cleanArtistName(artistName)
         val customDir = File(context.filesDir, "custom_artists")
         val customFile = File(customDir, "${clean.lowercase().hashCode()}_photo.jpg")
@@ -251,6 +269,7 @@ class ArtistInfoRepository(
      * Imposta o modifica manualmente il testo della biografia dell'artista.
      */
     suspend fun setCustomArtistBio(artistName: String, customBio: String?): ArtistInfo = withContext(Dispatchers.IO) {
+        ensureCacheLoaded()
         val clean = cleanArtistName(artistName)
         val existing = memoryCache[clean.lowercase()] ?: ArtistInfo(name = clean)
         val cleanText = customBio?.trim()?.ifBlank { null }
@@ -270,6 +289,7 @@ class ArtistInfoRepository(
      * Ripristina la biografia dell'artista ai dati automatici remoti.
      */
     suspend fun resetCustomArtistBio(artistName: String): ArtistInfo = withContext(Dispatchers.IO) {
+        ensureCacheLoaded()
         val clean = cleanArtistName(artistName)
         val existing = memoryCache[clean.lowercase()] ?: ArtistInfo(name = clean)
         val updated = existing.copy(
@@ -293,6 +313,7 @@ class ArtistInfoRepository(
      * (utile per omonimie o pseudonimi, es. "Nicola Pittalis" o "Pitta rapper").
      */
     suspend fun searchArtistBioOnWikipedia(artistName: String, query: String): ArtistInfo? = withContext(Dispatchers.IO) {
+        ensureCacheLoaded()
         val cleanQuery = query.trim()
         if (cleanQuery.isBlank()) return@withContext null
         val clean = cleanArtistName(artistName)

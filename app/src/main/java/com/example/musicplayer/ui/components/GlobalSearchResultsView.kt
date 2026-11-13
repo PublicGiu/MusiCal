@@ -200,19 +200,25 @@ fun GlobalSearchResultsView(
                     )
                 }
                 items(matchingTracks, key = { "track_${it.id}" }) { track ->
-                    TrackListItem(
+                    SwipeToQueueTrackItem(
                         track = track,
-                        isSelected = currentTrack?.id == track.id,
-                        isPlaying = isPlaying && currentTrack?.id == track.id,
-                        onClick = { onTrackClick(track) },
-                        onAddToQueueClick = onAddToQueueClick,
-                        onAddToPlaylistClick = onAddToPlaylistClick,
-                        onAddToFavoritesClick = onAddToFavoritesClick?.let { cb -> { cb(track) } },
-                        isFavorite = track.id in favoriteTrackIds,
-                        playCount = stats[track.id]?.playCount ?: 0,
-                        onAutoTagClick = onAutoTagTrackClick,
-                        onArtistClick = onArtistClick
-                    )
+                        onSwipeToQueue = { onAddToQueueClick(track) },
+                        key = "search_track_${track.id}"
+                    ) {
+                        TrackListItem(
+                            track = track,
+                            isSelected = currentTrack?.id == track.id,
+                            isPlaying = isPlaying && currentTrack?.id == track.id,
+                            onClick = { onTrackClick(track) },
+                            onAddToQueueClick = onAddToQueueClick,
+                            onAddToPlaylistClick = onAddToPlaylistClick,
+                            onAddToFavoritesClick = onAddToFavoritesClick?.let { cb -> { cb(track) } },
+                            isFavorite = track.id in favoriteTrackIds,
+                            playCount = stats[track.id]?.playCount ?: 0,
+                            onAutoTagClick = onAutoTagTrackClick,
+                            onArtistClick = onArtistClick
+                        )
+                    }
                 }
             }
 

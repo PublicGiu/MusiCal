@@ -1,6 +1,8 @@
 package com.example.musicplayer.playback
 
 import android.content.Context
+import android.content.Intent
+import android.media.audiofx.AudioEffect
 import android.media.audiofx.BassBoost
 import android.media.audiofx.Equalizer
 import android.media.audiofx.Virtualizer
@@ -25,7 +27,7 @@ data class EqualizerState(
     val presets: List<String> = emptyList(),
     val currentPresetIndex: Int = -1,
     val bassBoostStrength: Int = 0,
-    val isBassBoostSupported: Boolean = false,
+    val isBassBoostSupported: Boolean = true,
     val virtualizerStrength: Int = 0,
     val isVirtualizerSupported: Boolean = false
 )
@@ -33,15 +35,22 @@ data class EqualizerState(
 /**
  * Gestore dell'equalizzatore hardware e degli effetti sonori (Bass Boost e Virtualizer)
  * collegati all'audioSessionId di ExoPlayer.
+ *
+ * Include un'architettura ibrida per il Bass Boost: combina l'effetto hardware nativo
+ * con un incremento low-shelf acustico calibrato sulle bande a bassa frequenza (60Hz / 230Hz),
+ * garantendo che l'effetto sia immediatamente tangibile sia su altoparlanti integrati
+ * (spesso mutati dall'HAL AOSP) sia su cuffie e dispositivi Bluetooth.
  */
 object EqualizerManager {
 
     private const val TAG = "EqualizerManager"
+    private const val EFFECT_PRIORITY = 1000
 
     private var equalizer: Equalizer? = null
     private var bassBoost: BassBoost? = null
     private var virtualizer: Virtualizer? = null
     private var appPreferences: AppPreferences? = null
+    private var applicationContext: Context? = null
     private var currentAudioSessionId: Int = 0
 
     private val _state = MutableStateFlow(EqualizerState())
@@ -54,14 +63,17 @@ object EqualizerManager {
             return
         }
         val appContext = context.applicationContext ?: context
+        applicationContext = appContext
         val prefs = AppPreferences(appContext)
         appPreferences = prefs
 
         release()
         currentAudioSessionId = audioSessionId
 
+        broadcastSessionOpen(appContext, audioSessionId)
+
         try {
-            val eq = Equalizer(0, audioSessionId)
+            val eq = Equalizer(EFFECT_PRIORITY, audioSessionId)
             equalizer = eq
 
             val isEnabled = prefs.isEqualizerEnabled()
@@ -80,37 +92,35 @@ object EqualizerManager {
                 }
             }
 
-            // Inizializzazione BassBoost
+            // Inizializzazione BassBoost hardware
             var bbSupported = false
+            val savedBassBoost = prefs.getBassBoostStrength().coerceIn(0, 1000)
             try {
-                val bb = BassBoost(0, audioSessionId)
+                val bb = BassBoost(EFFECT_PRIORITY, audioSessionId)
                 bassBoost = bb
                 bbSupported = bb.strengthSupported
-                val savedStrength = prefs.getBassBoostStrength().coerceIn(0, 1000)
                 if (bbSupported) {
-                    bb.setStrength(savedStrength.toShort())
-                    bb.enabled = isEnabled && savedStrength > 0
+                    bb.setStrength(savedBassBoost.toShort())
+                    bb.enabled = isEnabled && savedBassBoost > 0
                 }
             } catch (e: Exception) {
-                Log.w(TAG, "BassBoost non supportato su questo dispositivo: ${e.message}")
+                Log.w(TAG, "BassBoost hardware nativo non supportato su questo dispositivo: ${e.message}")
             }
 
-            // Inizializzazione Virtualizer
+            // Inizializzazione Virtualizer hardware
             var virtSupported = false
+            val savedVirtualizer = prefs.getVirtualizerStrength().coerceIn(0, 1000)
             try {
-                val virt = Virtualizer(0, audioSessionId)
+                val virt = Virtualizer(EFFECT_PRIORITY, audioSessionId)
                 virtualizer = virt
                 virtSupported = virt.strengthSupported
-                val savedStrength = prefs.getVirtualizerStrength().coerceIn(0, 1000)
                 if (virtSupported) {
-                    virt.setStrength(savedStrength.toShort())
-                    virt.enabled = isEnabled && savedStrength > 0
+                    virt.setStrength(savedVirtualizer.toShort())
+                    virt.enabled = isEnabled && savedVirtualizer > 0
                 }
             } catch (e: Exception) {
-                Log.w(TAG, "Virtualizer non supportato su questo dispositivo: ${e.message}")
+                Log.w(TAG, "Virtualizer hardware non supportato su questo dispositivo: ${e.message}")
             }
-
-            eq.enabled = isEnabled
 
             // Caricamento bande salvate o default
             val savedPreset = prefs.getEqualizerPreset()
@@ -150,53 +160,134 @@ object EqualizerManager {
                 maxLevelMb = maxLevel,
                 presets = presetsList,
                 currentPresetIndex = savedPreset,
-                bassBoostStrength = prefs.getBassBoostStrength(),
-                isBassBoostSupported = bbSupported,
-                virtualizerStrength = prefs.getVirtualizerStrength(),
+                bassBoostStrength = savedBassBoost,
+                isBassBoostSupported = true, // L'architettura ibrida rende il Bass Boost sempre fruibile
+                virtualizerStrength = savedVirtualizer,
                 isVirtualizerSupported = virtSupported
             )
+
+            applyEffectiveBands()
         } catch (e: Exception) {
             Log.e(TAG, "Impossibile inizializzare l'equalizzatore: ${e.message}")
             _state.value = EqualizerState(isAvailable = false)
         }
     }
 
+    private fun broadcastSessionOpen(context: Context, sessionId: Int) {
+        try {
+            val intent = Intent(AudioEffect.ACTION_OPEN_AUDIO_EFFECT_CONTROL_SESSION).apply {
+                putExtra(AudioEffect.EXTRA_AUDIO_SESSION, sessionId)
+                putExtra(AudioEffect.EXTRA_PACKAGE_NAME, context.packageName)
+                putExtra(AudioEffect.EXTRA_CONTENT_TYPE, AudioEffect.CONTENT_TYPE_MUSIC)
+            }
+            context.sendBroadcast(intent)
+        } catch (e: Exception) {
+            Log.w(TAG, "Impossibile trasmettere ACTION_OPEN_AUDIO_EFFECT_CONTROL_SESSION: ${e.message}")
+        }
+    }
+
+    private fun broadcastSessionClose(context: Context, sessionId: Int) {
+        try {
+            val intent = Intent(AudioEffect.ACTION_CLOSE_AUDIO_EFFECT_CONTROL_SESSION).apply {
+                putExtra(AudioEffect.EXTRA_AUDIO_SESSION, sessionId)
+                putExtra(AudioEffect.EXTRA_PACKAGE_NAME, context.packageName)
+            }
+            context.sendBroadcast(intent)
+        } catch (e: Exception) {
+            Log.w(TAG, "Impossibile trasmettere ACTION_CLOSE_AUDIO_EFFECT_CONTROL_SESSION: ${e.message}")
+        }
+    }
+
+    /**
+     * Applica i livelli audio effettivi all'hardware:
+     * Combina le bande utente con l'incremento del Bass Boost su Band 0 (sub-bass / ~60 Hz)
+     * e Band 1 (mid-bass / ~230 Hz), assicurando che il potenziamento dei bassi sia
+     * potente, corposo e percepibile in qualsiasi condizione di ascolto.
+     */
+    private fun applyEffectiveBands() {
+        val eq = equalizer ?: return
+        val isEnabled = _state.value.isEnabled
+        val bassBoostStrength = _state.value.bassBoostStrength
+        val minLevel = _state.value.minLevelMb
+        val maxLevel = _state.value.maxLevelMb
+
+        try {
+            eq.enabled = isEnabled
+        } catch (e: Exception) {
+            Log.w(TAG, "Errore eq.enabled: ${e.message}")
+        }
+
+        try {
+            bassBoost?.enabled = (isEnabled && bassBoostStrength > 0)
+        } catch (e: Exception) {
+            Log.w(TAG, "Errore bassBoost.enabled: ${e.message}")
+        }
+
+        try {
+            virtualizer?.enabled = (isEnabled && _state.value.virtualizerStrength > 0)
+        } catch (e: Exception) {
+            Log.w(TAG, "Errore virtualizer.enabled: ${e.message}")
+        }
+
+        // Potenziamento acustico Bass Boost: fino a +700 mB (+7 dB) su banda 0
+        // e circa il 45% (+315 mB) su banda 1 per una curva di equalizzazione morbida e calda
+        val bassBoostOffsetMb = if (isEnabled && bassBoostStrength > 0) {
+            ((bassBoostStrength / 1000f) * 700f).toInt()
+        } else {
+            0
+        }
+        val lowMidOffsetMb = (bassBoostOffsetMb * 0.45f).toInt()
+
+        _state.value.bands.forEach { band ->
+            val extraBoost = when (band.bandIndex) {
+                0 -> bassBoostOffsetMb
+                1 -> lowMidOffsetMb
+                else -> 0
+            }
+            val effectiveLevel = (band.levelMb + extraBoost).coerceIn(minLevel, maxLevel).toShort()
+            try {
+                eq.setBandLevel(band.bandIndex.toShort(), effectiveLevel)
+            } catch (e: Exception) {
+                Log.w(TAG, "Errore applicazione banda ${band.bandIndex} ($effectiveLevel): ${e.message}")
+            }
+        }
+    }
+
     @Synchronized
     fun setEnabled(enabled: Boolean) {
-        val eq = equalizer ?: return
         try {
-            eq.enabled = enabled
-            bassBoost?.enabled = (enabled && (_state.value.bassBoostStrength > 0))
-            virtualizer?.enabled = (enabled && (_state.value.virtualizerStrength > 0))
             appPreferences?.setEqualizerEnabled(enabled)
             _state.value = _state.value.copy(isEnabled = enabled)
+            applyEffectiveBands()
         } catch (e: Exception) {
             Log.e(TAG, "Errore abilitazione equalizzatore", e)
         }
     }
 
     @Synchronized
-    fun setBandLevel(bandIndex: Int, levelMb: Int) {
-        val eq = equalizer ?: return
-        try {
-            val clamped = levelMb.coerceIn(_state.value.minLevelMb, _state.value.maxLevelMb).toShort()
-            eq.setBandLevel(bandIndex.toShort(), clamped)
-
-            val updatedBands = _state.value.bands.map {
-                if (it.bandIndex == bandIndex) it.copy(levelMb = clamped.toInt()) else it
-            }
-
-            val levelsCsv = updatedBands.joinToString(",") { "${it.bandIndex}:${it.levelMb}" }
-            appPreferences?.setEqualizerBandLevels(levelsCsv)
-            appPreferences?.setEqualizerPreset(-1)
-
-            _state.value = _state.value.copy(
-                bands = updatedBands,
-                currentPresetIndex = -1 // Passa a personalizzato
-            )
-        } catch (e: Exception) {
-            Log.e(TAG, "Errore impostazione banda $bandIndex", e)
+    fun setBandLevel(bandIndex: Int, levelMb: Int, persist: Boolean = false) {
+        val clamped = levelMb.coerceIn(_state.value.minLevelMb, _state.value.maxLevelMb)
+        val updatedBands = _state.value.bands.map {
+            if (it.bandIndex == bandIndex) it.copy(levelMb = clamped) else it
         }
+
+        _state.value = _state.value.copy(
+            bands = updatedBands,
+            currentPresetIndex = -1 // Passa a personalizzato
+        )
+        applyEffectiveBands()
+
+        if (persist) {
+            persistBandLevels()
+        }
+    }
+
+    @Synchronized
+    fun persistBandLevels() {
+        val updatedBands = _state.value.bands
+        val levelsCsv = updatedBands.joinToString(",") { "${it.bandIndex}:${it.levelMb}" }
+        appPreferences?.setEqualizerBandLevels(levelsCsv)
+        appPreferences?.setEqualizerPreset(_state.value.currentPresetIndex)
     }
 
     @Synchronized
@@ -218,6 +309,7 @@ object EqualizerManager {
                     bands = updatedBands,
                     currentPresetIndex = presetIndex
                 )
+                applyEffectiveBands()
             }
         } catch (e: Exception) {
             Log.e(TAG, "Errore impostazione preset $presetIndex", e)
@@ -225,45 +317,71 @@ object EqualizerManager {
     }
 
     @Synchronized
-    fun setBassBoostStrength(strength: Int) {
-        val bb = bassBoost ?: return
+    fun setBassBoostStrength(strength: Int, persist: Boolean = false) {
+        val clamped = strength.coerceIn(0, 1000)
         try {
-            val clamped = strength.coerceIn(0, 1000).toShort()
-            bb.setStrength(clamped)
-            bb.enabled = (_state.value.isEnabled && clamped > 0)
-            appPreferences?.setBassBoostStrength(clamped.toInt())
-            _state.value = _state.value.copy(bassBoostStrength = clamped.toInt())
+            bassBoost?.setStrength(clamped.toShort())
+            bassBoost?.enabled = (_state.value.isEnabled && clamped > 0)
         } catch (e: Exception) {
-            Log.e(TAG, "Errore BassBoost", e)
+            Log.e(TAG, "Errore BassBoost hardware", e)
+        }
+
+        _state.value = _state.value.copy(bassBoostStrength = clamped)
+        applyEffectiveBands()
+
+        if (persist) {
+            persistBassBoostStrength(clamped)
         }
     }
 
     @Synchronized
-    fun setVirtualizerStrength(strength: Int) {
-        val virt = virtualizer ?: return
+    fun persistBassBoostStrength(strength: Int) {
+        appPreferences?.setBassBoostStrength(strength.coerceIn(0, 1000))
+    }
+
+    @Synchronized
+    fun setVirtualizerStrength(strength: Int, persist: Boolean = false) {
+        val clamped = strength.coerceIn(0, 1000)
         try {
-            val clamped = strength.coerceIn(0, 1000).toShort()
-            virt.setStrength(clamped)
-            virt.enabled = (_state.value.isEnabled && clamped > 0)
-            appPreferences?.setVirtualizerStrength(clamped.toInt())
-            _state.value = _state.value.copy(virtualizerStrength = clamped.toInt())
+            val virt = virtualizer
+            if (virt != null) {
+                virt.setStrength(clamped.toShort())
+                virt.enabled = (_state.value.isEnabled && clamped > 0)
+            }
         } catch (e: Exception) {
-            Log.e(TAG, "Errore Virtualizer", e)
+            Log.e(TAG, "Errore Virtualizer hardware", e)
         }
+
+        _state.value = _state.value.copy(virtualizerStrength = clamped)
+
+        if (persist) {
+            persistVirtualizerStrength(clamped)
+        }
+    }
+
+    @Synchronized
+    fun persistVirtualizerStrength(strength: Int) {
+        appPreferences?.setVirtualizerStrength(strength.coerceIn(0, 1000))
     }
 
     @Synchronized
     fun resetToFlat() {
-        val eq = equalizer ?: return
         try {
-            val updatedBands = _state.value.bands.map {
-                eq.setBandLevel(it.bandIndex.toShort(), 0)
-                it.copy(levelMb = 0)
-            }
+            val updatedBands = _state.value.bands.map { it.copy(levelMb = 0) }
             appPreferences?.setEqualizerBandLevels(updatedBands.joinToString(",") { "${it.bandIndex}:0" })
             appPreferences?.setEqualizerPreset(-1)
-            setBassBoostStrength(0)
-            setVirtualizerStrength(0)
+            appPreferences?.setBassBoostStrength(0)
+            appPreferences?.setVirtualizerStrength(0)
+
+            try {
+                bassBoost?.setStrength(0)
+                bassBoost?.enabled = false
+            } catch (_: Exception) {}
+
+            try {
+                virtualizer?.setStrength(0)
+                virtualizer?.enabled = false
+            } catch (_: Exception) {}
 
             _state.value = _state.value.copy(
                 bands = updatedBands,
@@ -271,6 +389,7 @@ object EqualizerManager {
                 bassBoostStrength = 0,
                 virtualizerStrength = 0
             )
+            applyEffectiveBands()
         } catch (e: Exception) {
             Log.e(TAG, "Errore reset equalizzatore", e)
         }
@@ -278,7 +397,13 @@ object EqualizerManager {
 
     @Synchronized
     fun release() {
+        val ctx = applicationContext
+        val sid = currentAudioSessionId
+        if (ctx != null && sid != 0) {
+            broadcastSessionClose(ctx, sid)
+        }
         currentAudioSessionId = 0
+
         try {
             equalizer?.release()
         } catch (_: Exception) {}

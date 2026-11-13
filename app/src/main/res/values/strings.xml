@@ -423,4 +423,26 @@
     <string name="hide_password">Nascondi password</string>
     <string name="cover_content_desc">Copertina %s</string>
     <string name="album_cover_content_desc">Copertina album %s</string>
+
+    <!-- Backup e ripristino locale -->
+    <string name="settings_section_backup">Backup e Ripristino</string>
+    <string name="backup_section_description">Esporta o ripristina playlist, preferiti, cronologia di ascolto e preferenze dell\'app in un file JSON locale. Le credenziali Last.fm restano protette sul dispositivo.</string>
+    <string name="backup_export_button">Salva i dati di ascolto</string>
+    <string name="backup_import_button">Importa i dati di ascolto</string>
+    <string name="backup_export_success">Backup salvato con successo</string>
+    <string name="backup_export_error">Errore durante il salvataggio del backup: %s</string>
+    <string name="backup_import_error">Errore durante l\'importazione del backup: %s</string>
+    <string name="backup_error_file_too_large">il file supera il limite massimo di 10 MB</string>
+    <string name="backup_error_unsupported_version">versione del backup non supportata</string>
+    <string name="backup_error_invalid_format">formato JSON non valido o danneggiato</string>
+    <string name="backup_error_io">impossibile accedere al file selezionato</string>
+    <string name="backup_import_summary_title">Riepilogo importazione</string>
+    <string name="backup_import_summary_playlists_created">Playlist importate: %d</string>
+    <string name="backup_import_summary_playlists_updated">Playlist aggiornate: %d</string>
+    <string name="backup_import_summary_favorites_added">Preferiti aggiunti: %d</string>
+    <string name="backup_import_summary_stats_restored">Statistiche di ascolto ripristinate: %d</string>
+    <string name="backup_import_summary_scrobbles_restored">Scrobble in coda ripristinati: %d</string>
+    <string name="backup_import_summary_prefs_restored">Preferenze ripristinate: Sì</string>
+    <string name="backup_import_summary_unmatched_header">Brani non trovati sul dispositivo (%d):</string>
+    <string name="backup_import_summary_unmatched_more">…e altri %d brani</string>
 </resources>

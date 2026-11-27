@@ -150,6 +150,39 @@ class LibraryCoordinator(
     }.flowOn(Dispatchers.Default)
      .stateIn(scope, SharingStarted.WhileSubscribed(5000), emptyList())
 
+    private fun buildAlbumsFromTracks(tracks: List<AudioTrack>): List<Album> {
+        artistInfoRepository.ensureCacheLoaded()
+        val unreleasedSnapshot = UnreleasedTrackStore.getSnapshot(application)
+        return groupTracksIntoAlbums(
+            tracks = tracks,
+            unreleasedSnapshot = unreleasedSnapshot,
+            artistPhotoUriProvider = { artistName ->
+                artistInfoRepository.getCachedArtistInfo(artistName)
+                    ?.photoUrl
+                    ?.takeIf { it.isNotBlank() }
+                    ?.let { Uri.parse(it) }
+            }
+        )
+    }
+
+    /**
+     * Ricalcola immediatamente il raggruppamento degli album in memoria e su cache locale
+     * in seguito a modifiche in [UnreleasedTrackStore] (es. scansione batch Unreleased).
+     */
+    suspend fun regroupAlbumsFromUnreleasedStore() {
+        val currentTracks = _tracks.value
+        if (currentTracks.isEmpty()) return
+        val regroupedAlbums = withContext(Dispatchers.IO) {
+            buildAlbumsFromTracks(currentTracks)
+        }
+        withContext(Dispatchers.Main) {
+            _albums.value = regroupedAlbums
+        }
+        withContext(Dispatchers.IO) {
+            libraryCacheRepository.saveCache(_audioSourceMode.value, _customFolders.value, currentTracks, regroupedAlbums)
+        }
+    }
+
     fun loadInitialCachedLibrary(onLoaded: () -> Unit) {
         scope.launch(Dispatchers.IO) {
             val currentMode = _audioSourceMode.value
@@ -158,10 +191,15 @@ class LibraryCoordinator(
             if (cached != null) {
                 val (cachedTracks, cachedAlbums) = cached
                 if (cachedTracks.isNotEmpty()) {
+                    val effectiveAlbums = if (UnreleasedTrackStore.getSnapshot(application).isEmpty()) {
+                        cachedAlbums
+                    } else {
+                        buildAlbumsFromTracks(cachedTracks)
+                    }
                     withContext(Dispatchers.Main) {
                         if (_tracks.value.isEmpty()) {
                             _tracks.value = cachedTracks
-                            _albums.value = cachedAlbums
+                            _albums.value = effectiveAlbums
                             _isLoading.value = false
                             onLoaded()
                         }
@@ -184,16 +222,18 @@ class LibraryCoordinator(
         val currentCustomFolders = _customFolders.value
         val (loadedTracks, groupedAlbums) = withContext(Dispatchers.IO) {
             val tracks = loadAudioFiles(application, currentMode, currentCustomFolders)
-            val albums = groupTracksIntoAlbums(tracks)
+            val albums = buildAlbumsFromTracks(tracks)
             tracks to albums
         }
 
         withContext(Dispatchers.Main) {
             val currentTracks = _tracks.value
+            val currentAlbums = _albums.value
             val isUnchanged = !force &&
                 currentTracks.size == loadedTracks.size &&
                 currentTracks.isNotEmpty() &&
-                currentTracks == loadedTracks
+                currentTracks == loadedTracks &&
+                currentAlbums == groupedAlbums
 
             if (!isUnchanged || currentTracks.isEmpty()) {
                 _tracks.value = loadedTracks
@@ -380,7 +420,9 @@ class LibraryCoordinator(
                 track
             }
         }
-        val patchedAlbums = groupTracksIntoAlbums(patchedTracks)
+        val patchedAlbums = withContext(Dispatchers.IO) {
+            buildAlbumsFromTracks(patchedTracks)
+        }
         withContext(Dispatchers.Main) {
             _tracks.value = patchedTracks
             _albums.value = patchedAlbums
@@ -432,7 +474,8 @@ class LibraryCoordinator(
             val deletedIds = tracks.map { it.id }.toSet()
             val remainingTracks = _tracks.value.filter { it.id !in deletedIds }
             _tracks.value = remainingTracks
-            val updatedAlbums = groupTracksIntoAlbums(remainingTracks)
+            UnreleasedTrackStore.removeDeletedTracks(application, tracks)
+            val updatedAlbums = buildAlbumsFromTracks(remainingTracks)
             _albums.value = updatedAlbums
 
             onDeletedIds?.invoke(deletedIds)

@@ -56,9 +56,17 @@
     <string name="lang_short_system">System</string>
 
     <!-- Settings -->
-    <string name="settings_section_appearance">Appearance &amp; Theme</string>
-    <string name="settings_appearance_short">Appearance</string>
+    <string name="settings_section_appearance">Appearance &amp; Display</string>
+    <string name="settings_appearance_short">Appearance &amp; Display</string>
     <string name="settings_theme_mode">Theme mode</string>
+    <string name="settings_layout_card_title">Section layout</string>
+    <string name="settings_layout_card_desc">Independently choose how to display songs, albums and playlists</string>
+    <string name="layout_mode_list">List</string>
+    <string name="layout_mode_grid">Grid</string>
+    <string name="layout_grid_size_label">Grid size</string>
+    <string name="layout_grid_2x2">2×2</string>
+    <string name="layout_grid_3x3">3×3</string>
+    <string name="layout_grid_4x4">4×4</string>
     <string name="theme_system">System default</string>
     <string name="theme_light">Light theme</string>
     <string name="theme_dark">Dark theme</string>
@@ -167,6 +175,7 @@
     <string name="player_collapse_desc">Collapse full screen player</string>
     <string name="player_more_options">More options</string>
     <string name="player_menu_view_artist">View artist</string>
+    <string name="player_menu_view_album">View album</string>
     <string name="player_menu_add_to_queue">Add to queue</string>
     <string name="player_menu_add_to_favorites">Add to favorites</string>
     <string name="player_menu_added_to_favorites">Added to favorites</string>
@@ -350,7 +359,16 @@
     <string name="settings_update_check_error">Error during update check: %s</string>
 
     <!-- Global Search Results -->
+    <string name="search_filter_all">All</string>
+    <string name="search_filter_tracks">Songs</string>
+    <string name="search_filter_artist">Artist</string>
+    <string name="search_filter_album">Album</string>
+    <string name="search_filter_playlist">Playlist</string>
     <string name="search_no_results">No results for \"%s\"</string>
+    <string name="search_no_tracks_results">No songs found for \"%s\"</string>
+    <string name="search_no_artists_results">No artists found for \"%s\"</string>
+    <string name="search_no_albums_results">No albums found for \"%s\"</string>
+    <string name="search_no_playlists_results">No playlists found for \"%s\"</string>
     <string name="search_tracks_found">Songs found (%d)</string>
     <string name="search_albums_found">Albums found (%d)</string>
     <string name="search_playlists_found">Playlists found (%d)</string>
@@ -432,6 +450,16 @@
     <string name="autotag_apply_to_track">Apply to track</string>
     <string name="autotag_moved_tracks_notice">%d track(s) moved to another album (will be saved on completion)</string>
     <string name="autotag_edited_track_badge">Edited</string>
+    <string name="autotag_unreleased_badge">Unreleased</string>
+    <string name="autotag_unreleased_notice">No official release found on Deezer: this song will be grouped into the \"Unreleased\" album by %s.</string>
+    <string name="settings_unreleased_scan_title">Scan Unreleased songs</string>
+    <string name="settings_unreleased_scan_desc">Checks songs without an official album on Deezer and automatically groups unreleased tracks into an \"Unreleased\" album per artist.</string>
+    <string name="settings_unreleased_scan_button">Start Unreleased scan</string>
+    <string name="settings_unreleased_scan_progress">Checking %1$d of %2$d: %3$s</string>
+    <string name="settings_unreleased_scan_none_needed">All library songs are already organized into an album or marked as Unreleased.</string>
+    <string name="settings_unreleased_scan_result_grouped">Grouped %1$d unreleased songs into %2$d \"Unreleased\" albums (out of %3$d checked).</string>
+    <string name="settings_unreleased_scan_result_zero">No new Unreleased songs detected (%d songs checked).</string>
+    <string name="settings_unreleased_scan_review_official">Review %d found on Deezer</string>
 
     <!-- Snackbar Messages &amp; UI Notifications -->
     <string name="snackbar_cover_updated">Cover updated for \"%s\"</string>

@@ -142,4 +142,34 @@ class QuerySanitizerTest {
         assertEquals("Lazza", QuerySanitizer.extractPrimaryAlbumArtist("Lazza (feat. Shiva) - Topic"))
         assertEquals("", QuerySanitizer.extractPrimaryAlbumArtist("Artista sconosciuto"))
     }
+
+    @Test
+    fun `protected comma artists like Tyler The Creator remain intact across search and album artist extraction`() {
+        assertEquals("Tyler, The Creator", QuerySanitizer.extractPrimaryArtistForSearch("Tyler, The Creator"))
+        assertEquals("Tyler, The Creator", QuerySanitizer.extractPrimaryAlbumArtist("Tyler, The Creator"))
+        assertEquals("Tyler, The Creator", QuerySanitizer.extractPrimaryAlbumArtist("Tyler, The Creator feat. Kali Uchis"))
+        assertEquals("Tyler, The Creator", QuerySanitizer.extractPrimaryAlbumArtist("Tyler, The Creator, Lil Wayne"))
+        assertEquals("Tyler, The Creator", QuerySanitizer.extractPrimaryAlbumArtist("Tyler, The Creator & A\$AP Rocky"))
+        assertEquals("Earth, Wind & Fire", QuerySanitizer.extractPrimaryAlbumArtist("Earth, Wind & Fire"))
+
+        assertTrue(QuerySanitizer.artistsMatch("Tyler, The Creator", "Tyler, The Creator feat. Playboi Carti"))
+        assertTrue(QuerySanitizer.artistsMatch("Kali Uchis feat. Tyler, The Creator", "Tyler, The Creator"))
+        assertFalse(QuerySanitizer.artistsMatch("Tyler, The Creator", "The Creator"))
+        assertFalse(QuerySanitizer.hasRicherArtistCredits("Tyler, The Creator", "Tyler, The Creator"))
+        assertTrue(QuerySanitizer.hasRicherArtistCredits("Tyler, The Creator feat. Kali Uchis", "Tyler, The Creator"))
+
+        // Zero regression on normal comma-separated artist lists (including second artists starting with "The ")
+        assertEquals("Lazza", QuerySanitizer.extractPrimaryAlbumArtist("Lazza, Sfera Ebbasta"))
+        assertEquals("Future", QuerySanitizer.extractPrimaryAlbumArtist("Future, The Weeknd"))
+    }
+
+    @Test
+    fun `unreleased noise tags are stripped cleanly from dirty titles and detected as explicit markers`() {
+        assertTrue(QuerySanitizer.hasExplicitUnreleasedMarker("Playboi Carti - Molly (Unreleased).mp3"))
+        assertTrue(QuerySanitizer.hasExplicitUnreleasedMarker("Cancun [Leak]"))
+        assertFalse(QuerySanitizer.hasExplicitUnreleasedMarker("Magnolia"))
+
+        assertEquals("Molly", QuerySanitizer.cleanRawString("01 - Molly (Unreleased).mp3"))
+        assertTrue(QuerySanitizer.isTitleUnknownOrDirty("Molly [Unreleased]", "Molly [Unreleased].mp3", "Playboi Carti"))
+    }
 }

@@ -10,6 +10,7 @@ import com.example.musicplayer.data.FAVORITES_PLAYLIST_ID
 import com.example.musicplayer.data.FAVORITES_PLAYLIST_NAME
 import com.example.musicplayer.data.Playlist
 import com.example.musicplayer.data.PlaylistRepository
+import com.example.musicplayer.data.SectionViewMode
 import com.example.musicplayer.data.StatsRepository
 import com.example.musicplayer.data.ThemeMode
 import com.example.musicplayer.data.TrackStats
@@ -83,6 +84,9 @@ class BackupRepositoryTest {
         mockPrefs = mock(AppPreferences::class.java)
         `when`(mockPrefs.isAutoplayEnabled()).thenReturn(true)
         `when`(mockPrefs.getThemeMode()).thenReturn(ThemeMode.DARK)
+        `when`(mockPrefs.getTracksViewMode()).thenReturn(SectionViewMode.LIST)
+        `when`(mockPrefs.getAlbumsViewMode()).thenReturn(SectionViewMode.GRID_3)
+        `when`(mockPrefs.getPlaylistsViewMode()).thenReturn(SectionViewMode.GRID_2)
         `when`(mockPrefs.getAppLanguage()).thenReturn(AppLanguage.ITALIAN)
         `when`(mockPrefs.isDynamicColorEnabled()).thenReturn(true)
         `when`(mockPrefs.getAudioSourceMode()).thenReturn(AudioSourceMode.INTELLIGENT)
@@ -227,6 +231,9 @@ class BackupRepositoryTest {
         assertEquals(3, restoredStats[9002L]?.playCount)
         assertEquals(1, fakeDao.items.size)
         verify(mockPrefs).setThemeMode(ThemeMode.DARK)
+        verify(mockPrefs).setTracksViewMode(SectionViewMode.LIST)
+        verify(mockPrefs).setAlbumsViewMode(SectionViewMode.GRID_3)
+        verify(mockPrefs).setPlaylistsViewMode(SectionViewMode.GRID_2)
 
         // Seconda importazione identica: non deve duplicare nulla
         val secondSummary = repository.importBackupJson(exportedJson, listOf(newT1, newT2))

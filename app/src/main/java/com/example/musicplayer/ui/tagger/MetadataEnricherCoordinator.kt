@@ -7,8 +7,13 @@ import com.example.musicplayer.data.Album
 import com.example.musicplayer.data.AudioTrack
 import com.example.musicplayer.data.LyricsData
 import com.example.musicplayer.data.LyricsRepository
+import com.example.musicplayer.data.UNRELEASED_ALBUM_TITLE
+import com.example.musicplayer.data.UnreleasedTrackStore
+import com.example.musicplayer.data.extractMainArtist
 import com.example.musicplayer.data.isGenericAlbum
 import com.example.musicplayer.data.isMixedOrGeneric
+import com.example.musicplayer.data.isTrackUnreleased
+import com.example.musicplayer.data.isUnreleasedAlbumTitle
 import com.example.musicplayer.data.tagger.model.DeezerSearchTrack
 import com.example.musicplayer.data.tagger.model.EnrichedMetadata
 import com.example.musicplayer.data.tagger.repository.EnricherOptions
@@ -21,13 +26,31 @@ import kotlinx.coroutines.Job
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.io.File
+import java.util.Locale
 import java.util.concurrent.ConcurrentHashMap
+
+sealed class UnreleasedScanState {
+    object Idle : UnreleasedScanState()
+    data class Scanning(
+        val current: Int,
+        val total: Int,
+        val currentTrackTitle: String
+    ) : UnreleasedScanState()
+    data class Completed(
+        val scannedCount: Int,
+        val newlyGroupedUnreleasedCount: Int,
+        val affectedArtistsCount: Int,
+        val officialMatches: Map<AudioTrack, EnrichedMetadata> = emptyMap()
+    ) : UnreleasedScanState()
+}
 
 /**
  * Coordinatore per l'arricchimento dei metadati (Smart Auto-Tagger) e la gestione dei testi (.lrc).
@@ -40,12 +63,16 @@ class MetadataEnricherCoordinator(
     private val scope: CoroutineScope,
     private val onReloadLibrary: suspend (affectedMetadata: Map<Long, EnrichedMetadata>) -> Unit
 ) {
+    private val appContext: Context = context.applicationContext ?: context
     private val enricherRepository = MetadataEnricherRepository()
-    private val storageWriteManager = StorageWriteManager(context)
-    val lyricsRepository = LyricsRepository(context)
+    private val storageWriteManager = StorageWriteManager(appContext)
+    val lyricsRepository = LyricsRepository(appContext)
 
     private val _enricherState = MutableStateFlow<EnricherUiState>(EnricherUiState.Idle)
     val enricherState: StateFlow<EnricherUiState> = _enricherState.asStateFlow()
+
+    private val _unreleasedScanState = MutableStateFlow<UnreleasedScanState>(UnreleasedScanState.Idle)
+    val unreleasedScanState: StateFlow<UnreleasedScanState> = _unreleasedScanState.asStateFlow()
 
     private val _writeRequestIntentSender = MutableStateFlow<IntentSender?>(null)
     val writeRequestIntentSender: StateFlow<IntentSender?> = _writeRequestIntentSender.asStateFlow()
@@ -55,6 +82,7 @@ class MetadataEnricherCoordinator(
 
     private val pendingWrites = ConcurrentHashMap<AudioTrack, Pair<File, EnrichedMetadata>>()
     private var activeSearchJob: Job? = null
+    private var unreleasedScanJob: Job? = null
     private var lyricsLoadJob: Job? = null
 
     private fun clearPendingWrites() {
@@ -336,7 +364,7 @@ class MetadataEnricherCoordinator(
 
     fun startAlbumEnrichment(album: Album, separateAlbums: Boolean? = null) {
         activeSearchJob?.cancel()
-        val shouldSeparate = separateAlbums ?: album.isMixedOrGeneric()
+        val shouldSeparate = separateAlbums ?: (album.isMixedOrGeneric() || isUnreleasedAlbumTitle(album.title))
         _enricherState.value = EnricherUiState.Loading(
             if (shouldSeparate) "Analisi brani e separazione in album distinti..."
             else "Analisi album e unificazione tracce..."
@@ -395,9 +423,14 @@ class MetadataEnricherCoordinator(
             }
 
             // 2. Mappa unificata (per raggruppare i brani sotto l'album ufficiale unico senza corrompere tracce già valide)
-            val hasKnownLocalAlbum = !isGenericAlbum(album.title) && !album.title.contains("(Brani singoli)")
+            val hasKnownLocalAlbum = !isGenericAlbum(album.title) &&
+                !album.title.contains("(Brani singoli)") &&
+                !isUnreleasedAlbumTitle(album.title)
             val nonGenericCandidates = individualMap.values.filter {
-                !isGenericAlbum(it.album) && !it.album.contains("(Brani singoli)")
+                !it.isUnreleased &&
+                    !isGenericAlbum(it.album) &&
+                    !it.album.contains("(Brani singoli)") &&
+                    !isUnreleasedAlbumTitle(it.album)
             }
             val studioCandidates = nonGenericCandidates.filter {
                 !it.recordType.equals("single", ignoreCase = true)
@@ -566,7 +599,8 @@ class MetadataEnricherCoordinator(
                     releaseYear = finalReleaseYear,
                     genre = finalGenre ?: ind.genre,
                     trackNumber = resolvedTrackNumber,
-                    discNumber = resolvedDiscNumber
+                    discNumber = resolvedDiscNumber,
+                    isUnreleased = isUnreleasedAlbumTitle(resolvedUnifiedAlbumTitle)
                 )
             }
 
@@ -807,12 +841,29 @@ class MetadataEnricherCoordinator(
         var successCount = 0
         val appliedMetadataMap = snapshot.map { (track, pair) -> track.id to pair.second }.toMap()
 
+        val unreleasedToMark = mutableListOf<AudioTrack>()
+        val officialToUnmark = mutableListOf<AudioTrack>()
+
         snapshot.forEach { (track, pair) ->
             val (file, metadata) = pair
             current++
             _enricherState.value = EnricherUiState.Writing(current, total, metadata.title)
             val ok = storageWriteManager.commitTrackWrite(track, file, metadata)
-            if (ok) successCount++
+            if (ok) {
+                successCount++
+                if (metadata.isUnreleased || isUnreleasedAlbumTitle(metadata.album)) {
+                    unreleasedToMark.add(track)
+                } else {
+                    officialToUnmark.add(track)
+                }
+            }
+        }
+
+        if (unreleasedToMark.isNotEmpty()) {
+            UnreleasedTrackStore.markUnreleased(appContext, unreleasedToMark)
+        }
+        if (officialToUnmark.isNotEmpty()) {
+            UnreleasedTrackStore.unmarkUnreleased(appContext, officialToUnmark)
         }
 
         // Notifica il ViewModel per l'aggiornamento ottimistico in memoria e il ricaricamento asincrono della libreria
@@ -821,6 +872,156 @@ class MetadataEnricherCoordinator(
         _enricherState.value = EnricherUiState.Success(
             "Aggiornati con successo $successCount di $total brani!"
         )
+    }
+
+    /**
+     * Scansiona in batch (con throttling sicuro) i brani della libreria attualmente privi di un album ufficiale
+     * verificandone l'esistenza su Deezer: i brani non trovati (con artista valido) vengono registrati
+     * in [UnreleasedTrackStore] e raggruppati immediatamente nell'album "Unreleased" di ciascun artista,
+     * senza necessità di riscrivere i file audio su disco.
+     */
+    fun scanAndOrganizeUnreleasedTracks(
+        allTracks: List<AudioTrack>,
+        onUnreleasedGrouped: suspend () -> Unit
+    ) {
+        if (_unreleasedScanState.value is UnreleasedScanState.Scanning) return
+        unreleasedScanJob?.cancel()
+        unreleasedScanJob = scope.launch {
+            val currentSnapshot = withContext(Dispatchers.IO) {
+                UnreleasedTrackStore.getSnapshot(appContext)
+            }
+            val candidateTracks = withContext(Dispatchers.Default) {
+                allTracks.filter { track ->
+                    !isTrackUnreleased(track, currentSnapshot) && (
+                        isGenericAlbum(track.album) ||
+                            track.album.contains("(Brani singoli)") ||
+                            track.album.trim().lowercase(Locale.ROOT) in SCAN_CANDIDATE_PLATFORM_ALBUMS
+                        )
+                }
+            }
+
+            if (candidateTracks.isEmpty()) {
+                _unreleasedScanState.value = UnreleasedScanState.Completed(
+                    scannedCount = 0,
+                    newlyGroupedUnreleasedCount = 0,
+                    affectedArtistsCount = 0
+                )
+                return@launch
+            }
+
+            val total = candidateTracks.size
+            var processed = 0
+            val newlyUnreleased = mutableListOf<AudioTrack>()
+            val affectedArtists = mutableSetOf<String>()
+            val officialMatches = LinkedHashMap<AudioTrack, EnrichedMetadata>()
+            val lightweightOptions = EnricherOptions(
+                normalizeAlbum = true,
+                embedCover = false,
+                includeLyrics = false,
+                prioritizeStudioAlbum = true
+            )
+
+            val chunks = candidateTracks.chunked(3)
+            for ((chunkIndex, chunk) in chunks.withIndex()) {
+                if (!isActive) return@launch
+                _unreleasedScanState.value = UnreleasedScanState.Scanning(
+                    current = (processed + 1).coerceAtMost(total),
+                    total = total,
+                    currentTrackTitle = chunk.first().title
+                )
+
+                val chunkResults = withContext(Dispatchers.IO) {
+                    coroutineScope {
+                        chunk.map { track ->
+                            async {
+                                track to enricherRepository.enrichTrack(track, lightweightOptions).getOrNull()
+                            }
+                        }.awaitAll()
+                    }
+                }
+
+                for ((track, enriched) in chunkResults) {
+                    processed++
+                    if (enriched == null) continue
+                    if (enriched.isUnreleased || isUnreleasedAlbumTitle(enriched.album)) {
+                        val mainArtist = extractMainArtist(enriched.albumArtist.ifBlank { enriched.artist })
+                        if (mainArtist.isNotBlank() && !QuerySanitizer.isArtistUnknownOrDirty(mainArtist)) {
+                            newlyUnreleased.add(track)
+                            affectedArtists.add(mainArtist.lowercase(Locale.ROOT))
+                        }
+                    } else if (!isGenericAlbum(enriched.album) && !enriched.album.contains("(Brani singoli)")) {
+                        officialMatches[track] = enriched
+                    }
+                }
+
+                _unreleasedScanState.value = UnreleasedScanState.Scanning(
+                    current = processed.coerceAtMost(total),
+                    total = total,
+                    currentTrackTitle = chunk.last().title
+                )
+
+                if (chunkIndex < chunks.lastIndex) {
+                    delay(320L)
+                }
+            }
+
+            if (newlyUnreleased.isNotEmpty()) {
+                withContext(Dispatchers.IO) {
+                    UnreleasedTrackStore.markUnreleased(appContext, newlyUnreleased)
+                }
+                onUnreleasedGrouped()
+            }
+
+            _unreleasedScanState.value = UnreleasedScanState.Completed(
+                scannedCount = total,
+                newlyGroupedUnreleasedCount = newlyUnreleased.size,
+                affectedArtistsCount = affectedArtists.size,
+                officialMatches = officialMatches
+            )
+        }
+    }
+
+    fun cancelUnreleasedScan() {
+        unreleasedScanJob?.cancel()
+        unreleasedScanJob = null
+        _unreleasedScanState.value = UnreleasedScanState.Idle
+    }
+
+    fun dismissUnreleasedScanSummary() {
+        if (_unreleasedScanState.value !is UnreleasedScanState.Scanning) {
+            _unreleasedScanState.value = UnreleasedScanState.Idle
+        }
+    }
+
+    /**
+     * Apre la finestra di revisione Smart Auto-Tagger (in modalità Separazione Album) per i brani
+     * che durante la scansione batch sono risultati presenti ufficialmente su Deezer.
+     */
+    fun reviewOfficialMatchesFromScan(): Boolean {
+        val completed = _unreleasedScanState.value as? UnreleasedScanState.Completed ?: return false
+        if (completed.officialMatches.isEmpty()) return false
+
+        val matchedTracks = completed.officialMatches.keys.toList()
+        val metadataById = completed.officialMatches.entries.associate { (track, meta) ->
+            track.id to meta
+        }
+        val syntheticAlbum = Album(
+            id = -999_001L,
+            title = UNRELEASED_ALBUM_TITLE,
+            artist = matchedTracks.first().artist,
+            albumArtUri = matchedTracks.firstOrNull { it.albumArtUri != null }?.albumArtUri,
+            tracks = matchedTracks
+        )
+        _unreleasedScanState.value = UnreleasedScanState.Idle
+        _enricherState.value = EnricherUiState.ReviewAlbum(
+            album = syntheticAlbum,
+            tracksEnriched = metadataById,
+            individualTracksEnriched = metadataById,
+            unifiedTracksEnriched = metadataById,
+            options = EnricherOptions(normalizeAlbum = false),
+            isSeparationMode = true
+        )
+        return true
     }
 
     fun closeEnricher() {
@@ -836,6 +1037,19 @@ class MetadataEnricherCoordinator(
     }
 
     companion object {
+        private val SCAN_CANDIDATE_PLATFORM_ALBUMS = setOf(
+            "youtube",
+            "youtube music",
+            "soundcloud",
+            "audiomack",
+            "bandcamp",
+            "datpiff",
+            "leak",
+            "leaks",
+            "discord",
+            "telegram"
+        )
+
         /**
          * Determina l'Album Artist univoco in modalità "Uniforma Album" garantendo di conservare
          * automaticamente solo il nome del primo artista principale (escludendo co-autori/featuring)

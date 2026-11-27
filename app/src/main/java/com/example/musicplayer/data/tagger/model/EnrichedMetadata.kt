@@ -18,6 +18,7 @@ data class EnrichedMetadata(
     val syncedLyrics: String? = null,  // Testo sincronizzato con timestamp [mm:ss.xx]
     val isInstrumental: Boolean = false, // Traccia puramente strumentale priva di parte vocale
     val recordType: String? = null,    // Tipo di rilascio ("album", "ep", "single", "compile")
+    val isUnreleased: Boolean = false, // Brano non presente su Deezer / classificato come Unreleased
     val source: String = "Deezer + LRCLIB"
 ) {
     val hasSyncedLyrics: Boolean get() = !syncedLyrics.isNullOrBlank()
@@ -47,6 +48,7 @@ data class EnrichedMetadata(
         if (syncedLyrics != other.syncedLyrics) return false
         if (isInstrumental != other.isInstrumental) return false
         if (recordType != other.recordType) return false
+        if (isUnreleased != other.isUnreleased) return false
         if (source != other.source) return false
 
         return true
@@ -65,7 +67,9 @@ data class EnrichedMetadata(
         result = 31 * result + (coverBytes?.contentHashCode() ?: 0)
         result = 31 * result + (plainLyrics?.hashCode() ?: 0)
         result = 31 * result + (syncedLyrics?.hashCode() ?: 0)
+        result = 31 * result + isInstrumental.hashCode()
         result = 31 * result + (recordType?.hashCode() ?: 0)
+        result = 31 * result + isUnreleased.hashCode()
         result = 31 * result + source.hashCode()
         return result
     }

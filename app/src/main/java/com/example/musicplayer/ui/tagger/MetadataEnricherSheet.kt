@@ -38,6 +38,7 @@ import androidx.compose.material.icons.filled.AddPhotoAlternate
 import androidx.compose.material.icons.filled.AutoFixHigh
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.CheckCircle
+import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Done
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.ErrorOutline
@@ -82,8 +83,6 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.nestedscroll.NestedScrollConnection
 import androidx.compose.ui.input.nestedscroll.NestedScrollSource
 import androidx.compose.ui.input.nestedscroll.nestedScroll
-import androidx.compose.ui.input.pointer.PointerEventPass
-import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
@@ -97,6 +96,7 @@ import com.example.musicplayer.R
 import com.example.musicplayer.data.Album
 import com.example.musicplayer.data.AudioTrack
 import com.example.musicplayer.data.formatDurationMs
+import com.example.musicplayer.data.isUnreleasedAlbumTitle
 import com.example.musicplayer.data.tagger.model.DeezerSearchTrack
 import com.example.musicplayer.data.tagger.model.EnrichedMetadata
 import com.example.musicplayer.data.tagger.repository.EnricherOptions
@@ -165,21 +165,14 @@ fun MetadataEnricherSheet(
         else -> false
     }
 
-    // Traccia se il gesto di trascinamento è iniziato dalla stanghetta grigia in cima al centro (dragHandle)
-    var isDraggingFromHandle by remember { mutableStateOf(false) }
-
     val sheetState = rememberModalBottomSheetState(
         skipPartiallyExpanded = true,
         confirmValueChange = { targetValue ->
-            if (targetValue == SheetValue.Hidden) {
-                isDraggingFromHandle
-            } else {
-                true
-            }
+            targetValue != SheetValue.Hidden
         }
     )
 
-    // Blocca la propagazione di qualsiasi scroll/fling verticale dal corpo interno al ModalBottomSheet
+    // Blocca la propagazione di qualsiasi scroll/fling verticale dal foglio al ModalBottomSheet (swipe-down disabilitato)
     val sheetBodyScrollBlocker = remember {
         object : NestedScrollConnection {
             override fun onPostScroll(
@@ -203,6 +196,9 @@ fun MetadataEnricherSheet(
 
     ModalBottomSheet(
         onDismissRequest = {
+            if (state is EnricherUiState.Writing) {
+                return@ModalBottomSheet
+            }
             if (hasParentAlbum) {
                 if (!onReturnToAlbumFromTrack()) {
                     onDismissRequest()
@@ -213,28 +209,7 @@ fun MetadataEnricherSheet(
         },
         sheetState = sheetState,
         containerColor = MaterialTheme.colorScheme.surface,
-        dragHandle = {
-            // Unica zona da cui è consentito chiudere il foglio tramite swipe verso il basso
-            Box(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .pointerInput(Unit) {
-                        awaitEachGesture {
-                            awaitFirstDown(pass = PointerEventPass.Initial, requireUnconsumed = false)
-                            isDraggingFromHandle = true
-                        }
-                    }
-                    .padding(top = 14.dp, bottom = 10.dp),
-                contentAlignment = Alignment.Center
-            ) {
-                Box(
-                    modifier = Modifier
-                        .size(width = 36.dp, height = 4.dp)
-                        .clip(CircleShape)
-                        .background(MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.45f))
-                )
-            }
-        },
+        dragHandle = null,
         modifier = modifier
     ) {
         BackHandler(enabled = hasParentAlbum) {
@@ -244,20 +219,14 @@ fun MetadataEnricherSheet(
         Column(
             modifier = Modifier
                 .fillMaxWidth()
-                .pointerInput(Unit) {
-                    awaitEachGesture {
-                        awaitFirstDown(pass = PointerEventPass.Initial, requireUnconsumed = false)
-                        isDraggingFromHandle = false
-                    }
-                }
                 .nestedScroll(sheetBodyScrollBlocker)
                 .draggable(
                     state = noopVerticalDraggableState,
                     orientation = Orientation.Vertical
                 )
                 .padding(horizontal = 20.dp)
+                .padding(top = 16.dp, bottom = 24.dp)
                 .navigationBarsPadding()
-                .padding(bottom = 24.dp)
         ) {
             // Header
             Row(
@@ -309,6 +278,16 @@ fun MetadataEnricherSheet(
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
+                }
+                if (!hasParentAlbum && state !is EnricherUiState.Writing) {
+                    Spacer(modifier = Modifier.width(4.dp))
+                    IconButton(onClick = onDismissRequest) {
+                        Icon(
+                            imageVector = Icons.Default.Close,
+                            contentDescription = stringResource(R.string.close),
+                            tint = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
                 }
             }
 
@@ -631,6 +610,44 @@ private fun ReviewTrackContent(
         }
 
         Spacer(modifier = Modifier.height(14.dp))
+
+        val effectiveIsUnreleased = isUnreleasedAlbumTitle(editedAlbum) ||
+            (enriched.isUnreleased && editedAlbum.trim().equals(enriched.album.trim(), ignoreCase = true))
+        if (effectiveIsUnreleased) {
+            val displayUnreleasedArtist = editedAlbumArtist.trim()
+                .ifBlank { editedArtist.trim() }
+                .ifBlank { track.artist }
+            Surface(
+                shape = RoundedCornerShape(12.dp),
+                color = MaterialTheme.colorScheme.tertiaryContainer.copy(alpha = 0.55f),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(bottom = 10.dp)
+            ) {
+                Row(
+                    modifier = Modifier.padding(horizontal = 12.dp, vertical = 10.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(
+                        text = stringResource(R.string.autotag_unreleased_badge),
+                        style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold),
+                        color = MaterialTheme.colorScheme.onTertiaryContainer,
+                        modifier = Modifier
+                            .background(
+                                MaterialTheme.colorScheme.tertiary.copy(alpha = 0.2f),
+                                RoundedCornerShape(6.dp)
+                            )
+                            .padding(horizontal = 8.dp, vertical = 3.dp)
+                    )
+                    Spacer(modifier = Modifier.width(10.dp))
+                    Text(
+                        text = stringResource(R.string.autotag_unreleased_notice, displayUnreleasedArtist),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onTertiaryContainer
+                    )
+                }
+            }
+        }
 
         // Scheda Diff Metadati con Quick-Edit
         Surface(
@@ -1019,17 +1036,20 @@ private fun ReviewTrackContent(
             Spacer(modifier = Modifier.width(10.dp))
             Button(
                 onClick = {
+                    val finalAlbum = editedAlbum.trim().ifBlank { enriched.album }
                     val finalEnriched = enriched.copy(
                         title = editedTitle.trim().ifBlank { enriched.title },
                         artist = editedArtist.trim().ifBlank { enriched.artist },
-                        album = editedAlbum.trim().ifBlank { enriched.album },
+                        album = finalAlbum,
                         albumArtist = editedAlbumArtist.trim().ifBlank { enriched.albumArtist },
                         genre = editedGenre.trim().takeIf { it.isNotBlank() },
                         releaseYear = editedYear.trim().toIntOrNull(),
                         trackNumber = editedTrackNumber.trim().toIntOrNull(),
                         discNumber = editedDiscNumber.trim().toIntOrNull() ?: 1,
                         coverBytes = customCoverBytes ?: enriched.coverBytes,
-                        coverUrl = if (customCoverBytes != null && customCoverBytes !== enriched.coverBytes) null else enriched.coverUrl
+                        coverUrl = if (customCoverBytes != null && customCoverBytes !== enriched.coverBytes) null else enriched.coverUrl,
+                        isUnreleased = isUnreleasedAlbumTitle(finalAlbum) ||
+                            (enriched.isUnreleased && finalAlbum.equals(enriched.album.trim(), ignoreCase = true))
                     )
                     onApply(finalEnriched, options)
                 },
@@ -1483,6 +1503,17 @@ private fun ReviewAlbumContent(
                                 overflow = TextOverflow.Ellipsis
                             )
                         }
+                    }
+                    if (enriched?.isUnreleased == true || isUnreleasedAlbumTitle(enriched?.album)) {
+                        Text(
+                            text = stringResource(R.string.autotag_unreleased_badge),
+                            style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold),
+                            color = MaterialTheme.colorScheme.tertiary,
+                            modifier = Modifier
+                                .background(MaterialTheme.colorScheme.tertiary.copy(alpha = 0.15f), RoundedCornerShape(4.dp))
+                                .padding(horizontal = 6.dp, vertical = 2.dp)
+                        )
+                        Spacer(modifier = Modifier.width(4.dp))
                     }
                     if (isManuallyEdited) {
                         Text(

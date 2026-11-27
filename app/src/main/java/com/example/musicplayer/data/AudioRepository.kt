@@ -2,28 +2,32 @@ package com.example.musicplayer.data
 
 import android.content.ContentUris
 import android.content.Context
+import android.net.Uri
 import android.provider.MediaStore
+import com.example.musicplayer.data.tagger.sanitizer.QuerySanitizer
 
-private val EXCLUDED_PATH_KEYWORDS = listOf(
-    "whatsapp",
-    "telegram",
-    "viber",
-    "signal",
-    "messenger",
-    "instagram",
-    "wechat",
+private val EXCLUDED_PATH_SUBSTRINGS = listOf(
+    "com.whatsapp",
+    "org.telegram",
+    "org.thoughtcrime.securesms",
+    "com.viber",
+    "com.discord",
+    "com.instagram",
+    "com.facebook.orca",
+    "com.skype",
+    "com.tencent.mm",
     "micromsg",
-    "discord",
-    "skype",
     "truecaller",
     "cubeacr",
     "boldbeast",
-    "recorder",
-    "recordings",
-    "registrazioni",
-    "registrazione",
+    "whatsapp audio",
+    "whatsapp voice",
+    "telegram audio",
+    "telegram voice",
+    "telegram documents",
     "voice record",
     "voicerecord",
+    "voice_record",
     "voicememo",
     "voice memo",
     "voice_memo",
@@ -37,6 +41,8 @@ private val EXCLUDED_PATH_KEYWORDS = listOf(
     "memo vocali",
     "memo vocale",
     "messaggi vocali",
+    "registrazioni vocali",
+    "registrazione vocale",
     "callrecording",
     "call recording",
     "call_recording",
@@ -54,17 +60,57 @@ private val EXCLUDED_PATH_KEYWORDS = listOf(
     "screenrecord",
     "screen_record",
     "screen-record",
-    "chiamate",
-    "ringtones",
-    "notifications",
-    "alarms",
-    "podcasts",
-    "audiobooks",
+    "miui/ringtone",
+    "samsung/ringtone",
     "/.trashed",
     "/.cache",
     "/cache/",
     "/temp/",
     "/tmp/"
+)
+
+private val EXCLUDED_ROOT_PREFIXES = listOf(
+    "android/data/",
+    "android/obb/",
+    "dcim/",
+    "pictures/",
+    "movies/"
+)
+
+private val EXCLUDED_EXACT_SEGMENTS_EVERYWHERE = setOf(
+    "whatsapp",
+    "telegram",
+    "recordings",
+    "registrazioni",
+    "registrazione",
+    "recorder",
+    "registratore",
+    "ringtones",
+    "suonerie",
+    "notifications",
+    "notifiche",
+    "alarms",
+    "sveglie",
+    "allarmi",
+    "podcasts",
+    "podcast",
+    "audiobooks",
+    "audiolibri",
+    "chiamate",
+    "voicememos",
+    "cache",
+    "temp",
+    "tmp"
+)
+
+private val EXCLUDED_CHAT_SEGMENTS_OUTSIDE_MUSIC = setOf(
+    "viber",
+    "signal",
+    "messenger",
+    "instagram",
+    "wechat",
+    "discord",
+    "skype"
 )
 
 private val RECORDING_EXCLUDED_EXTENSIONS = setOf(".amr", ".3gp", ".3ga", ".awb", ".qcp", ".spx")
@@ -86,7 +132,12 @@ private val SYNTHETIC_VOICE_NOTE_PREFIXES = listOf(
     "record-",
     "recording_",
     "recording-",
+    "audio recording",
+    "voice recording",
+    "screen recording",
+    "recorder -",
     "registrazione vocale",
+    "registrazione schermo",
     "registrazione_",
     "registrazione-",
     "nuova registrazione",
@@ -110,7 +161,12 @@ private val SYNTHETIC_VOICE_NOTE_PREFIXES = listOf(
 )
 
 private val NUMBERED_RECORDING_NAME_REGEX = Regex(
-    """^(?:voice|voce|rec|record|recording|registrazione(?:\s+vocale)?|memo(?:\s+vocale)?|nota\s+vocale|audio|call|chiamata)(?:[\s_#-]*\d+(?:[\s_#-].*)?)?$""",
+    """^(?:(?:voice|voce|rec|record|recording|registrazione(?:\s+vocale)?|memo(?:\s+vocale)?|nota\s+vocale|audio|call|chiamata)(?:[\s_#-]*\d+(?:[\s_#-].*)?)?|(?:standard|interview|intervista|clip|sound)[\s_#-]+\d+|rec\d{6,})$""",
+    RegexOption.IGNORE_CASE
+)
+
+private val UI_SFX_NAME_REGEX = Regex(
+    """^(?:ringtone|notification|alarm|suoneria|notifica|sveglia|camera_click|shutter|screenshot|lock|unlock|keypress|charging|low_battery|beep|ding|chime|sfx|sound_effect)(?:[\s_#-]*\d+)?$""",
     RegexOption.IGNORE_CASE
 )
 
@@ -129,6 +185,12 @@ private val WHATSAPP_WA_ID_REGEX = Regex("""^(?:ptt|aud|wa)[_-]?\d{4,}""", Regex
 private val RECORDER_METADATA_NAMES = setOf(
     "voice recorder",
     "sound recorder",
+    "google recorder",
+    "samsung voice recorder",
+    "xiaomirecorder",
+    "miui sound recorder",
+    "easy voice recorder",
+    "smart recorder",
     "recorder",
     "registratore",
     "registratore vocale",
@@ -140,10 +202,32 @@ private val RECORDER_METADATA_NAMES = setOf(
     "registrazioni",
     "whatsapp audio",
     "telegram audio",
+    "ringtones",
+    "notifications",
+    "alarms",
+    "suonerie",
+    "notifiche",
     "sounds",
     "acr",
     "cube acr"
 )
+
+private fun isExcludedIntelligentPath(lowerPath: String): Boolean {
+    if (lowerPath.isEmpty()) return false
+    val cleanPath = lowerPath.trimStart('/')
+    if (EXCLUDED_ROOT_PREFIXES.any { cleanPath.startsWith(it) }) return true
+    if (EXCLUDED_PATH_SUBSTRINGS.any { lowerPath.contains(it) }) return true
+
+    val segments = cleanPath.split('/').filter { it.isNotBlank() }
+    if (segments.isEmpty()) return false
+    if (segments.any { it in EXCLUDED_EXACT_SEGMENTS_EVERYWHERE }) return true
+
+    val isInsideMusicRoot = segments.first() == "music"
+    if (!isInsideMusicRoot && segments.any { it in EXCLUDED_CHAT_SEGMENTS_OUTSIDE_MUSIC }) {
+        return true
+    }
+    return false
+}
 
 private fun stripAudioExtension(fileName: String): String {
     val dotIdx = fileName.lastIndexOf('.')
@@ -179,10 +263,11 @@ fun isIntelligentMusicTrack(
     artist: String,
     album: String,
     durationMs: Long,
-    isSystemNonMusic: Boolean = false
+    isSystemNonMusic: Boolean = false,
+    fileSizeBytes: Long = -1L
 ): Boolean {
-    // 0. Esclusione immediata tramite flag nativi MediaStore (IS_RECORDING, suonerie, allarmi, podcast, audiolibri)
-    if (isSystemNonMusic) {
+    // 0. Esclusione immediata tramite flag nativi MediaStore o file corrotti/a durata zero
+    if (isSystemNonMusic || durationMs <= 0L) {
         return false
     }
 
@@ -200,22 +285,30 @@ fun isIntelligentMusicTrack(
         return false
     }
 
-    // 3. Esclusione percorsi indesiderati (applicata anche a sottocartelle di Music/ come Music/Recordings/)
-    if (EXCLUDED_PATH_KEYWORDS.any { lowerPath.contains(it) }) {
+    // 3. Esclusione percorsi indesiderati (segment-safe per non escludere album/artisti tipo Music/Signal/ o Music/The Alarms/)
+    if (isExcludedIntelligentPath(lowerPath)) {
         return false
     }
 
     val hasAuthenticMetadata = hasAuthenticMusicMetadata(artist, album) &&
         !hasRecorderPlaceholderMetadata(artist, album)
 
+    // 3.5 Esclusione micro-file (< 16 KB, es. click UI/suoni di sistema) privi di metadati musicali autentici
+    if (fileSizeBytes in 1 until 16_384L && !hasAuthenticMetadata) {
+        return false
+    }
+
     // 4. Metadati espliciti di app registratore / messaggistica
     if (hasRecorderPlaceholderMetadata(artist, album)) {
         return false
     }
 
+    val cleanLowerPath = lowerPath.trimStart('/')
+    val isInsideMusicFolder = cleanLowerPath.startsWith("music/")
+
     // 5. Cartelle OEM di registrazione (Sounds/, Record/, Calls/) a radice o prive di metadati musicali autentici
-    if (RECORDING_ROOT_SEGMENT_REGEX.containsMatchIn(lowerPath)) {
-        if (!lowerPath.startsWith("music/") || !hasAuthenticMetadata) {
+    if (RECORDING_ROOT_SEGMENT_REGEX.containsMatchIn(cleanLowerPath)) {
+        if (!isInsideMusicFolder || !hasAuthenticMetadata) {
             return false
         }
     }
@@ -224,20 +317,36 @@ fun isIntelligentMusicTrack(
     val matchesRecordingName = matchesRecordingNamePattern(lowerBaseName, title)
     if (matchesRecordingName) {
         // Dentro Music/ ammettiamo solo brani con metadati musicali autentici completi (artista + album validi)
-        if (!lowerPath.startsWith("music/") || !hasAuthenticMetadata) {
+        if (!isInsideMusicFolder || !hasAuthenticMetadata) {
             return false
         }
     }
 
+    // 6.5 Effetti sonori di sistema / suonerie brevi prive di metadati
+    val matchesUiSfx = UI_SFX_NAME_REGEX.matches(lowerBaseName.trim()) || UI_SFX_NAME_REGEX.matches(title.trim())
+    if (matchesUiSfx && durationMs < 45_000L && !hasAuthenticMetadata) {
+        return false
+    }
+
+    // 6.6 Clip vocali .opus / .ogg brevi (< 45s) fuori da Music/ prive di metadati e di formato "Artista - Titolo"
+    if (!isInsideMusicFolder &&
+        (lowerName.endsWith(".opus") || lowerName.endsWith(".ogg")) &&
+        durationMs < 45_000L &&
+        !hasAuthenticMetadata &&
+        !lowerBaseName.contains(" - ")
+    ) {
+        return false
+    }
+
     // 7. Fast-path sicuro per file nella cartella canonica "music/" che hanno superato i controlli precedenti
-    if (lowerPath.startsWith("music/")) {
-        if (durationMs in 1 until 15_000L && !hasAuthenticMetadata) return false
+    if (isInsideMusicFolder) {
+        if (durationMs < 15_000L && !hasAuthenticMetadata) return false
         if (durationMs > 1_200_000L && !hasAuthenticMetadata) return false
         return true
     }
 
     // 8. Soglia minima di durata: 15 secondi (15.000 ms)
-    if (durationMs in 1 until 15_000L && !hasAuthenticMetadata) {
+    if (durationMs < 15_000L && !hasAuthenticMetadata) {
         return false
     }
 
@@ -296,7 +405,8 @@ fun loadAudioFiles(
         MediaStore.Audio.Media.TRACK,
         MediaStore.Audio.Media.DISC_NUMBER,
         MediaStore.Audio.Media.DISPLAY_NAME,
-        MediaStore.Audio.Media.ALBUM_ARTIST
+        MediaStore.Audio.Media.ALBUM_ARTIST,
+        MediaStore.Audio.Media.SIZE
     )
 
     val (selection, selectionArgs) = when (sourceMode) {
@@ -323,10 +433,15 @@ fun loadAudioFiles(
             val sel = "${MediaStore.Audio.Media.IS_MUSIC} != 0 AND (${clauses.joinToString(" OR ")})"
             sel to args.toTypedArray()
         }
-        AudioSourceMode.ALL,
-        AudioSourceMode.INTELLIGENT -> {
+        AudioSourceMode.ALL -> {
             val sel = "${MediaStore.Audio.Media.IS_MUSIC} != 0"
             sel to null
+        }
+        AudioSourceMode.INTELLIGENT -> {
+            val sel = "${MediaStore.Audio.Media.IS_MUSIC} != 0 OR " +
+                    "${MediaStore.Audio.Media.RELATIVE_PATH} LIKE ? OR " +
+                    "${MediaStore.Audio.Media.RELATIVE_PATH} = ?"
+            sel to arrayOf("Music/%", "Music/")
         }
     }
 
@@ -355,6 +470,7 @@ fun loadAudioFiles(
         val displayNameColumn = cursor.getColumnIndex(MediaStore.Audio.Media.DISPLAY_NAME)
         val albumArtistColumn = cursor.getColumnIndex(MediaStore.Audio.Media.ALBUM_ARTIST).takeIf { it >= 0 }
             ?: cursor.getColumnIndex("album_artist")
+        val sizeColumn = cursor.getColumnIndex(MediaStore.Audio.Media.SIZE)
         val isRecordingColumn = cursor.getColumnIndex(MediaStore.Audio.Media.IS_RECORDING)
         val isRingtoneColumn = cursor.getColumnIndex(MediaStore.Audio.Media.IS_RINGTONE)
         val isNotificationColumn = cursor.getColumnIndex(MediaStore.Audio.Media.IS_NOTIFICATION)
@@ -377,6 +493,7 @@ fun loadAudioFiles(
             val relativePath = if (relativePathColumn >= 0) cursor.getString(relativePathColumn)?.trim().orEmpty() else ""
             val displayName = if (displayNameColumn >= 0) cursor.getString(displayNameColumn)?.trim().orEmpty() else ""
             val albumArtist = if (albumArtistColumn >= 0) cursor.getString(albumArtistColumn)?.trim().orEmpty() else ""
+            val fileSizeBytes = if (sizeColumn >= 0 && !cursor.isNull(sizeColumn)) cursor.getLong(sizeColumn) else -1L
             val isSystemNonMusic = isFlagColumnTrue(isRecordingColumn) ||
                 isFlagColumnTrue(isRingtoneColumn) ||
                 isFlagColumnTrue(isNotificationColumn) ||
@@ -385,7 +502,16 @@ fun loadAudioFiles(
                 isFlagColumnTrue(isAudiobookColumn)
 
             if (sourceMode == AudioSourceMode.INTELLIGENT &&
-                !isIntelligentMusicTrack(relativePath, displayName, title, artist, album, duration, isSystemNonMusic)
+                !isIntelligentMusicTrack(
+                    relativePath = relativePath,
+                    displayName = displayName,
+                    title = title,
+                    artist = artist,
+                    album = album,
+                    durationMs = duration,
+                    isSystemNonMusic = isSystemNonMusic,
+                    fileSizeBytes = fileSizeBytes
+                )
             ) {
                 continue
             }
@@ -464,28 +590,40 @@ private val VARIOUS_ARTISTS_NAMES = setOf(
     "ost"
 )
 
-private val FEAT_ARTIST_REGEX = Regex("""(?i)\s+(feat\.?|ft\.?|featuring|with|vs\.?|&|,|\+|x|/)\s+.*""")
+const val UNRELEASED_ALBUM_TITLE = "Unreleased"
+
+fun isUnreleasedAlbumTitle(name: String?): Boolean {
+    return name?.trim()?.equals(UNRELEASED_ALBUM_TITLE, ignoreCase = true) == true
+}
+
+private val FEAT_ARTIST_REGEX = Regex(
+    """(?i)(?:\s*,\s+.*|\s+(?:feat\.?|ft\.?|featuring|with|con|vs\.?|&|\+|x|/)\s+.*|\s*[\(\[]\s*(?:feat\.?|ft\.?|featuring|with|con)\s+.*)$"""
+)
 private val COLLAB_SEPARATORS_REGEX = Regex("""(?i)(\s*,\s*|\s+(&|x|\+|and)\s+)""")
 
 /**
  * Verifica se un nome artista rappresenta un progetto collaborativo o di coppia
- * (es. "Drake & 21 Savage", "Salmo & Noyz Narcos").
+ * (es. "Drake & 21 Savage", "Salmo & Noyz Narcos"), escludendo singoli artisti
+ * il cui nome canonico contiene una virgola interna (es. "Tyler, The Creator").
  */
 fun isCollabArtist(artistName: String?): Boolean {
     if (artistName.isNullOrBlank()) return false
     val trimmed = artistName.trim()
     if (isVariousArtists(trimmed)) return false
-    return COLLAB_SEPARATORS_REGEX.containsMatchIn(trimmed)
+    val masked = QuerySanitizer.maskProtectedArtists(trimmed)
+    return COLLAB_SEPARATORS_REGEX.containsMatchIn(masked.maskedText)
 }
 
 /**
  * Estrae i singoli artisti che compongono il progetto collaborativo.
  * Es: "Drake & 21 Savage" -> listOf("Drake", "21 Savage")
+ * Es: "Tyler, The Creator & A$AP Rocky" -> listOf("Tyler, The Creator", "A$AP Rocky")
  */
 fun extractCollaborators(artistName: String?): List<String> {
     if (artistName.isNullOrBlank()) return emptyList()
-    val parts = artistName.split(COLLAB_SEPARATORS_REGEX)
-    return parts.map { it.trim() }.filter { it.isNotBlank() }
+    val masked = QuerySanitizer.maskProtectedArtists(artistName.trim())
+    val parts = masked.maskedText.split(COLLAB_SEPARATORS_REGEX)
+    return parts.map { masked.unmask(it).trim() }.filter { it.isNotBlank() }
 }
 
 /**
@@ -516,11 +654,14 @@ fun isVariousArtists(name: String?): Boolean {
 }
 
 /**
- * Estrae l'artista principale rimuovendo collaborazioni ("feat.", "ft.", "&", "+", "x", ecc.).
+ * Estrae l'artista principale rimuovendo collaborazioni ("feat.", "ft.", "&", "+", "x", ecc.),
+ * preservando intatti i nomi d'arte protetti che contengono virgola (es. "Tyler, The Creator").
  */
 fun extractMainArtist(artist: String?): String {
     if (artist.isNullOrBlank()) return ""
-    return artist.replace(FEAT_ARTIST_REGEX, "").trim()
+    val masked = QuerySanitizer.maskProtectedArtists(artist.trim())
+    val stripped = masked.maskedText.replace(FEAT_ARTIST_REGEX, "").trim()
+    return masked.unmask(stripped).trim()
 }
 
 /**
@@ -638,10 +779,45 @@ fun Album.matchesArtist(artistName: String): Boolean {
 }
 
 /**
+ * Determina se un brano deve essere classificato come Unreleased e raggruppato nell'album "Unreleased"
+ * del proprio artista principale:
+ * 1. Il tag album del file è già "Unreleased".
+ * 2. L'album attuale è generico/assente (o "Brani singoli") E il brano è registrato in [unreleasedSnapshot]
+ *    (non trovato su Deezer tramite Auto-Tag o scansione batch) oppure presenta un marcatore esplicito
+ *    di inedito nel titolo/nome file/cartella.
+ */
+fun isTrackUnreleased(
+    track: AudioTrack,
+    unreleasedSnapshot: UnreleasedSnapshot = UnreleasedSnapshot.EMPTY
+): Boolean {
+    val rawAlbum = track.album.trim()
+    if (isUnreleasedAlbumTitle(rawAlbum)) return true
+
+    val hasOfficialAlbum = !isGenericAlbum(rawAlbum) && !rawAlbum.contains("(Brani singoli)")
+    if (hasOfficialAlbum) return false
+
+    if (!unreleasedSnapshot.isEmpty() && unreleasedSnapshot.matches(track)) {
+        return true
+    }
+
+    if (QuerySanitizer.hasExplicitUnreleasedMarker(track.title) ||
+        QuerySanitizer.hasExplicitUnreleasedMarker(track.displayName)
+    ) {
+        return true
+    }
+
+    val folderSegments = track.relativePath.split('/', '\\').map { it.trim().lowercase(java.util.Locale.ROOT) }
+    return folderSegments.any { it == "unreleased" || it == "leaks" }
+}
+
+/**
  * Verifica se un album raggruppa tracce eterogenee (album diversi o titolo generico)
  * che necessitano di separazione/disaggregazione.
  */
 fun Album.isMixedOrGeneric(): Boolean {
+    // Un album "Unreleased" di un singolo artista è una raccolta intenzionale e non un album misto anomalo
+    if (isUnreleasedAlbumTitle(title)) return false
+
     // 1. Album con nome generico ("Sconosciuto", "Downloads", ecc.) o collezione di brani singoli
     if (isGenericAlbum(title) || title.contains("(Brani singoli)")) return true
 
@@ -657,8 +833,14 @@ fun Album.isMixedOrGeneric(): Boolean {
 
 /**
  * Raggruppa i brani in una lista di modelli Album con tracce associate.
+ * Crea automaticamente un album "Unreleased" per singolo artista solo quando sono presenti
+ * almeno un brano unreleased di quell'artista.
  */
-fun groupTracksIntoAlbums(tracks: List<AudioTrack>): List<Album> {
+fun groupTracksIntoAlbums(
+    tracks: List<AudioTrack>,
+    unreleasedSnapshot: UnreleasedSnapshot = UnreleasedSnapshot.EMPTY,
+    artistPhotoUriProvider: ((String) -> Uri?)? = null
+): List<Album> {
     val usedAlbumIds = mutableSetOf<Long>()
     val mainArtistCache = HashMap<String, String>()
     fun getMainArtist(artist: String?): String {
@@ -666,52 +848,102 @@ fun groupTracksIntoAlbums(tracks: List<AudioTrack>): List<Album> {
         return mainArtistCache.getOrPut(artist) { extractMainArtist(artist) }
     }
 
+    fun resolveUnreleasedMainArtist(track: AudioTrack): String {
+        val fromAlbumArtist = track.albumArtist.trim()
+            .takeIf { it.isNotBlank() && !isVariousArtists(it) && !QuerySanitizer.isArtistUnknownOrDirty(it) }
+            ?.let { getMainArtist(it) }
+            .orEmpty()
+        if (fromAlbumArtist.isNotBlank() && fromAlbumArtist.lowercase(java.util.Locale.ROOT) !in GENERIC_ALBUM_NAMES) {
+            return fromAlbumArtist
+        }
+
+        val fromTrackArtist = track.artist.trim()
+            .takeIf { it.isNotBlank() && !isVariousArtists(it) && !QuerySanitizer.isArtistUnknownOrDirty(it) }
+            ?.let { getMainArtist(it) }
+            .orEmpty()
+        if (fromTrackArtist.isNotBlank() && fromTrackArtist.lowercase(java.util.Locale.ROOT) !in GENERIC_ALBUM_NAMES) {
+            return fromTrackArtist
+        }
+
+        val fromTitleFallback = QuerySanitizer.extractFallbackArtistAndTitle(track.title)?.first
+            ?.takeIf { !isVariousArtists(it) && !QuerySanitizer.isArtistUnknownOrDirty(it) }
+            ?.let { getMainArtist(it) }
+            .orEmpty()
+        if (fromTitleFallback.isNotBlank() && fromTitleFallback.lowercase(java.util.Locale.ROOT) !in GENERIC_ALBUM_NAMES) {
+            return fromTitleFallback
+        }
+
+        return ""
+    }
+
     return tracks.groupBy { track ->
         val rawAlbum = track.album.trim()
-        val isGeneric = isGenericAlbum(rawAlbum)
+        val isUnreleased = isTrackUnreleased(track, unreleasedSnapshot)
 
-        if (isGeneric) {
-            val mainArtist = getMainArtist(track.artist)
-            if (mainArtist.isNotBlank() && mainArtist.lowercase(java.util.Locale.ROOT) !in GENERIC_ALBUM_NAMES) {
-                "generic_artist:${mainArtist.lowercase(java.util.Locale.ROOT)}"
+        if (isUnreleased) {
+            val mainArtist = resolveUnreleasedMainArtist(track)
+            if (mainArtist.isNotBlank()) {
+                "unreleased:artist:${mainArtist.lowercase(java.util.Locale.ROOT)}"
             } else {
-                "generic_single:${track.id}"
+                "unreleased:unknown"
             }
         } else {
-            val cleanAlbum = rawAlbum.lowercase(java.util.Locale.ROOT)
-            val rawAlbumArtist = track.albumArtist.trim().ifBlank { getMainArtist(track.artist) }
-            val isVa = isVariousArtists(rawAlbumArtist) || isVariousArtists(track.artist)
-            if (isVa) {
-                "album:$cleanAlbum:va"
+            val isGeneric = isGenericAlbum(rawAlbum)
+            if (isGeneric) {
+                val mainArtist = getMainArtist(track.artist)
+                if (mainArtist.isNotBlank() && mainArtist.lowercase(java.util.Locale.ROOT) !in GENERIC_ALBUM_NAMES) {
+                    "generic_artist:${mainArtist.lowercase(java.util.Locale.ROOT)}"
+                } else {
+                    "generic_single:${track.id}"
+                }
             } else {
-                "album:$cleanAlbum:artist:${rawAlbumArtist.lowercase(java.util.Locale.ROOT)}"
+                val cleanAlbum = rawAlbum.lowercase(java.util.Locale.ROOT)
+                val rawAlbumArtist = track.albumArtist.trim().ifBlank { getMainArtist(track.artist) }
+                val isVa = isVariousArtists(rawAlbumArtist) || isVariousArtists(track.artist)
+                if (isVa) {
+                    "album:$cleanAlbum:va"
+                } else {
+                    "album:$cleanAlbum:artist:${rawAlbumArtist.lowercase(java.util.Locale.ROOT)}"
+                }
             }
         }
     }.map { (groupKey, albumTracks) ->
         val first = albumTracks.first()
-        val isGeneric = isGenericAlbum(first.album)
+        val isUnreleasedGroup = groupKey.startsWith("unreleased:")
+        val isGeneric = !isUnreleasedGroup && isGenericAlbum(first.album)
 
-        val albumTitle = if (isGeneric) {
-            val mainArtist = getMainArtist(first.artist)
-            if (mainArtist.isNotBlank() && mainArtist.lowercase(java.util.Locale.ROOT) !in GENERIC_ALBUM_NAMES) {
-                "$mainArtist (Brani singoli)"
-            } else {
-                first.title
+        val albumTitle = when {
+            isUnreleasedGroup -> UNRELEASED_ALBUM_TITLE
+            isGeneric -> {
+                val mainArtist = getMainArtist(first.artist)
+                if (mainArtist.isNotBlank() && mainArtist.lowercase(java.util.Locale.ROOT) !in GENERIC_ALBUM_NAMES) {
+                    "$mainArtist (Brani singoli)"
+                } else {
+                    first.title
+                }
             }
-        } else {
-            first.album
+            else -> first.album
         }
 
-        val albumArtist = if (isGeneric) {
-            getMainArtist(first.artist).ifBlank { first.artist }
-        } else {
-            val rawAlbumArtist = first.albumArtist.trim().ifBlank { getMainArtist(first.artist) }
-            if (isVariousArtists(rawAlbumArtist)) "Artisti Vari" else rawAlbumArtist.ifBlank { first.artist }
+        val albumArtist = when {
+            isUnreleasedGroup -> {
+                resolveUnreleasedMainArtist(first).ifBlank {
+                    getMainArtist(first.artist).ifBlank { first.artist }
+                }
+            }
+            isGeneric -> {
+                getMainArtist(first.artist).ifBlank { first.artist }
+            }
+            else -> {
+                val rawAlbumArtist = first.albumArtist.trim().ifBlank { getMainArtist(first.artist) }
+                if (isVariousArtists(rawAlbumArtist)) "Artisti Vari" else rawAlbumArtist.ifBlank { first.artist }
+            }
         }
 
-        // Calcolo ID univoco e stabile
+        // Calcolo ID univoco e stabile: per gli album sintetici "Unreleased" per-artista
+        // generiamo sempre un ID deterministico basato su groupKey per evitare collisioni MediaStore
         val albumIdCandidates = albumTracks.map { it.albumId }.distinct()
-        val primaryCandidate = if (albumIdCandidates.size == 1 && albumIdCandidates.first() > 0L) {
+        val primaryCandidate = if (!isUnreleasedGroup && albumIdCandidates.size == 1 && albumIdCandidates.first() > 0L) {
             albumIdCandidates.first()
         } else {
             null
@@ -732,6 +964,7 @@ fun groupTracksIntoAlbums(tracks: List<AudioTrack>): List<Album> {
         val representativeArtUri = albumTracks.firstOrNull { it.albumArtUri?.scheme == "file" }?.albumArtUri
             ?: albumTracks.firstOrNull { it.albumArtUri != null }?.albumArtUri
             ?: first.albumArtUri
+            ?: (if (isUnreleasedGroup && albumArtist.isNotBlank()) artistPhotoUriProvider?.invoke(albumArtist) else null)
 
         val sortedAlbumTracks = albumTracks.sortedWith(
             compareBy<AudioTrack> { it.discNumber }
@@ -746,5 +979,8 @@ fun groupTracksIntoAlbums(tracks: List<AudioTrack>): List<Album> {
             albumArtUri = representativeArtUri,
             tracks = sortedAlbumTracks
         )
-    }.sortedBy { it.title.lowercase(java.util.Locale.ROOT) }
+    }.sortedWith(
+        compareBy<Album> { it.title.lowercase(java.util.Locale.ROOT) }
+            .thenBy { it.artist.lowercase(java.util.Locale.ROOT) }
+    )
 }

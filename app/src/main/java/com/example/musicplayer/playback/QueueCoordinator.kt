@@ -42,7 +42,8 @@ class QueueCoordinator(
     private val setIsPlaying: (Boolean) -> Unit,
     private val startProgressTicker: () -> Unit,
     private val updateDuration: () -> Unit,
-    private val onRecordTrackPlayed: (Long) -> Unit,
+    private val onTrackPlaySessionStarted: (Long, Long) -> Unit = { _, _ -> },
+    private val onResetPlaySession: () -> Unit = {},
     private val onLastFmTrackStarted: (AudioTrack) -> Unit,
     private val onLastFmResetScrobble: () -> Unit,
     private val onSavePlaybackState: () -> Unit,
@@ -443,6 +444,7 @@ class QueueCoordinator(
         controller.play()
         setCurrentTrack(current)
         setCurrentPositionMs(0L)
+        onTrackPlaySessionStarted(current.id, 0L)
         setIsPlaying(true)
         startProgressTicker()
         updateQueueFromController()
@@ -529,6 +531,7 @@ class QueueCoordinator(
         controller.play()
         setCurrentTrack(track)
         setCurrentPositionMs(0L)
+        onTrackPlaySessionStarted(track.id, 0L)
         setIsPlaying(true)
         startProgressTicker()
         updateQueueFromController()
@@ -540,7 +543,10 @@ class QueueCoordinator(
             if (controller.repeatMode == Player.REPEAT_MODE_ONE) {
                 controller.seekTo(0L)
                 setCurrentPositionMs(0L)
-                getCurrentTrack()?.let { onLastFmTrackStarted(it) }
+                getCurrentTrack()?.let {
+                    onTrackPlaySessionStarted(it.id, 0L)
+                    onLastFmTrackStarted(it)
+                }
             } else if (controller.hasNextMediaItem()) {
                 controller.seekToNextMediaItem()
             }
@@ -748,6 +754,79 @@ class QueueCoordinator(
         return selected
     }
 
+    /**
+     * Rigenera la lista dei 15 brani in Riproduzione Automatica ("Successivi") scegliendone 15 nuovi
+     * diversi da quelli attualmente visualizzati, senza interrompere il brano corrente né modificare la Coda Utente.
+     */
+    fun refreshAutoplayQueue() {
+        val controller = getMediaController() ?: return
+        val current = getCurrentTrack() ?: return
+        val mode = _repeatMode.value
+        if (mode == Player.REPEAT_MODE_ONE) return
+
+        val previousAutoplay = _autoplayQueue.value
+        val previousAutoplayIds = previousAutoplay.map { it.id }.toSet()
+        val userQueueIds = _userQueue.value.map { it.id }.toSet()
+
+        val newAutoplay = when (mode) {
+            Player.REPEAT_MODE_ALL -> {
+                val contextTracks = getRepeatContextTracks(current)
+                if (contextTracks.size <= 1) {
+                    previousAutoplay
+                } else {
+                    generateFreshAutoplayBatch(
+                        pool = contextTracks,
+                        currentTrackId = current.id,
+                        userQueueIds = userQueueIds,
+                        previousAutoplayIds = previousAutoplayIds,
+                        recentIds = recentPlayedTrackIds.toSet(),
+                        count = 15,
+                        allowRepeatFillIfShort = true
+                    )
+                }
+            }
+            else -> {
+                val allTracks = getTracks()
+                val sourcePool = if (_isAutoplayEnabled.value) {
+                    allTracks
+                } else if (isCustomContextActive && activeContextTracks.isNotEmpty()) {
+                    activeContextTracks
+                } else {
+                    emptyList()
+                }
+
+                if (sourcePool.isEmpty()) {
+                    emptyList()
+                } else {
+                    val refreshed = generateFreshAutoplayBatch(
+                        pool = sourcePool,
+                        currentTrackId = current.id,
+                        userQueueIds = userQueueIds,
+                        previousAutoplayIds = previousAutoplayIds,
+                        recentIds = recentPlayedTrackIds.toSet(),
+                        count = 15,
+                        allowRepeatFillIfShort = false
+                    )
+                    refreshed.forEach { recordRecentTrack(it.id) }
+                    refreshed
+                }
+            }
+        }
+
+        if (newAutoplay.isEmpty()) return
+
+        _autoplayQueue.value = newAutoplay
+        if (controller.mediaItemCount > 0) {
+            val currentIndex = controller.currentMediaItemIndex.coerceAtLeast(0)
+            val autoStartExo = (currentIndex + 1 + _userQueue.value.size).coerceAtMost(controller.mediaItemCount)
+            if (autoStartExo < controller.mediaItemCount) {
+                controller.removeMediaItems(autoStartExo, controller.mediaItemCount)
+            }
+            controller.addMediaItems(newAutoplay.map { trackToMediaItem(it) })
+            updateQueueFromController()
+        }
+    }
+
     fun replenishAutoplayIfNeeded(referenceTrack: AudioTrack? = getCurrentTrack()) {
         val controller = getMediaController() ?: return
         val mode = _repeatMode.value
@@ -864,7 +943,7 @@ class QueueCoordinator(
 
             hasRecordedPlayForRestoredTrack = true
             trackId?.let { id ->
-                onRecordTrackPlayed(id)
+                onTrackPlaySessionStarted(id, controller?.currentPosition?.coerceAtLeast(0L) ?: 0L)
                 recordRecentTrack(id)
             }
             onLastFmTrackStarted(current)
@@ -910,6 +989,7 @@ class QueueCoordinator(
             replenishAutoplayIfNeeded(current)
         } ?: run {
             setCurrentTrack(null)
+            onResetPlaySession()
             onLastFmResetScrobble()
             lastKnownQueueIndex = 0
         }
@@ -1026,6 +1106,7 @@ class QueueCoordinator(
         controller.pause()
         setCurrentTrack(track)
         setCurrentPositionMs(posMs)
+        onTrackPlaySessionStarted(track.id, posMs)
         setIsPlaying(false)
         updateDuration()
         updateQueueFromController()
@@ -1040,4 +1121,69 @@ class QueueCoordinator(
             _queue.value = currentQueue.filter { it.id !in deletedIds }
         }
     }
+}
+
+/**
+ * Seleziona fino a [count] nuovi brani per l'aggiornamento manuale di "Successivi" nella Riproduzione Automatica:
+ * 1. Priorità assoluta a brani non presenti né in [previousAutoplayIds], né in [userQueueIds], né in [recentIds], né uguali a [currentTrackId].
+ * 2. Se i candidati freschi non bastano a raggiungere [count], attinge ai brani non presenti in [previousAutoplayIds] (ignorando [recentIds]).
+ * 3. Se la libreria è piccola e ancora non si raggiungono [count] elementi, completa rimescolando da [previousAutoplayIds].
+ */
+internal fun generateFreshAutoplayBatch(
+    pool: List<AudioTrack>,
+    currentTrackId: Long?,
+    userQueueIds: Set<Long>,
+    previousAutoplayIds: Set<Long>,
+    recentIds: Set<Long>,
+    count: Int = 15,
+    allowRepeatFillIfShort: Boolean = false
+): List<AudioTrack> {
+    if (pool.isEmpty() || count <= 0) return emptyList()
+    val distinctPool = pool.distinctBy { it.id }
+    val hardExclude = userQueueIds + setOfNotNull(currentTrackId)
+
+    val result = mutableListOf<AudioTrack>()
+    val chosenIds = mutableSetOf<Long>()
+
+    // Livello 1: completamente freschi (né nei 15 precedenti, né nei recenti, né in coda utente/corrente)
+    val tier1 = distinctPool.filter {
+        it.id !in hardExclude && it.id !in previousAutoplayIds && it.id !in recentIds
+    }.shuffled()
+    for (t in tier1) {
+        if (result.size >= count) break
+        if (chosenIds.add(t.id)) result.add(t)
+    }
+
+    // Livello 2: non nei 15 precedenti (anche se ascoltati/suggeriti più indietro nella sessione)
+    if (result.size < count) {
+        val tier2 = distinctPool.filter {
+            it.id !in hardExclude && it.id !in previousAutoplayIds && it.id !in chosenIds
+        }.shuffled()
+        for (t in tier2) {
+            if (result.size >= count) break
+            if (chosenIds.add(t.id)) result.add(t)
+        }
+    }
+
+    // Livello 3: libreria piccola (< count + 15 brani) -> integra dai precedenti rimescolati
+    if (result.size < count) {
+        val tier3 = distinctPool.filter {
+            it.id !in hardExclude && it.id !in chosenIds
+        }.shuffled()
+        for (t in tier3) {
+            if (result.size >= count) break
+            if (chosenIds.add(t.id)) result.add(t)
+        }
+    }
+
+    // In REPEAT_MODE_ALL su contesti piccoli (es. album da 8 brani), riempie ciclicamente fino a count
+    if (allowRepeatFillIfShort && result.isNotEmpty() && result.size < count) {
+        val cycleBase = distinctPool.filter { it.id != currentTrackId }.ifEmpty { distinctPool }
+        while (result.size < count) {
+            result.addAll(cycleBase.shuffled())
+        }
+        return result.take(count)
+    }
+
+    return result.take(count)
 }

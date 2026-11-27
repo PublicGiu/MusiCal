@@ -18,6 +18,24 @@ data class Album(
 }
 
 /**
+ * Risolve l'[Album] corrispondente a una traccia audio cercando in ordine:
+ * 1. L'album che contiene esplicitamente l'ID della traccia (supporta ID sintetici e brani singoli).
+ * 2. L'album con medesimo [AudioTrack.albumId] MediaStore.
+ * 3. L'album con medesimo titolo (case-insensitive).
+ */
+fun List<Album>.findAlbumForTrack(track: AudioTrack): Album? {
+    return find { alb -> alb.tracks.any { it.id == track.id } }
+        ?: find { track.albumId > 0L && it.id == track.albumId }
+        ?: find {
+            track.album.isNotBlank() &&
+                it.title.equals(track.album, ignoreCase = true) &&
+                it.artist.isNotBlank() &&
+                track.matchesArtist(it.artist)
+        }
+        ?: find { track.album.isNotBlank() && it.title.equals(track.album, ignoreCase = true) }
+}
+
+/**
  * Gruppo di tracce duplicate identificate all'interno di un album.
  */
 data class DuplicateTrackGroup(

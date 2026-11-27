@@ -16,7 +16,6 @@ import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
@@ -29,27 +28,22 @@ import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.automirrored.filled.ArrowForward
 import androidx.compose.material.icons.filled.Album
-import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material3.Button
-import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
-import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.OutlinedButton
-import androidx.compose.material3.SheetValue
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
-import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -58,20 +52,15 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
-import androidx.compose.ui.input.nestedscroll.NestedScrollConnection
-import androidx.compose.ui.input.nestedscroll.NestedScrollSource
-import androidx.compose.ui.input.nestedscroll.nestedScroll
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
-import androidx.compose.ui.unit.Velocity
 import com.example.musicplayer.R
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.material.icons.automirrored.filled.ArrowForward
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -82,6 +71,7 @@ import com.example.musicplayer.data.ArtistInfo
 import com.example.musicplayer.data.ArtistInfoRepository
 import com.example.musicplayer.data.AudioTrack
 import com.example.musicplayer.data.extractMainArtist
+import com.example.musicplayer.data.findAlbumForTrack
 import com.example.musicplayer.data.isCollabArtist
 import com.example.musicplayer.data.isPartnerInCollab
 import com.example.musicplayer.data.matchesArtist
@@ -89,7 +79,6 @@ import com.example.musicplayer.data.matchesCollabArtist
 import com.example.musicplayer.ui.theme.LocalMusicVioletNeon
 import kotlinx.coroutines.launch
 
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun ArtistDetailSheet(
     artistName: String,
@@ -108,76 +97,10 @@ fun ArtistDetailSheet(
     favoriteTrackIds: Set<Long> = emptySet(),
     onAutoTagTrackClick: ((AudioTrack) -> Unit)? = null,
     artistInfoRepository: ArtistInfoRepository? = null,
-    onNavigateToArtist: ((String) -> Unit)? = null
+    onNavigateToArtist: ((String) -> Unit)? = null,
+    modifier: Modifier = Modifier
 ) {
     val artistListState = rememberLazyListState()
-
-    val sheetState = rememberModalBottomSheetState(
-        skipPartiallyExpanded = true,
-        confirmValueChange = { targetValue ->
-            if (targetValue == SheetValue.Hidden) {
-                artistListState.firstVisibleItemIndex == 0
-            } else {
-                true
-            }
-        }
-    )
-
-    val artistSheetNestedScrollConnection = remember(artistListState) {
-        object : NestedScrollConnection {
-            private var isGestureActive = false
-            private var dragStartedAtTop = false
-
-            fun reset() {
-                isGestureActive = false
-                dragStartedAtTop = false
-            }
-
-            override fun onPreScroll(available: Offset, source: NestedScrollSource): Offset {
-                if (source == NestedScrollSource.UserInput) {
-                    if (!isGestureActive) {
-                        isGestureActive = true
-                        val isAtTop = artistListState.firstVisibleItemIndex == 0 &&
-                                artistListState.firstVisibleItemScrollOffset == 0
-                        dragStartedAtTop = isAtTop
-                    }
-                }
-                return Offset.Zero
-            }
-
-            override fun onPostScroll(
-                consumed: Offset,
-                available: Offset,
-                source: NestedScrollSource
-            ): Offset {
-                if (source == NestedScrollSource.UserInput && available.y > 0f) {
-                    if (!dragStartedAtTop) {
-                        return Offset(0f, available.y)
-                    }
-                }
-                return Offset.Zero
-            }
-
-            override suspend fun onPreFling(available: Velocity): Velocity {
-                return Velocity.Zero
-            }
-
-            override suspend fun onPostFling(consumed: Velocity, available: Velocity): Velocity {
-                reset()
-                return if (available.y > 0f) {
-                    Velocity(0f, available.y)
-                } else {
-                    Velocity.Zero
-                }
-            }
-        }
-    }
-
-    LaunchedEffect(artistListState.isScrollInProgress) {
-        if (!artistListState.isScrollInProgress) {
-            artistSheetNestedScrollConnection.reset()
-        }
-    }
 
     val displayArtistName = remember(artistName) {
         if (isCollabArtist(artistName)) artistName.trim() else extractMainArtist(artistName).ifBlank { artistName }
@@ -257,20 +180,18 @@ fun ArtistDetailSheet(
     // Seleziona la foto autentica HD dall'artistInfo (Deezer), con fallback sulla copertina dell'album
     val displayPhotoModel = artistInfo?.photoUrl ?: artistCoverUri
 
-    ModalBottomSheet(
-        onDismissRequest = onDismissRequest,
-        sheetState = sheetState,
-        dragHandle = null,
-        containerColor = MaterialTheme.colorScheme.surface,
-        modifier = Modifier.fillMaxSize()
+    Surface(
+        modifier = modifier
+            .fillMaxSize()
+            .pointerInput(Unit) {},
+        color = MaterialTheme.colorScheme.surface
     ) {
         Column(
             modifier = Modifier
                 .fillMaxSize()
                 .statusBarsPadding()
-                .navigationBarsPadding()
         ) {
-            // Header: pulsante indietro / chiudi
+            // Header: pulsante indietro a sinistra
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -280,7 +201,7 @@ fun ArtistDetailSheet(
             ) {
                 IconButton(onClick = onDismissRequest) {
                     Icon(
-                        imageVector = Icons.Default.Close,
+                        imageVector = Icons.AutoMirrored.Filled.ArrowBack,
                         contentDescription = stringResource(R.string.artist_close_desc)
                     )
                 }
@@ -306,9 +227,7 @@ fun ArtistDetailSheet(
             ) {
                 LazyColumn(
                     state = artistListState,
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .nestedScroll(artistSheetNestedScrollConnection),
+                    modifier = Modifier.fillMaxSize(),
                     contentPadding = PaddingValues(bottom = 24.dp)
                 ) {
                     // Profilo Artista Hero
@@ -576,7 +495,10 @@ fun ArtistDetailSheet(
                                 onAddToPlaylistClick = onAddToPlaylistClick,
                                 onAddToFavoritesClick = onAddToFavoritesClick?.let { cb -> { cb(track) } },
                                 isFavorite = track.id in favoriteTrackIds,
-                                onAutoTagClick = onAutoTagTrackClick
+                                onAutoTagClick = onAutoTagTrackClick,
+                                onAlbumClick = { clickedTrack ->
+                                    albums.findAlbumForTrack(clickedTrack)?.let { onAlbumClick(it) }
+                                }
                             )
                         }
 
@@ -684,8 +606,7 @@ fun ArtistDetailSheet(
                 }
 
                 item {
-                    Spacer(modifier = Modifier.navigationBarsPadding())
-                    Spacer(modifier = Modifier.height(32.dp))
+                    Spacer(modifier = Modifier.height(16.dp))
                 }
             }
         }

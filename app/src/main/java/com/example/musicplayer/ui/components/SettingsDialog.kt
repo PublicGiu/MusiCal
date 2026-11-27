@@ -6,12 +6,17 @@ import android.os.PowerManager
 import android.provider.Settings
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
+import androidx.compose.animation.expandVertically
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.shrinkVertically
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -39,8 +44,12 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.automirrored.filled.FormatListBulleted
 import androidx.compose.material.icons.automirrored.filled.OpenInNew
+import androidx.compose.material.icons.automirrored.filled.QueueMusic
 import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.Album
+import androidx.compose.material.icons.filled.AutoFixHigh
 import androidx.compose.material.icons.filled.BatteryChargingFull
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Close
@@ -48,6 +57,7 @@ import androidx.compose.material.icons.filled.Download
 import androidx.compose.material.icons.filled.Folder
 import androidx.compose.material.icons.filled.FolderOpen
 import androidx.compose.material.icons.filled.GraphicEq
+import androidx.compose.material.icons.filled.GridView
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.Language
 import androidx.compose.material.icons.filled.MusicNote
@@ -72,6 +82,7 @@ import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.RadioButton
@@ -119,9 +130,11 @@ import com.example.musicplayer.data.backup.BackupErrorCode
 import com.example.musicplayer.data.backup.BackupException
 import com.example.musicplayer.data.backup.ImportSummary
 import com.example.musicplayer.data.AudioSourceMode
+import com.example.musicplayer.data.SectionViewMode
 import com.example.musicplayer.data.ThemeMode
 import com.example.musicplayer.data.update.GithubUpdateChecker
 import com.example.musicplayer.ui.MusicViewModel
+import com.example.musicplayer.ui.tagger.UnreleasedScanState
 import kotlinx.coroutines.launch
 
 /**
@@ -141,6 +154,9 @@ fun SettingsDialog(
 ) {
     val context = LocalContext.current
     val themeMode by viewModel.themeMode.collectAsState()
+    val tracksViewMode by viewModel.tracksViewMode.collectAsState()
+    val albumsViewMode by viewModel.albumsViewMode.collectAsState()
+    val playlistsViewMode by viewModel.playlistsViewMode.collectAsState()
     val isAutoplayEnabled by viewModel.isAutoplayEnabled.collectAsState()
     val tracks by viewModel.tracks.collectAsState()
     val albums by viewModel.albums.collectAsState()
@@ -156,6 +172,7 @@ fun SettingsDialog(
     val updateCheckError by viewModel.updateCheckError.collectAsState()
     val ignoredDuplicateKeys by viewModel.ignoredDuplicateKeys.collectAsState()
     val appLanguage by viewModel.appLanguage.collectAsState()
+    val unreleasedScanState by viewModel.unreleasedScanState.collectAsState()
 
     val coroutineScope = rememberCoroutineScope()
     val snackbarHostState = remember { SnackbarHostState() }
@@ -369,7 +386,7 @@ fun SettingsDialog(
                     )
                 )
 
-                // 2. Aspetto & Tema
+                // 2. Aspetto & Visualizzazione
                 SettingsSectionHeader(
                     icon = Icons.Default.Tune,
                     title = stringResource(R.string.settings_appearance_short)
@@ -394,6 +411,14 @@ fun SettingsDialog(
                             icon = Icons.Outlined.DesktopWindows
                         )
                     )
+                )
+                SettingsSectionLayoutsCard(
+                    tracksViewMode = tracksViewMode,
+                    albumsViewMode = albumsViewMode,
+                    playlistsViewMode = playlistsViewMode,
+                    onTracksViewModeChange = { viewModel.setTracksViewMode(it) },
+                    onAlbumsViewModeChange = { viewModel.setAlbumsViewMode(it) },
+                    onPlaylistsViewModeChange = { viewModel.setPlaylistsViewMode(it) }
                 )
 
                 // 3. Riproduzione & Audio
@@ -800,6 +825,144 @@ fun SettingsDialog(
                                 )
                                 Spacer(modifier = Modifier.width(8.dp))
                                 Text(stringResource(R.string.settings_restore_duplicates, ignoredDuplicateKeys.size))
+                            }
+                        }
+
+                        Spacer(modifier = Modifier.height(14.dp))
+                        HorizontalDivider()
+                        Spacer(modifier = Modifier.height(12.dp))
+
+                        Text(
+                            text = stringResource(R.string.settings_unreleased_scan_title),
+                            style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold)
+                        )
+                        Spacer(modifier = Modifier.height(4.dp))
+                        Text(
+                            text = stringResource(R.string.settings_unreleased_scan_desc),
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                        Spacer(modifier = Modifier.height(10.dp))
+
+                        when (val scanState = unreleasedScanState) {
+                            is UnreleasedScanState.Idle -> {
+                                OutlinedButton(
+                                    onClick = { viewModel.scanAndOrganizeUnreleasedTracks() },
+                                    modifier = Modifier.fillMaxWidth()
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Default.AutoFixHigh,
+                                        contentDescription = null,
+                                        modifier = Modifier.size(18.dp)
+                                    )
+                                    Spacer(modifier = Modifier.width(8.dp))
+                                    Text(stringResource(R.string.settings_unreleased_scan_button))
+                                }
+                            }
+                            is UnreleasedScanState.Scanning -> {
+                                Surface(
+                                    shape = RoundedCornerShape(10.dp),
+                                    color = MaterialTheme.colorScheme.surface,
+                                    modifier = Modifier.fillMaxWidth()
+                                ) {
+                                    Column(modifier = Modifier.padding(12.dp)) {
+                                        val progressFraction = if (scanState.total > 0) {
+                                            (scanState.current.toFloat() / scanState.total.toFloat()).coerceIn(0f, 1f)
+                                        } else {
+                                            0f
+                                        }
+                                        Text(
+                                            text = stringResource(
+                                                R.string.settings_unreleased_scan_progress,
+                                                scanState.current,
+                                                scanState.total,
+                                                scanState.currentTrackTitle
+                                            ),
+                                            style = MaterialTheme.typography.bodySmall.copy(fontWeight = FontWeight.Medium),
+                                            color = MaterialTheme.colorScheme.onSurface
+                                        )
+                                        Spacer(modifier = Modifier.height(8.dp))
+                                        LinearProgressIndicator(
+                                            progress = { progressFraction },
+                                            modifier = Modifier
+                                                .fillMaxWidth()
+                                                .height(6.dp)
+                                                .clip(RoundedCornerShape(3.dp))
+                                        )
+                                        Spacer(modifier = Modifier.height(8.dp))
+                                        Row(
+                                            modifier = Modifier.fillMaxWidth(),
+                                            horizontalArrangement = Arrangement.End
+                                        ) {
+                                            TextButton(onClick = { viewModel.cancelUnreleasedScan() }) {
+                                                Text(stringResource(R.string.cancel))
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                            is UnreleasedScanState.Completed -> {
+                                Surface(
+                                    shape = RoundedCornerShape(10.dp),
+                                    color = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.45f),
+                                    modifier = Modifier.fillMaxWidth()
+                                ) {
+                                    Column(modifier = Modifier.padding(12.dp)) {
+                                        val summaryMessage = when {
+                                            scanState.scannedCount == 0 ->
+                                                stringResource(R.string.settings_unreleased_scan_none_needed)
+                                            scanState.newlyGroupedUnreleasedCount > 0 ->
+                                                stringResource(
+                                                    R.string.settings_unreleased_scan_result_grouped,
+                                                    scanState.newlyGroupedUnreleasedCount,
+                                                    scanState.affectedArtistsCount,
+                                                    scanState.scannedCount
+                                                )
+                                            else ->
+                                                stringResource(
+                                                    R.string.settings_unreleased_scan_result_zero,
+                                                    scanState.scannedCount
+                                                )
+                                        }
+                                        Text(
+                                            text = summaryMessage,
+                                            style = MaterialTheme.typography.bodySmall.copy(fontWeight = FontWeight.Medium),
+                                            color = MaterialTheme.colorScheme.onSurface
+                                        )
+                                        Spacer(modifier = Modifier.height(8.dp))
+                                        Row(
+                                            modifier = Modifier.fillMaxWidth(),
+                                            horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.End),
+                                            verticalAlignment = Alignment.CenterVertically
+                                        ) {
+                                            if (scanState.officialMatches.isNotEmpty()) {
+                                                Button(
+                                                    onClick = {
+                                                        if (viewModel.reviewOfficialMatchesFromScan()) {
+                                                            onDismiss()
+                                                        }
+                                                    }
+                                                ) {
+                                                    Icon(
+                                                        imageVector = Icons.Default.AutoFixHigh,
+                                                        contentDescription = null,
+                                                        modifier = Modifier.size(16.dp)
+                                                    )
+                                                    Spacer(modifier = Modifier.width(6.dp))
+                                                    Text(
+                                                        stringResource(
+                                                            R.string.settings_unreleased_scan_review_official,
+                                                            scanState.officialMatches.size
+                                                        )
+                                                    )
+                                                }
+                                            }
+                                            TextButton(onClick = { viewModel.dismissUnreleasedScanSummary() }) {
+                                                Text(stringResource(R.string.done))
+                                            }
+                                        }
+                                    }
+                                }
                             }
                         }
                     }
@@ -1373,6 +1536,236 @@ private fun <T> SettingsTileSelectorCard(
                     }
                 }
             }
+        }
+    }
+}
+
+@Composable
+private fun SettingsSectionLayoutsCard(
+    tracksViewMode: SectionViewMode,
+    albumsViewMode: SectionViewMode,
+    playlistsViewMode: SectionViewMode,
+    onTracksViewModeChange: (SectionViewMode) -> Unit,
+    onAlbumsViewModeChange: (SectionViewMode) -> Unit,
+    onPlaylistsViewModeChange: (SectionViewMode) -> Unit
+) {
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        colors = CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)
+        )
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(16.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp)
+        ) {
+            Column {
+                Text(
+                    text = stringResource(R.string.settings_layout_card_title),
+                    style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.SemiBold)
+                )
+                Text(
+                    text = stringResource(R.string.settings_layout_card_desc),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+
+            HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
+
+            SectionLayoutRow(
+                icon = Icons.Default.MusicNote,
+                sectionTitle = stringResource(R.string.tab_tracks),
+                currentMode = tracksViewMode,
+                onModeSelected = onTracksViewModeChange
+            )
+
+            HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
+
+            SectionLayoutRow(
+                icon = Icons.Default.Album,
+                sectionTitle = stringResource(R.string.tab_albums),
+                currentMode = albumsViewMode,
+                onModeSelected = onAlbumsViewModeChange
+            )
+
+            HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
+
+            SectionLayoutRow(
+                icon = Icons.AutoMirrored.Filled.QueueMusic,
+                sectionTitle = stringResource(R.string.tab_playlists),
+                currentMode = playlistsViewMode,
+                onModeSelected = onPlaylistsViewModeChange
+            )
+        }
+    }
+}
+
+@Composable
+private fun SectionLayoutRow(
+    icon: ImageVector,
+    sectionTitle: String,
+    currentMode: SectionViewMode,
+    onModeSelected: (SectionViewMode) -> Unit
+) {
+    var rememberedGridMode by remember {
+        mutableStateOf(if (currentMode.isGrid) currentMode else SectionViewMode.GRID_2)
+    }
+    if (currentMode.isGrid && rememberedGridMode != currentMode) {
+        rememberedGridMode = currentMode
+    }
+
+    Column(
+        modifier = Modifier.fillMaxWidth(),
+        verticalArrangement = Arrangement.spacedBy(8.dp)
+    ) {
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.SpaceBetween
+        ) {
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                modifier = Modifier.weight(1f).padding(end = 8.dp)
+            ) {
+                Icon(
+                    imageVector = icon,
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.primary,
+                    modifier = Modifier.size(20.dp)
+                )
+                Spacer(modifier = Modifier.width(10.dp))
+                Text(
+                    text = sectionTitle,
+                    style = MaterialTheme.typography.bodyLarge.copy(fontWeight = FontWeight.Medium)
+                )
+            }
+
+            Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                LayoutOptionChip(
+                    selected = !currentMode.isGrid,
+                    label = stringResource(R.string.layout_mode_list),
+                    icon = Icons.AutoMirrored.Filled.FormatListBulleted,
+                    onClick = { onModeSelected(SectionViewMode.LIST) }
+                )
+                LayoutOptionChip(
+                    selected = currentMode.isGrid,
+                    label = stringResource(R.string.layout_mode_grid),
+                    icon = Icons.Default.GridView,
+                    onClick = {
+                        onModeSelected(if (currentMode.isGrid) currentMode else rememberedGridMode)
+                    }
+                )
+            }
+        }
+
+        AnimatedVisibility(
+            visible = currentMode.isGrid,
+            enter = expandVertically(animationSpec = tween(180)) + fadeIn(animationSpec = tween(180)),
+            exit = shrinkVertically(animationSpec = tween(150)) + fadeOut(animationSpec = tween(150))
+        ) {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(start = 30.dp, top = 2.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.SpaceBetween
+            ) {
+                Text(
+                    text = stringResource(R.string.layout_grid_size_label),
+                    style = MaterialTheme.typography.labelMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.padding(end = 8.dp)
+                )
+                Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                    val gridSizes = listOf(
+                        SectionViewMode.GRID_2 to stringResource(R.string.layout_grid_2x2),
+                        SectionViewMode.GRID_3 to stringResource(R.string.layout_grid_3x3),
+                        SectionViewMode.GRID_4 to stringResource(R.string.layout_grid_4x4)
+                    )
+                    gridSizes.forEach { (gridMode, label) ->
+                        LayoutOptionChip(
+                            selected = currentMode == gridMode,
+                            label = label,
+                            icon = null,
+                            onClick = { onModeSelected(gridMode) }
+                        )
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun LayoutOptionChip(
+    selected: Boolean,
+    label: String,
+    icon: ImageVector?,
+    onClick: () -> Unit
+) {
+    val containerColor by animateColorAsState(
+        targetValue = if (selected) {
+            MaterialTheme.colorScheme.primary.copy(alpha = 0.16f)
+        } else {
+            MaterialTheme.colorScheme.surface.copy(alpha = 0.65f)
+        },
+        animationSpec = tween(durationMillis = 160),
+        label = "layoutChipBg"
+    )
+    val borderColor by animateColorAsState(
+        targetValue = if (selected) {
+            MaterialTheme.colorScheme.primary
+        } else {
+            MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)
+        },
+        animationSpec = tween(durationMillis = 160),
+        label = "layoutChipBorder"
+    )
+    val contentColor by animateColorAsState(
+        targetValue = if (selected) {
+            MaterialTheme.colorScheme.primary
+        } else {
+            MaterialTheme.colorScheme.onSurfaceVariant
+        },
+        animationSpec = tween(durationMillis = 160),
+        label = "layoutChipContent"
+    )
+
+    Surface(
+        shape = RoundedCornerShape(10.dp),
+        color = containerColor,
+        border = BorderStroke(
+            width = if (selected) 1.5.dp else 1.dp,
+            color = borderColor
+        ),
+        modifier = Modifier
+            .clip(RoundedCornerShape(10.dp))
+            .clickable(onClick = onClick)
+    ) {
+        Row(
+            modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.Center
+        ) {
+            if (icon != null) {
+                Icon(
+                    imageVector = icon,
+                    contentDescription = null,
+                    tint = contentColor,
+                    modifier = Modifier.size(15.dp)
+                )
+                Spacer(modifier = Modifier.width(5.dp))
+            }
+            Text(
+                text = label,
+                style = MaterialTheme.typography.labelMedium,
+                fontWeight = if (selected) FontWeight.SemiBold else FontWeight.Medium,
+                color = contentColor,
+                maxLines = 1
+            )
         }
     }
 }

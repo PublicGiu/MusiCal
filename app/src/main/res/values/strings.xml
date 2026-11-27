@@ -56,9 +56,17 @@
     <string name="lang_short_system">Sistema</string>
 
     <!-- Impostazioni -->
-    <string name="settings_section_appearance">Aspetto &amp; Tema</string>
-    <string name="settings_appearance_short">Aspetto</string>
+    <string name="settings_section_appearance">Aspetto &amp; Visualizzazione</string>
+    <string name="settings_appearance_short">Aspetto &amp; Visualizzazione</string>
     <string name="settings_theme_mode">Modalità tema</string>
+    <string name="settings_layout_card_title">Visualizzazione sezioni</string>
+    <string name="settings_layout_card_desc">Scegli in modo indipendente come mostrare brani, album e playlist</string>
+    <string name="layout_mode_list">Elenco</string>
+    <string name="layout_mode_grid">Griglia</string>
+    <string name="layout_grid_size_label">Dimensione griglia</string>
+    <string name="layout_grid_2x2">2×2</string>
+    <string name="layout_grid_3x3">3×3</string>
+    <string name="layout_grid_4x4">4×4</string>
     <string name="theme_system">Segui il sistema</string>
     <string name="theme_light">Tema chiaro</string>
     <string name="theme_dark">Tema scuro</string>
@@ -167,6 +175,7 @@
     <string name="player_collapse_desc">Riduci player a schermo intero</string>
     <string name="player_more_options">Altre opzioni</string>
     <string name="player_menu_view_artist">Visualizza artista</string>
+    <string name="player_menu_view_album">Visualizza album</string>
     <string name="player_menu_add_to_queue">Aggiungi alla coda</string>
     <string name="player_menu_add_to_favorites">Aggiungi ai brani preferiti</string>
     <string name="player_menu_added_to_favorites">Aggiunto ai brani preferiti</string>
@@ -350,7 +359,16 @@
     <string name="settings_update_check_error">Errore durante la verifica: %s</string>
 
     <!-- Risultati Ricerca Globale -->
+    <string name="search_filter_all">Tutto</string>
+    <string name="search_filter_tracks">Brani</string>
+    <string name="search_filter_artist">Artista</string>
+    <string name="search_filter_album">Album</string>
+    <string name="search_filter_playlist">Playlist</string>
     <string name="search_no_results">Nessun risultato per \"%s\"</string>
+    <string name="search_no_tracks_results">Nessun brano trovato per \"%s\"</string>
+    <string name="search_no_artists_results">Nessun artista trovato per \"%s\"</string>
+    <string name="search_no_albums_results">Nessun album trovato per \"%s\"</string>
+    <string name="search_no_playlists_results">Nessuna playlist trovata per \"%s\"</string>
     <string name="search_tracks_found">Brani trovati (%d)</string>
     <string name="search_albums_found">Album trovati (%d)</string>
     <string name="search_playlists_found">Playlist trovate (%d)</string>
@@ -432,6 +450,16 @@
     <string name="autotag_apply_to_track">Applica al brano</string>
     <string name="autotag_moved_tracks_notice">%d brano/i spostato/i in un altro album (verrà salvato al termine)</string>
     <string name="autotag_edited_track_badge">Modificato</string>
+    <string name="autotag_unreleased_badge">Unreleased</string>
+    <string name="autotag_unreleased_notice">Nessuna uscita ufficiale trovata su Deezer: il brano verrà organizzato nell\'album \"Unreleased\" di %s.</string>
+    <string name="settings_unreleased_scan_title">Scansiona brani Unreleased</string>
+    <string name="settings_unreleased_scan_desc">Verifica su Deezer i brani privi di album ufficiale e raggruppa automaticamente gli inediti in un album \"Unreleased\" per ciascun artista.</string>
+    <string name="settings_unreleased_scan_button">Avvia scansione Unreleased</string>
+    <string name="settings_unreleased_scan_progress">Verifica %1$d di %2$d: %3$s</string>
+    <string name="settings_unreleased_scan_none_needed">Tutti i brani della libreria sono già organizzati in un album o contrassegnati come Unreleased.</string>
+    <string name="settings_unreleased_scan_result_grouped">Raggruppati %1$d brani inediti in %2$d album \"Unreleased\" (su %3$d verificati).</string>
+    <string name="settings_unreleased_scan_result_zero">Nessun nuovo brano Unreleased rilevato (%d brani verificati).</string>
+    <string name="settings_unreleased_scan_review_official">Rivedi %d trovati su Deezer</string>
 
     <!-- Messaggi Snackbar e Notifiche Interfaccia -->
     <string name="snackbar_cover_updated">Copertina aggiornata per \"%s\"</string>

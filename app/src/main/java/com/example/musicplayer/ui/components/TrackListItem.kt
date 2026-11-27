@@ -10,25 +10,30 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.QueueMusic
+import androidx.compose.material.icons.filled.Album
 import androidx.compose.material.icons.filled.AutoFixHigh
 import androidx.compose.material.icons.filled.DeleteOutline
 import androidx.compose.material.icons.filled.Favorite
 import androidx.compose.material.icons.filled.FavoriteBorder
-import androidx.compose.material.icons.filled.GraphicEq
 import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.MusicNote
 import androidx.compose.material.icons.filled.Person
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import com.example.musicplayer.R
+import androidx.compose.material3.Card
+import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.Icon
@@ -44,11 +49,13 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import coil.compose.AsyncImage
 import coil.request.ImageRequest
 import coil.size.Precision
@@ -71,10 +78,12 @@ fun TrackListItem(
     playCount: Int = 0,
     onAutoTagClick: ((AudioTrack) -> Unit)? = null,
     onArtistClick: ((String) -> Unit)? = null,
+    onAlbumClick: ((AudioTrack) -> Unit)? = null,
     dragHandle: (@Composable () -> Unit)? = null
 ) {
     var menuExpanded by remember { mutableStateOf(false) }
-    val hasOptionsMenu = onAddToQueueClick != null || onAddToFavoritesClick != null || onAddToPlaylistClick != null || onRemoveClick != null || onAutoTagClick != null || onArtistClick != null
+    val canViewAlbum = onAlbumClick != null && track.album.isNotBlank()
+    val hasOptionsMenu = onAddToQueueClick != null || onAddToFavoritesClick != null || onAddToPlaylistClick != null || onRemoveClick != null || onAutoTagClick != null || onArtistClick != null || canViewAlbum
 
     val backgroundColor by animateColorAsState(
         targetValue = if (isSelected) {
@@ -239,113 +248,20 @@ fun TrackListItem(
                         )
                     }
 
-                    DropdownMenu(
+                    TrackOptionsDropdownMenu(
+                        track = track,
                         expanded = menuExpanded,
-                        onDismissRequest = { menuExpanded = false }
-                    ) {
-                        if (onArtistClick != null) {
-                            DropdownMenuItem(
-                                text = { Text(stringResource(R.string.player_menu_view_artist)) },
-                                leadingIcon = {
-                                    Icon(
-                                        imageVector = Icons.Default.Person,
-                                        contentDescription = null,
-                                        tint = MaterialTheme.colorScheme.primary
-                                    )
-                                },
-                                onClick = {
-                                    menuExpanded = false
-                                    onArtistClick(track.artist)
-                                }
-                            )
-                        }
-                        if (onAddToQueueClick != null) {
-                            DropdownMenuItem(
-                                text = { Text(stringResource(R.string.player_menu_add_to_queue)) },
-                                leadingIcon = {
-                                    Icon(
-                                        painter = painterResource(R.drawable.ic_queue_music_custom),
-                                        contentDescription = null
-                                    )
-                                },
-                                onClick = {
-                                    menuExpanded = false
-                                    onAddToQueueClick(track)
-                                }
-                            )
-                        }
-                        if (onAddToFavoritesClick != null) {
-                            DropdownMenuItem(
-                                text = {
-                                    Text(
-                                        text = if (isFavorite) {
-                                            stringResource(R.string.player_menu_added_to_favorites)
-                                        } else {
-                                            stringResource(R.string.player_menu_add_to_favorites)
-                                        }
-                                    )
-                                },
-                                leadingIcon = {
-                                    if (isFavorite) {
-                                        Icon(
-                                            imageVector = Icons.Default.Favorite,
-                                            contentDescription = null,
-                                            tint = MaterialTheme.colorScheme.primary
-                                        )
-                                    } else {
-                                        Icon(
-                                            imageVector = Icons.Default.FavoriteBorder,
-                                            contentDescription = null
-                                        )
-                                    }
-                                },
-                                onClick = {
-                                    menuExpanded = false
-                                    onAddToFavoritesClick()
-                                }
-                            )
-                        }
-                        if (onAddToPlaylistClick != null) {
-                            DropdownMenuItem(
-                                text = { Text(stringResource(R.string.player_menu_add_to_playlist)) },
-                                leadingIcon = {
-                                    Icon(Icons.AutoMirrored.Filled.QueueMusic, contentDescription = null)
-                                },
-                                onClick = {
-                                    menuExpanded = false
-                                    onAddToPlaylistClick(track)
-                                }
-                            )
-                        }
-                        if (onAutoTagClick != null) {
-                            DropdownMenuItem(
-                                text = { Text(stringResource(R.string.player_menu_auto_tag)) },
-                                leadingIcon = {
-                                    Icon(
-                                        imageVector = Icons.Default.AutoFixHigh,
-                                        contentDescription = null,
-                                        tint = MaterialTheme.colorScheme.primary
-                                    )
-                                },
-                                onClick = {
-                                    menuExpanded = false
-                                    onAutoTagClick(track)
-                                }
-                            )
-                        }
-                        if (onRemoveClick != null) {
-                            DropdownMenuItem(
-                                text = { Text(removeLabel ?: stringResource(R.string.remove_from_playlist_action)) },
-                                leadingIcon = {
-                                    Icon(Icons.Default.DeleteOutline, contentDescription = null)
-                                },
-                                onClick = {
-                                    menuExpanded = false
-                                    onRemoveClick()
-                                }
-                            )
-                        }
-                    }
+                        onDismissRequest = { menuExpanded = false },
+                        onArtistClick = onArtistClick,
+                        onAlbumClick = if (canViewAlbum) onAlbumClick else null,
+                        onAddToQueueClick = onAddToQueueClick,
+                        onAddToFavoritesClick = onAddToFavoritesClick,
+                        isFavorite = isFavorite,
+                        onAddToPlaylistClick = onAddToPlaylistClick,
+                        onAutoTagClick = onAutoTagClick,
+                        onRemoveClick = onRemoveClick,
+                        removeLabel = removeLabel
+                    )
                 }
             }
 
@@ -353,6 +269,401 @@ fun TrackListItem(
                 Spacer(modifier = Modifier.width(4.dp))
                 dragHandle()
             }
+        }
+    }
+}
+
+@OptIn(ExperimentalFoundationApi::class)
+@Composable
+fun TrackGridItem(
+    track: AudioTrack,
+    isSelected: Boolean,
+    isPlaying: Boolean,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+    columns: Int = 2,
+    onAddToQueueClick: ((AudioTrack) -> Unit)? = null,
+    onAddToPlaylistClick: ((AudioTrack) -> Unit)? = null,
+    onAddToFavoritesClick: (() -> Unit)? = null,
+    isFavorite: Boolean = false,
+    onRemoveClick: (() -> Unit)? = null,
+    removeLabel: String? = null,
+    playCount: Int = 0,
+    onAutoTagClick: ((AudioTrack) -> Unit)? = null,
+    onArtistClick: ((String) -> Unit)? = null,
+    onAlbumClick: ((AudioTrack) -> Unit)? = null
+) {
+    val isCompact = columns >= 3
+    val isUltraCompact = columns >= 4
+    val cardPadding = when {
+        isUltraCompact -> 6.dp
+        isCompact -> 8.dp
+        else -> 10.dp
+    }
+    val cardShape = RoundedCornerShape(if (isCompact) 12.dp else 16.dp)
+    val coverShape = RoundedCornerShape(if (isCompact) 8.dp else 12.dp)
+    val canViewAlbum = onAlbumClick != null && track.album.isNotBlank()
+    val hasOptionsMenu = onAddToQueueClick != null || onAddToFavoritesClick != null || onAddToPlaylistClick != null || onRemoveClick != null || onAutoTagClick != null || onArtistClick != null || canViewAlbum
+    var menuExpanded by remember { mutableStateOf(false) }
+
+    val backgroundColor by animateColorAsState(
+        targetValue = if (isSelected) {
+            MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.65f)
+        } else {
+            MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)
+        },
+        animationSpec = tween(durationMillis = 220, easing = FastOutSlowInEasing),
+        label = "TrackGridBgColor"
+    )
+
+    val titleColor by animateColorAsState(
+        targetValue = if (isSelected) {
+            MaterialTheme.colorScheme.onPrimaryContainer
+        } else {
+            MaterialTheme.colorScheme.onSurface
+        },
+        animationSpec = tween(durationMillis = 220, easing = FastOutSlowInEasing),
+        label = "TrackGridTitleColor"
+    )
+
+    Card(
+        modifier = modifier
+            .fillMaxWidth()
+            .clip(cardShape)
+            .combinedClickable(
+                onClick = onClick,
+                onLongClick = if (hasOptionsMenu) {
+                    { menuExpanded = true }
+                } else {
+                    null
+                }
+            ),
+        colors = CardDefaults.cardColors(containerColor = backgroundColor),
+        shape = cardShape
+    ) {
+        Column(modifier = Modifier.padding(cardPadding)) {
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .aspectRatio(1f)
+                    .clip(coverShape),
+                contentAlignment = Alignment.Center
+            ) {
+                var isImageError by remember(track.id, track.albumArtUri) { mutableStateOf(false) }
+                val context = LocalContext.current
+                val imageRequest = remember(track.albumArtUri, columns) {
+                    track.albumArtUri?.let { uri ->
+                        ImageRequest.Builder(context)
+                            .data(uri)
+                            .size(if (columns >= 3) 240 else 360)
+                            .precision(Precision.INEXACT)
+                            .allowHardware(true)
+                            .build()
+                    }
+                }
+
+                if (imageRequest != null && !isImageError) {
+                    AsyncImage(
+                        model = imageRequest,
+                        contentDescription = stringResource(R.string.cover_content_desc, track.title),
+                        contentScale = ContentScale.Crop,
+                        modifier = Modifier.fillMaxSize(),
+                        onError = { isImageError = true }
+                    )
+                } else {
+                    Surface(
+                        modifier = Modifier.fillMaxSize(),
+                        color = if (isSelected) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surfaceContainerHighest
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.MusicNote,
+                            contentDescription = null,
+                            tint = if (isSelected) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f),
+                            modifier = Modifier.padding(if (isUltraCompact) 14.dp else if (isCompact) 20.dp else 28.dp)
+                        )
+                    }
+                }
+
+                if (isSelected) {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.58f)),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        AnimatedEqualizerBars(
+                            isPlaying = isPlaying,
+                            color = MaterialTheme.colorScheme.onPrimary,
+                            modifier = Modifier.size(if (isUltraCompact) 20.dp else 26.dp)
+                        )
+                    }
+                }
+
+                if (isCompact && hasOptionsMenu) {
+                    Box(
+                        modifier = Modifier
+                            .align(Alignment.TopEnd)
+                            .padding(4.dp)
+                    ) {
+                        Surface(
+                            modifier = Modifier
+                                .size(24.dp)
+                                .clip(CircleShape)
+                                .combinedClickable(onClick = { menuExpanded = true }),
+                            color = Color.Black.copy(alpha = 0.48f),
+                            shape = CircleShape
+                        ) {
+                            Box(contentAlignment = Alignment.Center) {
+                                Icon(
+                                    imageVector = Icons.Default.MoreVert,
+                                    contentDescription = stringResource(R.string.player_more_options),
+                                    tint = Color.White,
+                                    modifier = Modifier.size(15.dp)
+                                )
+                            }
+                        }
+                        TrackOptionsDropdownMenu(
+                            track = track,
+                            expanded = menuExpanded,
+                            onDismissRequest = { menuExpanded = false },
+                            onArtistClick = onArtistClick,
+                            onAlbumClick = if (canViewAlbum) onAlbumClick else null,
+                            onAddToQueueClick = onAddToQueueClick,
+                            onAddToFavoritesClick = onAddToFavoritesClick,
+                            isFavorite = isFavorite,
+                            onAddToPlaylistClick = onAddToPlaylistClick,
+                            onAutoTagClick = onAutoTagClick,
+                            onRemoveClick = onRemoveClick,
+                            removeLabel = removeLabel
+                        )
+                    }
+                }
+            }
+
+            Spacer(modifier = Modifier.height(if (isCompact) 6.dp else 8.dp))
+
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(
+                        text = track.title,
+                        style = when {
+                            isUltraCompact -> MaterialTheme.typography.labelSmall.copy(
+                                fontWeight = FontWeight.SemiBold,
+                                fontSize = 11.sp
+                            )
+                            isCompact -> MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Bold)
+                            else -> MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Bold)
+                        },
+                        color = titleColor,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                    Text(
+                        text = track.artist,
+                        style = when {
+                            isUltraCompact -> MaterialTheme.typography.labelSmall.copy(fontSize = 10.sp)
+                            isCompact -> MaterialTheme.typography.labelSmall
+                            else -> MaterialTheme.typography.bodySmall
+                        },
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                    if (!isUltraCompact) {
+                        val subtitleMeta = if (playCount > 0) {
+                            val playText = if (playCount == 1) {
+                                stringResource(R.string.play_count_single, playCount)
+                            } else {
+                                stringResource(R.string.play_count_multiple, playCount)
+                            }
+                            "${track.formattedDuration()} • $playText"
+                        } else {
+                            track.formattedDuration()
+                        }
+                        Text(
+                            text = subtitleMeta,
+                            style = MaterialTheme.typography.labelSmall.copy(
+                                fontSize = if (isCompact) 10.sp else 11.sp
+                            ),
+                            color = if (playCount > 0) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
+                        )
+                    }
+                }
+
+                if (!isCompact && hasOptionsMenu) {
+                    Box {
+                        IconButton(
+                            onClick = { menuExpanded = true },
+                            modifier = Modifier.size(32.dp)
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.MoreVert,
+                                contentDescription = stringResource(R.string.player_more_options),
+                                tint = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                        TrackOptionsDropdownMenu(
+                            track = track,
+                            expanded = menuExpanded,
+                            onDismissRequest = { menuExpanded = false },
+                            onArtistClick = onArtistClick,
+                            onAlbumClick = if (canViewAlbum) onAlbumClick else null,
+                            onAddToQueueClick = onAddToQueueClick,
+                            onAddToFavoritesClick = onAddToFavoritesClick,
+                            isFavorite = isFavorite,
+                            onAddToPlaylistClick = onAddToPlaylistClick,
+                            onAutoTagClick = onAutoTagClick,
+                            onRemoveClick = onRemoveClick,
+                            removeLabel = removeLabel
+                        )
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun TrackOptionsDropdownMenu(
+    track: AudioTrack,
+    expanded: Boolean,
+    onDismissRequest: () -> Unit,
+    onArtistClick: ((String) -> Unit)?,
+    onAlbumClick: ((AudioTrack) -> Unit)?,
+    onAddToQueueClick: ((AudioTrack) -> Unit)?,
+    onAddToFavoritesClick: (() -> Unit)?,
+    isFavorite: Boolean,
+    onAddToPlaylistClick: ((AudioTrack) -> Unit)?,
+    onAutoTagClick: ((AudioTrack) -> Unit)?,
+    onRemoveClick: (() -> Unit)?,
+    removeLabel: String?
+) {
+    DropdownMenu(
+        expanded = expanded,
+        onDismissRequest = onDismissRequest
+    ) {
+        if (onArtistClick != null) {
+            DropdownMenuItem(
+                text = { Text(stringResource(R.string.player_menu_view_artist)) },
+                leadingIcon = {
+                    Icon(
+                        imageVector = Icons.Default.Person,
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.primary
+                    )
+                },
+                onClick = {
+                    onDismissRequest()
+                    onArtistClick(track.artist)
+                }
+            )
+        }
+        if (onAlbumClick != null) {
+            DropdownMenuItem(
+                text = { Text(stringResource(R.string.player_menu_view_album)) },
+                leadingIcon = {
+                    Icon(
+                        imageVector = Icons.Default.Album,
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.primary
+                    )
+                },
+                onClick = {
+                    onDismissRequest()
+                    onAlbumClick(track)
+                }
+            )
+        }
+        if (onAddToQueueClick != null) {
+            DropdownMenuItem(
+                text = { Text(stringResource(R.string.player_menu_add_to_queue)) },
+                leadingIcon = {
+                    Icon(
+                        painter = painterResource(R.drawable.ic_queue_music_custom),
+                        contentDescription = null
+                    )
+                },
+                onClick = {
+                    onDismissRequest()
+                    onAddToQueueClick(track)
+                }
+            )
+        }
+        if (onAddToFavoritesClick != null) {
+            DropdownMenuItem(
+                text = {
+                    Text(
+                        text = if (isFavorite) {
+                            stringResource(R.string.player_menu_added_to_favorites)
+                        } else {
+                            stringResource(R.string.player_menu_add_to_favorites)
+                        }
+                    )
+                },
+                leadingIcon = {
+                    if (isFavorite) {
+                        Icon(
+                            imageVector = Icons.Default.Favorite,
+                            contentDescription = null,
+                            tint = MaterialTheme.colorScheme.primary
+                        )
+                    } else {
+                        Icon(
+                            imageVector = Icons.Default.FavoriteBorder,
+                            contentDescription = null
+                        )
+                    }
+                },
+                onClick = {
+                    onDismissRequest()
+                    onAddToFavoritesClick()
+                }
+            )
+        }
+        if (onAddToPlaylistClick != null) {
+            DropdownMenuItem(
+                text = { Text(stringResource(R.string.player_menu_add_to_playlist)) },
+                leadingIcon = {
+                    Icon(Icons.AutoMirrored.Filled.QueueMusic, contentDescription = null)
+                },
+                onClick = {
+                    onDismissRequest()
+                    onAddToPlaylistClick(track)
+                }
+            )
+        }
+        if (onAutoTagClick != null) {
+            DropdownMenuItem(
+                text = { Text(stringResource(R.string.player_menu_auto_tag)) },
+                leadingIcon = {
+                    Icon(
+                        imageVector = Icons.Default.AutoFixHigh,
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.primary
+                    )
+                },
+                onClick = {
+                    onDismissRequest()
+                    onAutoTagClick(track)
+                }
+            )
+        }
+        if (onRemoveClick != null) {
+            DropdownMenuItem(
+                text = { Text(removeLabel ?: stringResource(R.string.remove_from_playlist_action)) },
+                leadingIcon = {
+                    Icon(Icons.Default.DeleteOutline, contentDescription = null)
+                },
+                onClick = {
+                    onDismissRequest()
+                    onRemoveClick()
+                }
+            )
         }
     }
 }

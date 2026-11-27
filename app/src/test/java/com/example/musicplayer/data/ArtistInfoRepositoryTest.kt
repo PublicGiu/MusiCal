@@ -398,6 +398,15 @@ class ArtistInfoRepositoryTest {
 
         assertFalse(isCollabArtist("Drake"))
         assertFalse(isCollabArtist("Drake feat. 21 Savage"))
+        assertFalse(isCollabArtist("Tyler, The Creator"))
+        assertFalse(isCollabArtist("Tyler, The Creator feat. Kali Uchis"))
+        assertTrue(isCollabArtist("Tyler, The Creator & A\$AP Rocky"))
+        assertEquals("Tyler, The Creator", extractMainArtist("Tyler, The Creator"))
+        assertEquals("Tyler, The Creator", extractMainArtist("Tyler, The Creator feat. Kali Uchis"))
+        assertEquals(
+            listOf("Tyler, The Creator", "A\$AP Rocky"),
+            extractCollaborators("Tyler, The Creator & A\$AP Rocky")
+        )
         assertFalse(isCollabArtist("Various Artists"))
         assertFalse(isCollabArtist(null))
         assertFalse(isCollabArtist(""))

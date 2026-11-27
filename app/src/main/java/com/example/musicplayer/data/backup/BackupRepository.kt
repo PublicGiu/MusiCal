@@ -10,6 +10,7 @@ import com.example.musicplayer.data.FAVORITES_PLAYLIST_ID
 import com.example.musicplayer.data.FAVORITES_PLAYLIST_NAME
 import com.example.musicplayer.data.Playlist
 import com.example.musicplayer.data.PlaylistRepository
+import com.example.musicplayer.data.SectionViewMode
 import com.example.musicplayer.data.StatsRepository
 import com.example.musicplayer.data.ThemeMode
 import com.example.musicplayer.data.TrackStats
@@ -140,6 +141,9 @@ class BackupRepository(
         val prefsObj = JSONObject().apply {
             put("autoplayEnabled", appPreferences.isAutoplayEnabled())
             put("themeMode", appPreferences.getThemeMode().name)
+            put("tracksViewMode", appPreferences.getTracksViewMode().name)
+            put("albumsViewMode", appPreferences.getAlbumsViewMode().name)
+            put("playlistsViewMode", appPreferences.getPlaylistsViewMode().name)
             put("appLanguage", appPreferences.getAppLanguage().name)
             put("dynamicColorEnabled", appPreferences.isDynamicColorEnabled())
             put("audioSourceMode", appPreferences.getAudioSourceMode().name)
@@ -439,6 +443,18 @@ class BackupRepository(
         }
         if (prefsObj.has("dynamicColorEnabled")) {
             appPreferences.setDynamicColorEnabled(prefsObj.optBoolean("dynamicColorEnabled", false))
+        }
+        if (prefsObj.has("tracksViewMode")) {
+            runCatching { SectionViewMode.valueOf(prefsObj.optString("tracksViewMode")) }
+                .getOrNull()?.let { appPreferences.setTracksViewMode(it) }
+        }
+        if (prefsObj.has("albumsViewMode")) {
+            runCatching { SectionViewMode.valueOf(prefsObj.optString("albumsViewMode")) }
+                .getOrNull()?.let { appPreferences.setAlbumsViewMode(it) }
+        }
+        if (prefsObj.has("playlistsViewMode")) {
+            runCatching { SectionViewMode.valueOf(prefsObj.optString("playlistsViewMode")) }
+                .getOrNull()?.let { appPreferences.setPlaylistsViewMode(it) }
         }
         if (prefsObj.has("audioSourceMode")) {
             runCatching { AudioSourceMode.valueOf(prefsObj.optString("audioSourceMode")) }

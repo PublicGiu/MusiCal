@@ -1,11 +1,11 @@
 # 🎵 MusiCal — Lettore Musicale Nativo per Android 16
 
-![Versione](https://img.shields.io/badge/versione-0.2.9-8B5CF6)
+![Versione](https://img.shields.io/badge/versione-0.2.13-8B5CF6)
 ![Android](https://img.shields.io/badge/Android-16%20(API%2036)-7C3AED)
 ![Kotlin](https://img.shields.io/badge/Kotlin-2.1.0-A855F7)
 ![Jetpack Compose](https://img.shields.io/badge/UI-Jetpack%20Compose%20%2B%20Material%203-C084FC)
 ![Media3](https://img.shields.io/badge/Audio-AndroidX%20Media3%20(ExoPlayer)-6D28D9)
-![Test](https://img.shields.io/badge/test-373%20passed-success)
+![Test](https://img.shields.io/badge/test-390%20passed-success)
 
 **MusiCal** è un lettore musicale locale moderno, veloce e privo di pubblicità o tracciamento, progettato nativamente ed esclusivamente per **Android 16 (API 36)**.
 
@@ -13,9 +13,13 @@ Realizzato interamente in **Kotlin** e **Jetpack Compose** con un'identità visi
 
 ---
 
-## 🆕 Novità Principali fino alla v0.2.9
+## 🆕 Novità Principali fino alla v0.2.13
 
-Dalla v0.2.0 alla **v0.2.9** MusiCal è stato ampliato con numerose funzionalità e miglioramenti strutturali:
+Dalla v0.2.0 alla **v0.2.13** MusiCal è stato ampliato con numerose funzionalità e miglioramenti strutturali:
+- **v0.2.13**: **Album automatico `"Unreleased"` per singolo artista** (creato automaticamente solo quando sono presenti brani inediti non trovati su Deezer o contrassegnati localmente, con fallback copertina sulla foto dell'artista), **scansione batch Unreleased** con barra di avanzamento nelle Impostazioni (sezione Libreria) e **fix completo per artisti con virgola interna** (es. `"Tyler, The Creator"`) in Auto-Tag, ricerca e raggruppamento album senza regressioni sulle collaborazioni.
+- **v0.2.12**: **Ricerca globale uniformata** (`50.dp` per Brani, Album, Playlist e Artisti trovati) e **nuova barra filtri fluida** a 5 categorie (`Tutto`, `Brani`, `Artista`, `Album`, `Playlist`) sincronizzata con `HorizontalPager`.
+- **v0.2.11**: **Mini-player visibile e cliccabile nel Profilo Artista** per aprire subito il player a schermo intero, e **rimozione dello swipe-down accidentale** in Profilo Artista e Smart Auto-Tagger (chiusura esplicita tramite pulsante dedicato o tasto Indietro).
+- **v0.2.10**: **Sezione `"Aspetto & Visualizzazione"`** in Impostazioni con layout indipendente **Elenco** o **Griglia (`2×2`, `3×3`, `4×4`)** per Brani, Album e Playlist, **conteggio riproduzione valida al 50% di tempo effettivo ascoltato** con aggiornamento ritardato di *"Ascoltati di recente"* per brani, album e playlist, voce **"Visualizza album"** in tutti i menu `⋮` dei brani, **tasto `"Successivi"`** nella coda autoplay per rigenerare 15 nuovi brani, **Scansione Intelligente** segment-safe perfezionata e **isolamento rafforzato dello swipe-down sui testi**.
 - **v0.2.9**: **Scansione Intelligente potenziata** con filtri MediaStore Android 16 e anti-registrazioni OEM (anche sotto `Music/`), **rifiuto automatico delle pagine di brani/album** nelle biografie Wikipedia degli artisti, **unificazione dell'`Album Artist` principale** per evitare frammentazioni, **isolamento gesti verticali** nella vista testi karaoke (`SyncedLyricsView`) e **nuovi selettori a tile** in Impostazioni per Lingua e Tema.
 - **v0.2.8**: **Resilienza riproduzione in background** (promozione proattiva a Foreground Service, canale notifica dedicato, `Media3BitmapLoader` con `loadThumbnail` e guida bilingue in Impostazioni per l'ottimizzazione batteria OEM), **disambiguazione anti-omonimia** dei profili artista tramite incrocio con brani/album locali, supporto Auto-Tagger al formato **`Artista - Canzone`** e paginazione album Deezer fino a 300 tracce, e **allineamento alfabetico** condiviso tra ordinamento e Fast Scroller.
 - **v0.2.4**: **Ritaglio 1:1 interattivo e Zoom con blur** per le copertine delle playlist (`PlaylistCoverCropperDialog`, `CoverZoomDialog`), esportazione/ripristino delle **copertine nel backup** (`coverBase64`), **modifica diretta del singolo brano** dalla modalità *Uniforma/Separa Album*, opzione dedicata per `Album Artist` e archivio persistente deduplicato SHA-1 **`TaggedCoverStore`** per copertine immuni alle invalidazioni `MediaStore`.
@@ -157,7 +161,7 @@ Dalla v0.2.0 alla **v0.2.9** MusiCal è stato ampliato con numerose funzionalit�
 | **Persistenza Locale & Backup** | `AtomicFile` JSON (`playlists.json`, `track_stats.json`, `artist_cache.json`), `LibraryCacheRepository` (`library_cache.json`), `TaggedCoverStore` (SHA-1), Backup/Ripristino JSON portabile SAF, Room `2.6.1` (`scrobble_cache.db`), `SharedPreferences` |
 | **Immagini & Rete** | Coil Compose `2.7.0`, `SharedHttpClient` (OkHttp `4.12.0`: Deezer API, LRCLIB API, Wikipedia/MediaWiki API, Last.fm REST API, GitHub API) |
 | **Localizzazione** | Android 16 Per-App Language (`LocaleManager`), `strings.xml` (Italiano) e `values-en/strings.xml` (Inglese) |
-| **Test Automatizzati** | JUnit 4, Mockito Core, `org.json`, suite completa di **373 unit test** su JVM |
+| **Test Automatizzati** | JUnit 4, Mockito Core, `org.json`, suite completa di **390 unit test** su JVM |
 
 ```
 app/src/main/java/com/example/musicplayer/
@@ -174,6 +178,7 @@ app/src/main/java/com/example/musicplayer/
 │   ├── PlaylistRepository.kt               # Persistenza atomica playlist e copertine ritagliate Photo Picker
 │   ├── StatsRepository.kt                  # Persistenza atomica statistiche d'ascolto (AtomicFile)
 │   ├── TaggedCoverStore.kt                 # Archivio locale SHA-1 per copertine Auto-Tagger immuni a MediaStore
+│   ├── UnreleasedTrackStore.kt             # Archivio persistente locale per brani Unreleased per singolo artista
 │   ├── backup/                             # BackupModels e BackupRepository (export/import JSON SAF con coverBase64)
 │   ├── lastfm/                             # LastFmClient, LastFmConfig, LastFmCoordinator, SessionManager & Room DB
 │   ├── network/SharedHttpClient.kt         # Singleton OkHttpClient condiviso tra tutti i client HTTP
@@ -181,6 +186,7 @@ app/src/main/java/com/example/musicplayer/
 │   └── update/                             # GithubUpdateChecker e ReleaseNotesParser (note di rilascio bilingue)
 ├── playback/
 │   ├── PlaybackService.kt                  # MediaSessionService con ExoPlayer, Foreground proattivo e WakeLock
+│   ├── PlayCountThresholdTracker.kt        # Tracciamento tempo effettivo ascoltato (soglia >=50% per riproduzione valida)
 │   ├── QueueCoordinator.kt                 # Gestione Coda Utente prioritaria, Autoplay (15 brani) e Shuffle/Repeat 1:1
 │   ├── EqualizerManager.kt                 # Equalizzatore hardware DSP 5 bande, Bass Boost ibrido e Virtualizer
 │   ├── SleepTimerCoordinator.kt            # Coordinatore spegnimento programmato con fade-out volume (e SleepTimerState)
@@ -225,9 +231,9 @@ Il repository e gli APK distribuiti sono concepiti per proteggere rigorosamente 
 
 ## 📲 Download Diretto APK
 
-Se desideri installare subito **MusiCal v0.2.9** sul tuo dispositivo Android 16 senza compilare il sorgente, scarica il file `.apk` direttamente dalla sezione [**Releases**](https://github.com/PublicGiu/MusiCal/releases/tag/v0.2.9) di questo repository:
+Se desideri installare subito **MusiCal v0.2.13** sul tuo dispositivo Android 16 senza compilare il sorgente, scarica il file `.apk` direttamente dalla sezione [**Releases**](https://github.com/PublicGiu/MusiCal/releases/tag/v0.2.13) di questo repository:
 
-👉 **[Scarica MusiCal-v0.2.9.apk](https://github.com/PublicGiu/MusiCal/releases/download/v0.2.9/MusiCal-v0.2.9.apk)**
+👉 **[Scarica MusiCal-v0.2.13.apk](https://github.com/PublicGiu/MusiCal/releases/download/v0.2.13/MusiCal-v0.2.13.apk)**
 
 ---
 
@@ -272,7 +278,7 @@ Se desideri installare subito **MusiCal v0.2.9** sul tuo dispositivo Android 16 
    .\gradlew.bat assembleRelease -PexcludeLastFmKeys=true
    ```
 
-5. **Esegui la suite di Test Unitari (373 test su JVM)**:
+5. **Esegui la suite di Test Unitari (390 test su JVM)**:
    ```powershell
    .\gradlew.bat testDebugUnitTest
    ```

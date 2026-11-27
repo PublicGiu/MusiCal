@@ -15,6 +15,7 @@ import com.example.musicplayer.data.AudioTrack
 import com.example.musicplayer.data.PlaybackContext
 import com.example.musicplayer.data.Playlist
 import com.example.musicplayer.data.extractMainArtist
+import com.example.musicplayer.data.findAlbumForTrack
 import com.example.musicplayer.data.matchesArtist
 import com.example.musicplayer.ui.tagger.MetadataEnricherSheet
 import com.example.musicplayer.ui.MusicViewModel
@@ -53,8 +54,6 @@ fun MainModalsHost(
     showStatsDialog: Boolean,
     onDismissStatsDialog: () -> Unit,
     onOpenStats: () -> Unit,
-    selectedArtistForSheet: String?,
-    onDismissArtistDetailSheet: () -> Unit,
     onSelectArtistForSheet: (String?) -> Unit,
     // Dati e collezioni
     tracks: List<AudioTrack>,
@@ -122,7 +121,8 @@ fun MainModalsHost(
             onRemoveAutoplayItem = { index -> viewModel.removeAutoplayItem(index) },
             onMoveAutoplayItem = { fromIndex, toIndex -> viewModel.moveAutoplayItem(fromIndex, toIndex) },
             onMoveAutoplayItemToTop = { index -> viewModel.moveAutoplayItemToTop(index) },
-            onAddAutoplayItemToUserQueue = { index -> viewModel.moveAutoplayItemToUserQueue(index) }
+            onAddAutoplayItemToUserQueue = { index -> viewModel.moveAutoplayItemToUserQueue(index) },
+            onRefreshAutoplay = { viewModel.refreshAutoplayQueue() }
         )
     }
 
@@ -216,8 +216,7 @@ fun MainModalsHost(
             onAlbumClick = {
                 val track = currentTrack
                 if (track != null) {
-                    val matchingAlbum = albums.find { it.id == track.albumId }
-                        ?: albums.find { it.title.equals(track.album, ignoreCase = true) }
+                    val matchingAlbum = albums.findAlbumForTrack(track)
                         ?: if (track.album.isNotBlank()) {
                             val albumTracks = tracks.filter {
                                 it.albumId == track.albumId || it.album.equals(track.album, ignoreCase = true)
@@ -339,48 +338,7 @@ fun MainModalsHost(
         )
     }
 
-    // 10. ModalBottomSheet Vista Dettaglio Artista
-    selectedArtistForSheet?.let { artistName ->
-        val artistTracks = remember(artistName, tracks) {
-            tracks.filter { it.matchesArtist(artistName) }
-        }
-        ArtistDetailSheet(
-            artistName = artistName,
-            tracks = tracks,
-            albums = albums,
-            currentTrack = currentTrack,
-            isPlaying = isPlaying,
-            onDismissRequest = onDismissArtistDetailSheet,
-            onPlayTrackIndex = { index ->
-                viewModel.playArtist(artistName, index)
-            },
-            onPlayAllClick = {
-                viewModel.playArtist(artistName, 0)
-            },
-            onAddAllToQueueClick = {
-                viewModel.addTracksToQueue(artistTracks)
-                coroutineScope.launch {
-                    snackbarHostState.showSnackbar(
-                        message = context.getString(R.string.snackbar_artist_tracks_added_to_queue, artistTracks.size, artistName),
-                        duration = SnackbarDuration.Short
-                    )
-                }
-            },
-            onAlbumClick = { album ->
-                onDismissArtistDetailSheet()
-                onNavigateToAlbum(album)
-            },
-            onAddToQueueClick = onAddToQueue,
-            onAddToPlaylistClick = onAddToPlaylistRequest,
-            onAddToFavoritesClick = onAddToFavorites,
-            favoriteTrackIds = favoriteTrackIds,
-            onAutoTagTrackClick = { viewModel.startTrackEnrichment(it) },
-            artistInfoRepository = viewModel.artistInfoRepository,
-            onNavigateToArtist = onSelectArtistForSheet
-        )
-    }
-
-    // 11. Dialog Notifica Aggiornamento GitHub all'avvio
+    // 10. Dialog Notifica Aggiornamento GitHub all'avvio
     if (isUpdateDialogVisible) {
         updateInfo?.let { info ->
             UpdateAvailableDialog(

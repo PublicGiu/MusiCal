@@ -19,6 +19,11 @@ import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.basicMarquee
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.Orientation
+import androidx.compose.foundation.gestures.awaitEachGesture
+import androidx.compose.foundation.gestures.awaitFirstDown
+import androidx.compose.foundation.gestures.draggable
+import androidx.compose.foundation.gestures.rememberDraggableState
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsDraggedAsState
 import androidx.compose.foundation.interaction.collectIsPressedAsState
@@ -46,6 +51,7 @@ import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import com.example.musicplayer.R
 import androidx.compose.material.icons.automirrored.filled.QueueMusic
+import androidx.compose.material.icons.filled.Album
 import androidx.compose.material.icons.filled.AutoFixHigh
 import androidx.compose.material.icons.filled.Favorite
 import androidx.compose.material.icons.filled.FavoriteBorder
@@ -74,6 +80,7 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.IconButtonDefaults
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
+import androidx.compose.material3.SheetValue
 import androidx.compose.material3.Slider
 import androidx.compose.material3.SliderDefaults
 import androidx.compose.material3.Surface
@@ -96,6 +103,9 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.lerp
+import androidx.compose.ui.input.nestedscroll.nestedScroll
+import androidx.compose.ui.input.pointer.PointerEventPass
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
@@ -160,9 +170,19 @@ fun FullScreenPlayerSheet(
     referenceTrackTitles: List<String> = emptyList(),
     referenceAlbumTitles: List<String> = emptyList()
 ) {
-    val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
     val context = LocalContext.current
     var isLyricsViewActive by remember { mutableStateOf(false) }
+    var isGestureStartedInLyrics by remember { mutableStateOf(false) }
+    val sheetState = rememberModalBottomSheetState(
+        skipPartiallyExpanded = true,
+        confirmValueChange = { targetValue ->
+            if (targetValue == SheetValue.Hidden && isGestureStartedInLyrics) {
+                false
+            } else {
+                true
+            }
+        }
+    )
     var menuExpanded by remember { mutableStateOf(false) }
 
     val currentArtistName = currentTrack?.artist?.trim().orEmpty()
@@ -336,6 +356,12 @@ fun FullScreenPlayerSheet(
         Box(
             modifier = Modifier
                 .fillMaxSize()
+                .pointerInput(Unit) {
+                    awaitEachGesture {
+                        awaitFirstDown(pass = PointerEventPass.Initial, requireUnconsumed = false)
+                        isGestureStartedInLyrics = false
+                    }
+                }
                 .background(Color(0xFF0E0B16)) // Base solida opaca
                 .background(
                     brush = Brush.verticalGradient(
@@ -348,7 +374,8 @@ fun FullScreenPlayerSheet(
                 )
         ) {
             LazyColumn(
-                modifier = Modifier.fillMaxSize()
+                modifier = Modifier.fillMaxSize(),
+                userScrollEnabled = !isGestureStartedInLyrics
             ) {
                 // 1. Schermata principale del Player a tutta altezza
                 item {
@@ -451,6 +478,22 @@ fun FullScreenPlayerSheet(
                                     }
                                 )
                             }
+                            if (onAlbumClick != null && currentTrack.album.isNotBlank()) {
+                                DropdownMenuItem(
+                                    text = { Text(stringResource(R.string.player_menu_view_album)) },
+                                    leadingIcon = {
+                                        Icon(
+                                            imageVector = Icons.Default.Album,
+                                            contentDescription = null,
+                                            tint = MaterialTheme.colorScheme.primary
+                                        )
+                                    },
+                                    onClick = {
+                                        menuExpanded = false
+                                        onAlbumClick()
+                                    }
+                                )
+                            }
                             if (onAddToQueueClick != null) {
                                 DropdownMenuItem(
                                     text = { Text(stringResource(R.string.player_menu_add_to_queue)) },
@@ -548,15 +591,31 @@ fun FullScreenPlayerSheet(
                 label = "lyricsCoverCrossfade"
             ) { showLyrics ->
                 if (showLyrics) {
-                    SyncedLyricsView(
-                        lyricsData = currentLyrics,
-                        currentPositionProvider = currentPositionProvider,
-                        onSeekTo = onSeekTo,
-                        isInstrumental = currentLyrics?.isInstrumental == true || currentTrack?.isInstrumental() == true,
+                    val noopLyricsDragState = rememberDraggableState {}
+                    Box(
                         modifier = Modifier
                             .fillMaxWidth()
                             .aspectRatio(1f)
-                    )
+                            .pointerInput(Unit) {
+                                awaitEachGesture {
+                                    awaitFirstDown(pass = PointerEventPass.Initial, requireUnconsumed = false)
+                                    isGestureStartedInLyrics = true
+                                }
+                            }
+                            .nestedScroll(LyricsVerticalScrollBlocker)
+                            .draggable(
+                                state = noopLyricsDragState,
+                                orientation = Orientation.Vertical
+                            )
+                    ) {
+                        SyncedLyricsView(
+                            lyricsData = currentLyrics,
+                            currentPositionProvider = currentPositionProvider,
+                            onSeekTo = onSeekTo,
+                            isInstrumental = currentLyrics?.isInstrumental == true || currentTrack?.isInstrumental() == true,
+                            modifier = Modifier.fillMaxSize()
+                        )
+                    }
                 } else {
                 // 2. Copertina grande con HorizontalPager (finger-following fluido, animazione a molla e sincronizzazione reattiva)
                 HorizontalPager(

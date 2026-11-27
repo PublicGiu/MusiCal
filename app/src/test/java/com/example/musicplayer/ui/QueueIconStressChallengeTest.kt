@@ -315,9 +315,9 @@ class QueueIconStressChallengeTest {
         val occurrences = Regex("""painterResource\(R\.drawable\.ic_queue_music_custom\)""").findAll(playlistsView).count()
         assertEquals("PlaylistsView must reference ic_queue_music_custom in exactly 2 menu actions", 2, occurrences)
 
-        // Verify that playlist entity icons (the 4 places) are NOT corrupted to ic_queue_music_custom
+        // Verify that playlist entity icons (the 5 places including PlaylistGridItem) are NOT corrupted to ic_queue_music_custom
         val playlistEntityIconOccurrences = Regex("""Icons\.AutoMirrored\.Filled\.QueueMusic""").findAll(playlistsView).count()
-        assertEquals("PlaylistsView must retain 4 playlist-entity icons as QueueMusic", 4, playlistEntityIconOccurrences)
+        assertEquals("PlaylistsView must retain 5 playlist-entity icons as QueueMusic", 5, playlistEntityIconOccurrences)
     }
 
     // ---------------------------------------------------------------------------------------------

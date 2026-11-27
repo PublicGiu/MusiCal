@@ -36,6 +36,7 @@ import androidx.compose.material.icons.filled.DeleteOutline
 import androidx.compose.material.icons.filled.DragHandle
 import androidx.compose.material.icons.filled.GraphicEq
 import androidx.compose.material.icons.filled.MusicNote
+import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -102,7 +103,8 @@ fun QueueBottomSheet(
     onRemoveAutoplayItem: (Int) -> Unit = {},
     onMoveAutoplayItem: (fromIndex: Int, toIndex: Int) -> Unit = { _, _ -> },
     onMoveAutoplayItemToTop: (Int) -> Unit = {},
-    onAddAutoplayItemToUserQueue: (Int) -> Unit = {}
+    onAddAutoplayItemToUserQueue: (Int) -> Unit = {},
+    onRefreshAutoplay: () -> Unit = {}
 ) {
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
 
@@ -300,11 +302,30 @@ fun QueueBottomSheet(
                             )
                         }
 
-                        Text(
-                            text = stringResource(R.string.queue_upcoming),
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
+                        Surface(
+                            onClick = onRefreshAutoplay,
+                            enabled = autoplayQueue.isNotEmpty() || currentTrack != null,
+                            shape = RoundedCornerShape(50),
+                            color = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.45f)
+                        ) {
+                            Row(
+                                modifier = Modifier.padding(horizontal = 10.dp, vertical = 5.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.Refresh,
+                                    contentDescription = null,
+                                    tint = MaterialTheme.colorScheme.primary,
+                                    modifier = Modifier.size(14.dp)
+                                )
+                                Spacer(modifier = Modifier.width(4.dp))
+                                Text(
+                                    text = stringResource(R.string.queue_upcoming),
+                                    style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.SemiBold),
+                                    color = MaterialTheme.colorScheme.primary
+                                )
+                            }
+                        }
                     }
                 }
 

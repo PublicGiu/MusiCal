@@ -150,4 +150,83 @@ class AudioRepositoryIntelligentScanTest {
             )
         )
     }
+
+    @Test
+    fun `preserves music folders whose artist or album name matches generic chat or system words`() {
+        assertTrue(
+            isIntelligentMusicTrack(
+                relativePath = "Music/Signal/",
+                displayName = "01 Intro.mp3",
+                title = "Intro",
+                artist = "Signal",
+                album = "Signal",
+                durationMs = 185_000L
+            )
+        )
+        assertTrue(
+            isIntelligentMusicTrack(
+                relativePath = "Music/The Alarms/",
+                displayName = "Sixty Eight Guns.flac",
+                title = "Sixty Eight Guns",
+                artist = "The Alarms",
+                album = "Declaration",
+                durationMs = 198_000L
+            )
+        )
+    }
+
+    @Test
+    fun `filters out zero duration corrupt files app data folders and short untagged voice clips`() {
+        assertFalse(
+            isIntelligentMusicTrack(
+                relativePath = "Music/",
+                displayName = "Corrupt.mp3",
+                title = "Corrupt",
+                artist = "Artist",
+                album = "Album",
+                durationMs = 0L
+            )
+        )
+        assertFalse(
+            isIntelligentMusicTrack(
+                relativePath = "Android/data/com.somegame/files/audio/",
+                displayName = "bgm_loop.mp3",
+                title = "bgm_loop",
+                artist = "Game Studio",
+                album = "OST",
+                durationMs = 95_000L
+            )
+        )
+        assertFalse(
+            isIntelligentMusicTrack(
+                relativePath = "Download/",
+                displayName = "Standard 001.m4a",
+                title = "Standard 001",
+                artist = "Artista sconosciuto",
+                album = "Download",
+                durationMs = 70_000L
+            )
+        )
+        assertFalse(
+            isIntelligentMusicTrack(
+                relativePath = "Download/",
+                displayName = "msg_99123.opus",
+                title = "msg_99123",
+                artist = "Artista sconosciuto",
+                album = "Album sconosciuto",
+                durationMs = 22_000L
+            )
+        )
+        assertFalse(
+            isIntelligentMusicTrack(
+                relativePath = "Download/",
+                displayName = "click.mp3",
+                title = "click",
+                artist = "Artista sconosciuto",
+                album = "Album sconosciuto",
+                durationMs = 30_000L,
+                fileSizeBytes = 4_096L
+            )
+        )
+    }
 }

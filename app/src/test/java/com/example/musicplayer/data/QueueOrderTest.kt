@@ -1,6 +1,7 @@
 package com.example.musicplayer.data
 
 import android.net.Uri
+import com.example.musicplayer.playback.generateFreshAutoplayBatch
 import com.example.musicplayer.ui.buildCyclicContextQueue
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
@@ -387,5 +388,31 @@ class QueueOrderTest {
         assertEquals(15, queue.size)
         assertEquals("Track_3", queue.first().title)
         assertEquals("Track_2", queue.last().title)
+    }
+
+    @Test
+    fun testRefreshAutoplaySuccessiviProduces15BrandNewTracksWithoutTouchingUserQueue() {
+        val allTracks = (1L..40L).map { makeTrack(it, "Song_$it") }
+        val currentTrackId = 1L
+        val userQueueIds = setOf(2L, 3L)
+        val previousAutoplayIds = (4L..18L).toSet() // 15 brani attualmente in Riproduzione Automatica
+
+        val refreshed = generateFreshAutoplayBatch(
+            pool = allTracks,
+            currentTrackId = currentTrackId,
+            userQueueIds = userQueueIds,
+            previousAutoplayIds = previousAutoplayIds,
+            recentIds = setOf(1L),
+            count = 15
+        )
+
+        assertEquals(15, refreshed.size)
+        assertEquals(15, refreshed.map { it.id }.distinct().size)
+        assertTrue(refreshed.none { it.id == currentTrackId })
+        assertTrue(refreshed.none { it.id in userQueueIds })
+        assertTrue(
+            "I 15 nuovi brani devono essere tutti diversi dai 15 precedenti quando la libreria lo consente",
+            refreshed.none { it.id in previousAutoplayIds }
+        )
     }
 }

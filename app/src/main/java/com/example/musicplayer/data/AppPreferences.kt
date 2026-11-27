@@ -13,6 +13,19 @@ enum class ThemeMode(val label: String) {
 }
 
 /**
+ * Modalità di visualizzazione (Elenco o Griglia 2×2 / 3×3 / 4×4) configurabile
+ * in modo indipendente per le sezioni Brani, Album e Playlist.
+ */
+enum class SectionViewMode(val columns: Int) {
+    LIST(1),
+    GRID_2(2),
+    GRID_3(3),
+    GRID_4(4);
+
+    val isGrid: Boolean get() = this != LIST
+}
+
+/**
  * Gestore centralizzato e persistente delle preferenze dell'applicazione
  * salvate in SharedPreferences.
  */
@@ -51,6 +64,11 @@ class AppPreferences(context: Context) {
 
         // Lingua dell'applicazione (per-app language)
         private const val KEY_APP_LANGUAGE = "app_language"
+
+        // Modalità di visualizzazione indipendenti per ciascuna sezione
+        private const val KEY_TRACKS_VIEW_MODE = "tracks_view_mode"
+        private const val KEY_ALBUMS_VIEW_MODE = "albums_view_mode"
+        private const val KEY_PLAYLISTS_VIEW_MODE = "playlists_view_mode"
     }
 
     /**
@@ -78,6 +96,42 @@ class AppPreferences(context: Context) {
 
     fun setThemeMode(mode: ThemeMode) {
         prefs.edit().putString(KEY_THEME_MODE, mode.name).apply()
+    }
+
+    /**
+     * Modalità di visualizzazione per la scheda Brani (default LIST).
+     */
+    fun getTracksViewMode(): SectionViewMode = readSectionViewMode(KEY_TRACKS_VIEW_MODE, SectionViewMode.LIST)
+
+    fun setTracksViewMode(mode: SectionViewMode) {
+        prefs.edit().putString(KEY_TRACKS_VIEW_MODE, mode.name).apply()
+    }
+
+    /**
+     * Modalità di visualizzazione per la scheda Album (default GRID_2 = 2×2).
+     */
+    fun getAlbumsViewMode(): SectionViewMode = readSectionViewMode(KEY_ALBUMS_VIEW_MODE, SectionViewMode.GRID_2)
+
+    fun setAlbumsViewMode(mode: SectionViewMode) {
+        prefs.edit().putString(KEY_ALBUMS_VIEW_MODE, mode.name).apply()
+    }
+
+    /**
+     * Modalità di visualizzazione per la scheda Playlist (default LIST).
+     */
+    fun getPlaylistsViewMode(): SectionViewMode = readSectionViewMode(KEY_PLAYLISTS_VIEW_MODE, SectionViewMode.LIST)
+
+    fun setPlaylistsViewMode(mode: SectionViewMode) {
+        prefs.edit().putString(KEY_PLAYLISTS_VIEW_MODE, mode.name).apply()
+    }
+
+    private fun readSectionViewMode(key: String, defaultMode: SectionViewMode): SectionViewMode {
+        val raw = prefs.getString(key, defaultMode.name) ?: defaultMode.name
+        return try {
+            SectionViewMode.valueOf(raw)
+        } catch (_: Exception) {
+            defaultMode
+        }
     }
 
     /**

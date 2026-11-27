@@ -255,5 +255,51 @@ class AlbumGroupingWithAlbumArtistTest {
                 hasMajorityConsensus = false
             )
         )
+
+        assertEquals(
+            "Tyler, The Creator",
+            MetadataEnricherCoordinator.resolveUnifiedAlbumArtist(
+                officialAlbumArtist = "Tyler, The Creator",
+                unifiedCandidateAlbumArtist = "Tyler, The Creator",
+                localAlbumArtist = "Tyler, The Creator",
+                firstTrackArtist = "Tyler, The Creator feat. Playboi Carti",
+                hasMajorityConsensus = true
+            )
+        )
+    }
+
+    @Test
+    fun testTylerTheCreatorAlbumTracksUnifyIntoSingleAlbumEvenWithoutExplicitAlbumArtist() {
+        val mockUri = Mockito.mock(Uri::class.java)
+        val track1 = AudioTrack(
+            id = 301L,
+            title = "EARFQUAKE",
+            artist = "Tyler, The Creator, Playboi Carti",
+            duration = 190000L,
+            uri = mockUri,
+            albumId = 900L,
+            album = "IGOR",
+            albumArtist = "",
+            trackNumber = 2,
+            discNumber = 1
+        )
+        val track2 = AudioTrack(
+            id = 302L,
+            title = "NEW MAGIC WAND",
+            artist = "Tyler, The Creator",
+            duration = 195000L,
+            uri = mockUri,
+            albumId = 900L,
+            album = "IGOR",
+            albumArtist = "Tyler, The Creator",
+            trackNumber = 6,
+            discNumber = 1
+        )
+
+        val albums = groupTracksIntoAlbums(listOf(track1, track2))
+        assertEquals(1, albums.size)
+        assertEquals("IGOR", albums.first().title)
+        assertEquals("Tyler, The Creator", albums.first().artist)
+        assertEquals(2, albums.first().trackCount)
     }
 }

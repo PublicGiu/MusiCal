@@ -41,16 +41,22 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.WindowInsetsSides
 import androidx.compose.foundation.layout.calculateEndPadding
 import androidx.compose.foundation.layout.calculateStartPadding
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.only
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.grid.GridCells
+import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
+import androidx.compose.foundation.lazy.grid.items as gridItems
 import androidx.compose.foundation.lazy.grid.rememberLazyGridState
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
@@ -86,6 +92,7 @@ import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.PrimaryTabRow
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.ScaffoldDefaults
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Tab
 import androidx.compose.material3.Text
@@ -100,6 +107,7 @@ import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshotFlow
@@ -126,7 +134,9 @@ import com.example.musicplayer.data.Album
 import com.example.musicplayer.data.AudioTrack
 import com.example.musicplayer.data.PlaybackContext
 import com.example.musicplayer.data.Playlist
+import com.example.musicplayer.data.SectionViewMode
 import com.example.musicplayer.data.SortOption
+import com.example.musicplayer.data.findAlbumForTrack
 import com.example.musicplayer.data.matchesArtist
 import androidx.compose.foundation.background
 import androidx.compose.foundation.shape.CircleShape
@@ -156,6 +166,7 @@ import android.content.Intent
 import com.example.musicplayer.ui.components.SettingsDialog
 import com.example.musicplayer.ui.components.SleepTimerDialog
 import com.example.musicplayer.ui.components.SortSelectorRow
+import com.example.musicplayer.ui.components.TrackGridItem
 import com.example.musicplayer.ui.components.TrackListItem
 import com.example.musicplayer.ui.components.UpdateAvailableDialog
 import com.example.musicplayer.ui.components.extractAlphabeticalHeader
@@ -195,10 +206,13 @@ fun MainScreen(
     var showStatsDialog by remember { mutableStateOf(false) }
     var selectedArtistForSheet by remember { mutableStateOf<String?>(null) }
 
-    // Statistiche e ordinamento
+    // Statistiche, ordinamento e modalità di visualizzazione per sezione
     val stats by viewModel.stats.collectAsStateWithLifecycle()
     val sortOption by viewModel.sortOption.collectAsStateWithLifecycle()
     val isAscending by viewModel.isAscending.collectAsStateWithLifecycle()
+    val tracksViewMode by viewModel.tracksViewMode.collectAsStateWithLifecycle()
+    val albumsViewMode by viewModel.albumsViewMode.collectAsStateWithLifecycle()
+    val playlistsViewMode by viewModel.playlistsViewMode.collectAsStateWithLifecycle()
 
     // Ricerca globale
     val searchQuery by viewModel.searchQuery.collectAsStateWithLifecycle()
@@ -486,6 +500,23 @@ fun MainScreen(
         }
     }
 
+    val currentAlbumsState by rememberUpdatedState(albums)
+    val currentSearchQueryState by rememberUpdatedState(searchQuery)
+    val handleNavigateTrackAlbum: (AudioTrack) -> Unit = remember(viewModel) {
+        { track ->
+            val targetAlbum = currentAlbumsState.findAlbumForTrack(track)
+            if (targetAlbum != null) {
+                if (currentSearchQueryState.isNotBlank()) {
+                    viewModel.onSearchQueryChanged("")
+                }
+                isSearchExpandedInDetail = false
+                selectedArtistForSheet = null
+                selectedPlaylist = null
+                selectedAlbum = targetAlbum
+            }
+        }
+    }
+
     LaunchedEffect(lastFmStatusMessage) {
         lastFmStatusMessage?.let { msg ->
             if (!msg.startsWith("In riproduzione", ignoreCase = true) &&
@@ -534,25 +565,40 @@ fun MainScreen(
         }
     }
 
-    // Stati di scorrimento delle liste con scroll automatico all'inizio al cambio ordinamento
+    // Stati di scorrimento delle liste e griglie con scroll automatico all'inizio al cambio ordinamento
     val tracksListState = rememberLazyListState()
+    val tracksGridState = rememberLazyGridState()
     val albumsGridState = rememberLazyGridState()
+    val albumsListState = rememberLazyListState()
     val playlistsListState = rememberLazyListState()
+    val playlistsGridState = rememberLazyGridState()
 
     // Stato "in cima alla lista" tracciato separatamente per ciascuna sezione con tolleranza sui micro-offset e supporto a canScrollBackward:
     val isTracksAtTop by remember {
         derivedStateOf {
-            tracksListState.firstVisibleItemIndex == 0 && (!tracksListState.canScrollBackward || tracksListState.firstVisibleItemScrollOffset <= 8)
+            if (tracksViewMode.isGrid) {
+                tracksGridState.firstVisibleItemIndex == 0 && (!tracksGridState.canScrollBackward || tracksGridState.firstVisibleItemScrollOffset <= 8)
+            } else {
+                tracksListState.firstVisibleItemIndex == 0 && (!tracksListState.canScrollBackward || tracksListState.firstVisibleItemScrollOffset <= 8)
+            }
         }
     }
     val isAlbumsAtTop by remember {
         derivedStateOf {
-            albumsGridState.firstVisibleItemIndex == 0 && (!albumsGridState.canScrollBackward || albumsGridState.firstVisibleItemScrollOffset <= 8)
+            if (albumsViewMode.isGrid) {
+                albumsGridState.firstVisibleItemIndex == 0 && (!albumsGridState.canScrollBackward || albumsGridState.firstVisibleItemScrollOffset <= 8)
+            } else {
+                albumsListState.firstVisibleItemIndex == 0 && (!albumsListState.canScrollBackward || albumsListState.firstVisibleItemScrollOffset <= 8)
+            }
         }
     }
     val isPlaylistsAtTop by remember {
         derivedStateOf {
-            playlistsListState.firstVisibleItemIndex == 0 && (!playlistsListState.canScrollBackward || playlistsListState.firstVisibleItemScrollOffset <= 8)
+            if (playlistsViewMode.isGrid) {
+                playlistsGridState.firstVisibleItemIndex == 0 && (!playlistsGridState.canScrollBackward || playlistsGridState.firstVisibleItemScrollOffset <= 8)
+            } else {
+                playlistsListState.firstVisibleItemIndex == 0 && (!playlistsListState.canScrollBackward || playlistsListState.firstVisibleItemScrollOffset <= 8)
+            }
         }
     }
 
@@ -563,9 +609,9 @@ fun MainScreen(
                 false
             } else {
                 when (pagerState.currentPage) {
-                    0 -> tracksListState.firstVisibleItemIndex >= 4
-                    1 -> albumsGridState.firstVisibleItemIndex >= 4
-                    2 -> playlistsListState.firstVisibleItemIndex >= 4
+                    0 -> if (tracksViewMode.isGrid) tracksGridState.firstVisibleItemIndex >= 4 else tracksListState.firstVisibleItemIndex >= 4
+                    1 -> if (albumsViewMode.isGrid) albumsGridState.firstVisibleItemIndex >= 4 else albumsListState.firstVisibleItemIndex >= 4
+                    2 -> if (playlistsViewMode.isGrid) playlistsGridState.firstVisibleItemIndex >= 4 else playlistsListState.firstVisibleItemIndex >= 4
                     else -> false
                 }
             }
@@ -578,15 +624,27 @@ fun MainScreen(
         snapshotFlow {
             val page = pagerState.currentPage
             val atTop = when (page) {
-                0 -> tracksListState.firstVisibleItemIndex == 0 && (!tracksListState.canScrollBackward || tracksListState.firstVisibleItemScrollOffset <= 8)
-                1 -> albumsGridState.firstVisibleItemIndex == 0 && (!albumsGridState.canScrollBackward || albumsGridState.firstVisibleItemScrollOffset <= 8)
-                2 -> playlistsListState.firstVisibleItemIndex == 0 && (!playlistsListState.canScrollBackward || playlistsListState.firstVisibleItemScrollOffset <= 8)
+                0 -> if (tracksViewMode.isGrid) {
+                    tracksGridState.firstVisibleItemIndex == 0 && (!tracksGridState.canScrollBackward || tracksGridState.firstVisibleItemScrollOffset <= 8)
+                } else {
+                    tracksListState.firstVisibleItemIndex == 0 && (!tracksListState.canScrollBackward || tracksListState.firstVisibleItemScrollOffset <= 8)
+                }
+                1 -> if (albumsViewMode.isGrid) {
+                    albumsGridState.firstVisibleItemIndex == 0 && (!albumsGridState.canScrollBackward || albumsGridState.firstVisibleItemScrollOffset <= 8)
+                } else {
+                    albumsListState.firstVisibleItemIndex == 0 && (!albumsListState.canScrollBackward || albumsListState.firstVisibleItemScrollOffset <= 8)
+                }
+                2 -> if (playlistsViewMode.isGrid) {
+                    playlistsGridState.firstVisibleItemIndex == 0 && (!playlistsGridState.canScrollBackward || playlistsGridState.firstVisibleItemScrollOffset <= 8)
+                } else {
+                    playlistsListState.firstVisibleItemIndex == 0 && (!playlistsListState.canScrollBackward || playlistsListState.firstVisibleItemScrollOffset <= 8)
+                }
                 else -> true
             }
             val isListScrolling = when (page) {
-                0 -> tracksListState.isScrollInProgress
-                1 -> albumsGridState.isScrollInProgress
-                2 -> playlistsListState.isScrollInProgress
+                0 -> if (tracksViewMode.isGrid) tracksGridState.isScrollInProgress else tracksListState.isScrollInProgress
+                1 -> if (albumsViewMode.isGrid) albumsGridState.isScrollInProgress else albumsListState.isScrollInProgress
+                2 -> if (playlistsViewMode.isGrid) playlistsGridState.isScrollInProgress else playlistsListState.isScrollInProgress
                 else -> false
             }
             Triple(page, atTop, isListScrolling)
@@ -641,32 +699,117 @@ fun MainScreen(
     LaunchedEffect(sortOption, isAscending) {
         when (pagerState.currentPage) {
             0 -> {
-                if (sortedTracks.isNotEmpty() && (tracksListState.firstVisibleItemIndex > 0 || tracksListState.firstVisibleItemScrollOffset > 0)) {
-                    tracksListState.animateScrollToItem(index = 0)
+                if (sortedTracks.isNotEmpty()) {
+                    if (tracksViewMode.isGrid) {
+                        if (tracksGridState.firstVisibleItemIndex > 0 || tracksGridState.firstVisibleItemScrollOffset > 0) {
+                            tracksGridState.animateScrollToItem(index = 0)
+                        }
+                    } else if (tracksListState.firstVisibleItemIndex > 0 || tracksListState.firstVisibleItemScrollOffset > 0) {
+                        tracksListState.animateScrollToItem(index = 0)
+                    }
                 }
             }
             1 -> {
-                if (sortedAlbums.isNotEmpty() && (albumsGridState.firstVisibleItemIndex > 0 || albumsGridState.firstVisibleItemScrollOffset > 0)) {
-                    albumsGridState.animateScrollToItem(index = 0)
+                if (sortedAlbums.isNotEmpty()) {
+                    if (albumsViewMode.isGrid) {
+                        if (albumsGridState.firstVisibleItemIndex > 0 || albumsGridState.firstVisibleItemScrollOffset > 0) {
+                            albumsGridState.animateScrollToItem(index = 0)
+                        }
+                    } else if (albumsListState.firstVisibleItemIndex > 0 || albumsListState.firstVisibleItemScrollOffset > 0) {
+                        albumsListState.animateScrollToItem(index = 0)
+                    }
                 }
             }
             2 -> {
-                if (sortedPlaylists.isNotEmpty() && (playlistsListState.firstVisibleItemIndex > 0 || playlistsListState.firstVisibleItemScrollOffset > 0)) {
-                    playlistsListState.animateScrollToItem(index = 0)
+                if (sortedPlaylists.isNotEmpty()) {
+                    if (playlistsViewMode.isGrid) {
+                        if (playlistsGridState.firstVisibleItemIndex > 0 || playlistsGridState.firstVisibleItemScrollOffset > 0) {
+                            playlistsGridState.animateScrollToItem(index = 0)
+                        }
+                    } else if (playlistsListState.firstVisibleItemIndex > 0 || playlistsListState.firstVisibleItemScrollOffset > 0) {
+                        playlistsListState.animateScrollToItem(index = 0)
+                    }
                 }
             }
         }
         if (pagerState.currentPage != 0 && sortedTracks.isNotEmpty()) {
             tracksListState.scrollToItem(index = 0)
+            tracksGridState.scrollToItem(index = 0)
         }
         if (pagerState.currentPage != 1 && sortedAlbums.isNotEmpty()) {
             albumsGridState.scrollToItem(index = 0)
+            albumsListState.scrollToItem(index = 0)
         }
         if (pagerState.currentPage != 2 && sortedPlaylists.isNotEmpty()) {
             playlistsListState.scrollToItem(index = 0)
+            playlistsGridState.scrollToItem(index = 0)
         }
         isHeaderCompact = false
         isSearchExpandedInCompact = false
+    }
+
+    // Mantiene ancorata la cima (indice 0) quando un elemento viene promosso in alto dopo il 50% di ascolto in "Ascoltati di recente"
+    val topSortedTrackId = sortedTracks.firstOrNull()?.id
+    var lastTopTrackId by remember { mutableStateOf<Long?>(null) }
+    LaunchedEffect(topSortedTrackId, sortOption, isAscending) {
+        if (sortOption == SortOption.RECENTLY_PLAYED && isAscending && topSortedTrackId != null) {
+            if (lastTopTrackId != null && lastTopTrackId != topSortedTrackId) {
+                if (tracksViewMode.isGrid) {
+                    if (tracksGridState.firstVisibleItemIndex <= tracksViewMode.columns && !tracksGridState.isScrollInProgress) {
+                        if (pagerState.currentPage == 0) tracksGridState.animateScrollToItem(0) else tracksGridState.scrollToItem(0)
+                    }
+                } else {
+                    if (tracksListState.firstVisibleItemIndex <= 1 && !tracksListState.isScrollInProgress) {
+                        if (pagerState.currentPage == 0) tracksListState.animateScrollToItem(0) else tracksListState.scrollToItem(0)
+                    }
+                }
+            }
+            lastTopTrackId = topSortedTrackId
+        } else {
+            lastTopTrackId = topSortedTrackId
+        }
+    }
+
+    val topSortedAlbumId = sortedAlbums.firstOrNull()?.id
+    var lastTopAlbumId by remember { mutableStateOf<Long?>(null) }
+    LaunchedEffect(topSortedAlbumId, sortOption, isAscending) {
+        if (sortOption == SortOption.RECENTLY_PLAYED && isAscending && topSortedAlbumId != null) {
+            if (lastTopAlbumId != null && lastTopAlbumId != topSortedAlbumId) {
+                if (albumsViewMode.isGrid) {
+                    if (albumsGridState.firstVisibleItemIndex <= albumsViewMode.columns && !albumsGridState.isScrollInProgress) {
+                        if (pagerState.currentPage == 1) albumsGridState.animateScrollToItem(0) else albumsGridState.scrollToItem(0)
+                    }
+                } else {
+                    if (albumsListState.firstVisibleItemIndex <= 1 && !albumsListState.isScrollInProgress) {
+                        if (pagerState.currentPage == 1) albumsListState.animateScrollToItem(0) else albumsListState.scrollToItem(0)
+                    }
+                }
+            }
+            lastTopAlbumId = topSortedAlbumId
+        } else {
+            lastTopAlbumId = topSortedAlbumId
+        }
+    }
+
+    val topSortedPlaylistId = sortedPlaylists.firstOrNull()?.id
+    var lastTopPlaylistId by remember { mutableStateOf<String?>(null) }
+    LaunchedEffect(topSortedPlaylistId, sortOption, isAscending) {
+        if (sortOption == SortOption.RECENTLY_PLAYED && isAscending && topSortedPlaylistId != null) {
+            if (lastTopPlaylistId != null && lastTopPlaylistId != topSortedPlaylistId) {
+                if (playlistsViewMode.isGrid) {
+                    if (playlistsGridState.firstVisibleItemIndex <= playlistsViewMode.columns && !playlistsGridState.isScrollInProgress) {
+                        if (pagerState.currentPage == 2) playlistsGridState.animateScrollToItem(0) else playlistsGridState.scrollToItem(0)
+                    }
+                } else {
+                    if (playlistsListState.firstVisibleItemIndex <= 1 && !playlistsListState.isScrollInProgress) {
+                        if (pagerState.currentPage == 2) playlistsListState.animateScrollToItem(0) else playlistsListState.scrollToItem(0)
+                    }
+                }
+            }
+            lastTopPlaylistId = topSortedPlaylistId
+        } else {
+            lastTopPlaylistId = topSortedPlaylistId
+        }
     }
 
     // Permessi Android 16 (API 36)
@@ -740,11 +883,77 @@ fun MainScreen(
         label = "HeaderCollapseProgress"
     )
 
+    var activeArtistForOverlay by remember { mutableStateOf<String?>(null) }
+    if (selectedArtistForSheet != null) {
+        activeArtistForOverlay = selectedArtistForSheet
+    }
+    LaunchedEffect(selectedArtistForSheet) {
+        if (selectedArtistForSheet == null && activeArtistForOverlay != null) {
+            kotlinx.coroutines.delay(250L)
+            if (selectedArtistForSheet == null) {
+                activeArtistForOverlay = null
+            }
+        }
+    }
+
     Scaffold(
         modifier = modifier.fillMaxSize(),
         containerColor = MaterialTheme.colorScheme.surface,
         snackbarHost = { SnackbarHost(snackbarHostState) },
-        topBar = {
+        contentWindowInsets = ScaffoldDefaults.contentWindowInsets.only(
+            WindowInsetsSides.Horizontal + WindowInsetsSides.Bottom
+        ),
+        bottomBar = {
+            AnimatedVisibility(
+                visible = currentTrack != null,
+                enter = slideInVertically(
+                    initialOffsetY = { fullHeight -> fullHeight },
+                    animationSpec = tween(durationMillis = 350)
+                ) + fadeIn(animationSpec = tween(durationMillis = 350)),
+                exit = slideOutVertically(
+                    targetOffsetY = { fullHeight -> fullHeight },
+                    animationSpec = tween(durationMillis = 300)
+                ) + fadeOut(animationSpec = tween(durationMillis = 300))
+            ) {
+                PlayerBottomBar(
+                    currentTrack = currentTrack,
+                    isPlaying = isPlaying,
+                    currentPositionProvider = currentPositionProvider,
+                    durationMs = durationMs,
+                    isShuffleEnabled = isShuffleEnabled,
+                    repeatMode = repeatMode,
+                    isAutoplayEnabled = isAutoplayEnabled,
+                    onPlayPauseClick = { viewModel.togglePlayPause() },
+                    onPreviousClick = { viewModel.playPrevious() },
+                    onNextClick = { viewModel.playNext() },
+                    onShuffleClick = { viewModel.toggleShuffle() },
+                    onRepeatClick = { viewModel.toggleRepeatMode() },
+                    onToggleAutoplay = { viewModel.toggleAutoplay() },
+                    onQueueClick = { showQueueSheet = true },
+                    onSeekTo = { seekMs -> viewModel.seekTo(seekMs) },
+                    onOpenFullScreen = { showFullScreenPlayer = true },
+                    onAddToPlaylistClick = { track -> trackToAddToPlaylist = track },
+                    queue = queue,
+                    currentQueueIndex = currentQueueIndex,
+                    onSkipToQueueItem = { index -> viewModel.skipToQueueItem(index) }
+                )
+            }
+        }
+    ) { outerInnerPadding ->
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(
+                    start = outerInnerPadding.calculateStartPadding(LocalLayoutDirection.current),
+                    end = outerInnerPadding.calculateEndPadding(LocalLayoutDirection.current),
+                    bottom = outerInnerPadding.calculateBottomPadding()
+                )
+        ) {
+            Scaffold(
+                modifier = Modifier.fillMaxSize(),
+                containerColor = MaterialTheme.colorScheme.surface,
+                contentWindowInsets = WindowInsets(0, 0, 0, 0),
+                topBar = {
             Surface(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -998,42 +1207,6 @@ fun MainScreen(
                     }
                 }
             }
-        },
-        bottomBar = {
-            AnimatedVisibility(
-                visible = currentTrack != null,
-                enter = slideInVertically(
-                    initialOffsetY = { fullHeight -> fullHeight },
-                    animationSpec = tween(durationMillis = 350)
-                ) + fadeIn(animationSpec = tween(durationMillis = 350)),
-                exit = slideOutVertically(
-                    targetOffsetY = { fullHeight -> fullHeight },
-                    animationSpec = tween(durationMillis = 300)
-                ) + fadeOut(animationSpec = tween(durationMillis = 300))
-            ) {
-                PlayerBottomBar(
-                    currentTrack = currentTrack,
-                    isPlaying = isPlaying,
-                    currentPositionProvider = currentPositionProvider,
-                    durationMs = durationMs,
-                    isShuffleEnabled = isShuffleEnabled,
-                    repeatMode = repeatMode,
-                    isAutoplayEnabled = isAutoplayEnabled,
-                    onPlayPauseClick = { viewModel.togglePlayPause() },
-                    onPreviousClick = { viewModel.playPrevious() },
-                    onNextClick = { viewModel.playNext() },
-                    onShuffleClick = { viewModel.toggleShuffle() },
-                    onRepeatClick = { viewModel.toggleRepeatMode() },
-                    onToggleAutoplay = { viewModel.toggleAutoplay() },
-                    onQueueClick = { showQueueSheet = true },
-                    onSeekTo = { seekMs -> viewModel.seekTo(seekMs) },
-                    onOpenFullScreen = { showFullScreenPlayer = true },
-                    onAddToPlaylistClick = { track -> trackToAddToPlaylist = track },
-                    queue = queue,
-                    currentQueueIndex = currentQueueIndex,
-                    onSkipToQueueItem = { index -> viewModel.skipToQueueItem(index) }
-                )
-            }
         }
     ) { innerPadding ->
         Box(
@@ -1110,7 +1283,7 @@ fun MainScreen(
                         contentKey = { screen ->
                             when (screen) {
                                 is MainContentScreen.Tabs -> "screen_tabs"
-                                is MainContentScreen.Search -> "screen_search_${screen.query}"
+                                is MainContentScreen.Search -> "screen_search"
                                 is MainContentScreen.PlaylistDetail -> "screen_playlist_${screen.playlist.id}"
                             }
                         },
@@ -1120,7 +1293,7 @@ fun MainScreen(
                         when (targetScreen) {
                             is MainContentScreen.Search -> {
                                 GlobalSearchResultsView(
-                                    query = targetScreen.query,
+                                    query = searchQuery,
                                     matchingTracks = matchingTracks,
                                     matchingAlbums = matchingAlbums,
                                     matchingPlaylists = matchingPlaylists,
@@ -1147,13 +1320,16 @@ fun MainScreen(
                                         viewModel.deletePlaylist(playlist.id)
                                     },
                                     onAddAlbumToQueueClick = handleAddAlbumToQueue,
+                                    onAutoTagAlbumClick = { viewModel.startAlbumEnrichment(it, separateAlbums = false) },
+                                    onAutoTagAlbumSeparationClick = { viewModel.startAlbumEnrichment(it, separateAlbums = true) },
                                     onAddPlaylistToQueueClick = handleAddPlaylistToQueue,
                                     onAddToFavoritesClick = handleAddToFavorites,
                                     favoriteTrackIds = favoriteTrackIds,
                                     onChangePlaylistCoverClick = handleChangePlaylistCover,
                                     onRemovePlaylistCoverClick = handleRemovePlaylistCover,
                                     onAutoTagTrackClick = { viewModel.startTrackEnrichment(it) },
-                                    onArtistClick = { artist -> selectedArtistForSheet = artist }
+                                    onArtistClick = { artist -> selectedArtistForSheet = artist },
+                                    onTrackAlbumClick = handleNavigateTrackAlbum
                                 )
                             }
 
@@ -1203,7 +1379,8 @@ fun MainScreen(
                                     },
                                     onArtistClick = { artist ->
                                         selectedArtistForSheet = artist
-                                    }
+                                    },
+                                    onAlbumClick = handleNavigateTrackAlbum
                                 )
                             }
 
@@ -1316,49 +1493,114 @@ fun MainScreen(
                                                             // 1. Scheda 'Brani'
                                                             0 -> {
                                                                 Box(modifier = Modifier.fillMaxSize()) {
-                                                                    LazyColumn(
-                                                                        state = tracksListState,
-                                                                        modifier = Modifier.fillMaxSize(),
-                                                                        contentPadding = PaddingValues(bottom = 12.dp)
-                                                                    ) {
-                                                                        items(
-                                                                            items = sortedTracks,
-                                                                            key = { it.id },
-                                                                            contentType = { "track_list_item" }
-                                                                        ) { track ->
-                                                                            TrackListItem(
-                                                                                modifier = Modifier.animateItem(
-                                                                                    fadeInSpec = null,
-                                                                                    fadeOutSpec = null
-                                                                                ),
-                                                                                track = track,
-                                                                                isSelected = currentTrack?.id == track.id,
-                                                                                isPlaying = isPlaying && currentTrack?.id == track.id,
-                                                                                onClick = { viewModel.playTrack(track) },
-                                                                                onAddToQueueClick = handleAddTrackToQueue,
-                                                                                onAddToPlaylistClick = { trackToAddToPlaylist = it },
-                                                                                onAddToFavoritesClick = { handleAddToFavorites(track) },
-                                                                                isFavorite = track.id in favoriteTrackIds,
-                                                                                playCount = stats[track.id]?.playCount ?: 0,
-                                                                                onAutoTagClick = { viewModel.startTrackEnrichment(it) },
-                                                                                onArtistClick = { artist -> selectedArtistForSheet = artist }
+                                                                    if (!tracksViewMode.isGrid) {
+                                                                        LazyColumn(
+                                                                            state = tracksListState,
+                                                                            modifier = Modifier.fillMaxSize(),
+                                                                            contentPadding = PaddingValues(bottom = 12.dp)
+                                                                        ) {
+                                                                            items(
+                                                                                items = sortedTracks,
+                                                                                key = { it.id },
+                                                                                contentType = { "track_list_item" }
+                                                                            ) { track ->
+                                                                                TrackListItem(
+                                                                                    modifier = Modifier.animateItem(
+                                                                                        fadeInSpec = null,
+                                                                                        fadeOutSpec = null
+                                                                                    ),
+                                                                                    track = track,
+                                                                                    isSelected = currentTrack?.id == track.id,
+                                                                                    isPlaying = isPlaying && currentTrack?.id == track.id,
+                                                                                    onClick = { viewModel.playTrack(track) },
+                                                                                    onAddToQueueClick = handleAddTrackToQueue,
+                                                                                    onAddToPlaylistClick = { trackToAddToPlaylist = it },
+                                                                                    onAddToFavoritesClick = { handleAddToFavorites(track) },
+                                                                                    isFavorite = track.id in favoriteTrackIds,
+                                                                                    playCount = stats[track.id]?.playCount ?: 0,
+                                                                                    onAutoTagClick = { viewModel.startTrackEnrichment(it) },
+                                                                                    onArtistClick = { artist -> selectedArtistForSheet = artist },
+                                                                                    onAlbumClick = handleNavigateTrackAlbum
+                                                                                )
+                                                                            }
+                                                                        }
+
+                                                                        if (sortedTracks.isNotEmpty()) {
+                                                                            FastScrollbar(
+                                                                                state = tracksListState,
+                                                                                totalItems = sortedTracks.size,
+                                                                                isAlphabetical = sortOption == SortOption.ALPHABETICAL,
+                                                                                letterProvider = { index ->
+                                                                                    sortedTracks.getOrNull(index)?.title?.let { extractAlphabeticalHeader(it) }
+                                                                                },
+                                                                                modifier = Modifier
+                                                                                    .align(Alignment.CenterEnd)
+                                                                                    .fillMaxHeight()
+                                                                                    .padding(top = 8.dp, bottom = 12.dp)
                                                                             )
                                                                         }
-                                                                    }
+                                                                    } else {
+                                                                        val columns = tracksViewMode.columns
+                                                                        val gridPadding = when {
+                                                                            columns >= 4 -> 8.dp
+                                                                            columns == 3 -> 10.dp
+                                                                            else -> 12.dp
+                                                                        }
+                                                                        val gridSpacing = when {
+                                                                            columns >= 4 -> 8.dp
+                                                                            columns == 3 -> 10.dp
+                                                                            else -> 12.dp
+                                                                        }
+                                                                        LazyVerticalGrid(
+                                                                            state = tracksGridState,
+                                                                            columns = GridCells.Fixed(columns),
+                                                                            modifier = Modifier.fillMaxSize(),
+                                                                            contentPadding = PaddingValues(gridPadding),
+                                                                            horizontalArrangement = Arrangement.spacedBy(gridSpacing),
+                                                                            verticalArrangement = Arrangement.spacedBy(gridSpacing)
+                                                                        ) {
+                                                                            gridItems(
+                                                                                items = sortedTracks,
+                                                                                key = { it.id },
+                                                                                contentType = { "track_grid_item" }
+                                                                            ) { track ->
+                                                                                TrackGridItem(
+                                                                                    modifier = Modifier.animateItem(
+                                                                                        fadeInSpec = null,
+                                                                                        fadeOutSpec = null
+                                                                                    ),
+                                                                                    track = track,
+                                                                                    columns = columns,
+                                                                                    isSelected = currentTrack?.id == track.id,
+                                                                                    isPlaying = isPlaying && currentTrack?.id == track.id,
+                                                                                    onClick = { viewModel.playTrack(track) },
+                                                                                    onAddToQueueClick = handleAddTrackToQueue,
+                                                                                    onAddToPlaylistClick = { trackToAddToPlaylist = it },
+                                                                                    onAddToFavoritesClick = { handleAddToFavorites(track) },
+                                                                                    isFavorite = track.id in favoriteTrackIds,
+                                                                                    playCount = stats[track.id]?.playCount ?: 0,
+                                                                                    onAutoTagClick = { viewModel.startTrackEnrichment(it) },
+                                                                                    onArtistClick = { artist -> selectedArtistForSheet = artist },
+                                                                                    onAlbumClick = handleNavigateTrackAlbum
+                                                                                )
+                                                                            }
+                                                                        }
 
-                                                                    if (sortedTracks.isNotEmpty()) {
-                                                                        FastScrollbar(
-                                                                            state = tracksListState,
-                                                                            totalItems = sortedTracks.size,
-                                                                            isAlphabetical = sortOption == SortOption.ALPHABETICAL,
-                                                                            letterProvider = { index ->
-                                                                                sortedTracks.getOrNull(index)?.title?.let { extractAlphabeticalHeader(it) }
-                                                                            },
-                                                                            modifier = Modifier
-                                                                                .align(Alignment.CenterEnd)
-                                                                                .fillMaxHeight()
-                                                                                .padding(top = 8.dp, bottom = 12.dp)
-                                                                        )
+                                                                        if (sortedTracks.isNotEmpty()) {
+                                                                            FastScrollbar(
+                                                                                gridState = tracksGridState,
+                                                                                totalItems = sortedTracks.size,
+                                                                                columnsCount = columns,
+                                                                                isAlphabetical = sortOption == SortOption.ALPHABETICAL,
+                                                                                letterProvider = { index ->
+                                                                                    sortedTracks.getOrNull(index)?.title?.let { extractAlphabeticalHeader(it) }
+                                                                                },
+                                                                                modifier = Modifier
+                                                                                    .align(Alignment.CenterEnd)
+                                                                                    .fillMaxHeight()
+                                                                                    .padding(top = 8.dp, bottom = 12.dp)
+                                                                            )
+                                                                        }
                                                                     }
                                                                 }
                                                             }
@@ -1368,11 +1610,13 @@ fun MainScreen(
                                                                 AlbumsGridView(
                                                                     albums = sortedAlbums,
                                                                     onAlbumClick = { album -> selectedAlbum = album },
+                                                                    viewMode = albumsViewMode,
                                                                     onAddToQueueClick = handleAddAlbumToQueue,
                                                                     onAutoTagAlbumClick = { viewModel.startAlbumEnrichment(it, separateAlbums = false) },
                                                                     onAutoTagAlbumSeparationClick = { viewModel.startAlbumEnrichment(it, separateAlbums = true) },
                                                                     onArtistClick = { artist -> selectedArtistForSheet = artist },
                                                                     state = albumsGridState,
+                                                                    listState = albumsListState,
                                                                     isAlphabetical = sortOption == SortOption.ALPHABETICAL,
                                                                     letterProvider = { index ->
                                                                         sortedAlbums.getOrNull(index)?.title?.let { extractAlphabeticalHeader(it) }
@@ -1389,10 +1633,12 @@ fun MainScreen(
                                                                     onDeletePlaylistClick = { playlist ->
                                                                         viewModel.deletePlaylist(playlist.id)
                                                                     },
+                                                                    viewMode = playlistsViewMode,
                                                                     onAddToQueueClick = handleAddPlaylistToQueue,
                                                                     onChangeCoverClick = handleChangePlaylistCover,
                                                                     onRemoveCoverClick = handleRemovePlaylistCover,
                                                                     state = playlistsListState,
+                                                                    gridState = playlistsGridState,
                                                                     isAlphabetical = sortOption == SortOption.ALPHABETICAL,
                                                                     letterProvider = { index ->
                                                                         sortedPlaylists.getOrNull(index)?.name?.let { extractAlphabeticalHeader(it) }
@@ -1421,22 +1667,43 @@ fun MainScreen(
                                                                 coroutineScope.launch {
                                                                     when (pagerState.currentPage) {
                                                                         0 -> {
-                                                                            if (tracksListState.firstVisibleItemIndex > 10) {
-                                                                                tracksListState.scrollToItem(10)
+                                                                            if (tracksViewMode.isGrid) {
+                                                                                if (tracksGridState.firstVisibleItemIndex > 10) {
+                                                                                    tracksGridState.scrollToItem(10)
+                                                                                }
+                                                                                tracksGridState.animateScrollToItem(0)
+                                                                            } else {
+                                                                                if (tracksListState.firstVisibleItemIndex > 10) {
+                                                                                    tracksListState.scrollToItem(10)
+                                                                                }
+                                                                                tracksListState.animateScrollToItem(0)
                                                                             }
-                                                                            tracksListState.animateScrollToItem(0)
                                                                         }
                                                                         1 -> {
-                                                                            if (albumsGridState.firstVisibleItemIndex > 10) {
-                                                                                albumsGridState.scrollToItem(10)
+                                                                            if (albumsViewMode.isGrid) {
+                                                                                if (albumsGridState.firstVisibleItemIndex > 10) {
+                                                                                    albumsGridState.scrollToItem(10)
+                                                                                }
+                                                                                albumsGridState.animateScrollToItem(0)
+                                                                            } else {
+                                                                                if (albumsListState.firstVisibleItemIndex > 10) {
+                                                                                    albumsListState.scrollToItem(10)
+                                                                                }
+                                                                                albumsListState.animateScrollToItem(0)
                                                                             }
-                                                                            albumsGridState.animateScrollToItem(0)
                                                                         }
                                                                         2 -> {
-                                                                            if (playlistsListState.firstVisibleItemIndex > 10) {
-                                                                                playlistsListState.scrollToItem(10)
+                                                                            if (playlistsViewMode.isGrid) {
+                                                                                if (playlistsGridState.firstVisibleItemIndex > 10) {
+                                                                                    playlistsGridState.scrollToItem(10)
+                                                                                }
+                                                                                playlistsGridState.animateScrollToItem(0)
+                                                                            } else {
+                                                                                if (playlistsListState.firstVisibleItemIndex > 10) {
+                                                                                    playlistsListState.scrollToItem(10)
+                                                                                }
+                                                                                playlistsListState.animateScrollToItem(0)
                                                                             }
-                                                                            playlistsListState.animateScrollToItem(0)
                                                                         }
                                                                     }
                                                                 }
@@ -1549,6 +1816,87 @@ fun MainScreen(
         }
     }
 
+    // Livello Profilo Artista sopra la vista principale ma sotto il mini-player condiviso
+    AnimatedVisibility(
+        visible = selectedArtistForSheet != null,
+        enter = slideInHorizontally(
+            initialOffsetX = { fullWidth -> (fullWidth * 0.16f).toInt() },
+            animationSpec = tween(durationMillis = 260, easing = FastOutSlowInEasing)
+        ) + fadeIn(animationSpec = tween(durationMillis = 260)),
+        exit = slideOutHorizontally(
+            targetOffsetX = { fullWidth -> (fullWidth * 0.16f).toInt() },
+            animationSpec = tween(durationMillis = 200, easing = FastOutSlowInEasing)
+        ) + fadeOut(animationSpec = tween(durationMillis = 200)),
+        modifier = Modifier.fillMaxSize()
+    ) {
+        val targetArtist = activeArtistForOverlay
+        if (targetArtist != null) {
+            AnimatedContent(
+                targetState = targetArtist,
+                transitionSpec = {
+                    (fadeIn(tween(220)) + slideInHorizontally(
+                        initialOffsetX = { fullWidth -> (fullWidth * 0.12f).toInt() },
+                        animationSpec = tween(durationMillis = 220, easing = FastOutSlowInEasing)
+                    )).togetherWith(
+                        fadeOut(tween(180)) + slideOutHorizontally(
+                            targetOffsetX = { fullWidth -> -(fullWidth * 0.08f).toInt() },
+                            animationSpec = tween(durationMillis = 180, easing = FastOutSlowInEasing)
+                        )
+                    )
+                },
+                label = "ArtistProfileOverlayTransition",
+                modifier = Modifier.fillMaxSize()
+            ) { artistName ->
+                val artistTracks = remember(artistName, tracks) {
+                    tracks.filter { it.matchesArtist(artistName) }
+                }
+                ArtistDetailSheet(
+                    artistName = artistName,
+                    tracks = tracks,
+                    albums = albums,
+                    currentTrack = currentTrack,
+                    isPlaying = isPlaying,
+                    onDismissRequest = { selectedArtistForSheet = null },
+                    onPlayTrackIndex = { index ->
+                        viewModel.playArtist(artistName, index)
+                    },
+                    onPlayAllClick = {
+                        viewModel.playArtist(artistName, 0)
+                    },
+                    onAddAllToQueueClick = {
+                        viewModel.addTracksToQueue(artistTracks)
+                        coroutineScope.launch {
+                            snackbarHostState.showSnackbar(
+                                message = context.getString(
+                                    R.string.snackbar_artist_tracks_added_to_queue,
+                                    artistTracks.size,
+                                    artistName
+                                ),
+                                duration = SnackbarDuration.Short
+                            )
+                        }
+                    },
+                    onAlbumClick = { album ->
+                        if (searchQuery.isNotBlank()) viewModel.onSearchQueryChanged("")
+                        isSearchExpandedInDetail = false
+                        selectedArtistForSheet = null
+                        selectedAlbum = album
+                        selectedPlaylist = null
+                    },
+                    onAddToQueueClick = handleAddTrackToQueue,
+                    onAddToPlaylistClick = { trackToAddToPlaylist = it },
+                    onAddToFavoritesClick = handleAddToFavorites,
+                    favoriteTrackIds = favoriteTrackIds,
+                    onAutoTagTrackClick = { viewModel.startTrackEnrichment(it) },
+                    artistInfoRepository = viewModel.artistInfoRepository,
+                    onNavigateToArtist = { target -> selectedArtistForSheet = target }
+                )
+            }
+        }
+    }
+        }
+    }
+
     // Dialog Aggiungi a Playlist
     trackToAddToPlaylist?.let { track ->
         AddToPlaylistDialog(
@@ -1602,8 +1950,6 @@ fun MainScreen(
         showStatsDialog = showStatsDialog,
         onDismissStatsDialog = { showStatsDialog = false },
         onOpenStats = { showStatsDialog = true },
-        selectedArtistForSheet = selectedArtistForSheet,
-        onDismissArtistDetailSheet = { selectedArtistForSheet = null },
         onSelectArtistForSheet = { selectedArtistForSheet = it },
         tracks = tracks,
         albums = albums,

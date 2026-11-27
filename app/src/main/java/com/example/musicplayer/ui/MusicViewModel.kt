@@ -30,6 +30,7 @@ import com.example.musicplayer.data.LyricsData
 import com.example.musicplayer.data.PlaybackContext
 import com.example.musicplayer.data.Playlist
 import com.example.musicplayer.data.PlaylistRepository
+import com.example.musicplayer.data.SectionViewMode
 import com.example.musicplayer.data.SortOption
 import com.example.musicplayer.data.StatsRepository
 import com.example.musicplayer.data.ThemeMode
@@ -40,6 +41,7 @@ import com.example.musicplayer.data.tagger.model.EnrichedMetadata
 import com.example.musicplayer.data.tagger.repository.EnricherOptions
 import com.example.musicplayer.data.update.AppUpdateInfo
 import com.example.musicplayer.data.update.GithubUpdateChecker
+import com.example.musicplayer.playback.PlayCountThresholdTracker
 import com.example.musicplayer.playback.PlaybackService
 import com.example.musicplayer.playback.QueueCoordinator
 import com.example.musicplayer.playback.SleepTimerCoordinator
@@ -49,6 +51,7 @@ import com.example.musicplayer.data.backup.ImportSummary
 import com.example.musicplayer.data.lastfm.cache.AppDatabase
 import com.example.musicplayer.ui.tagger.EnricherUiState
 import com.example.musicplayer.ui.tagger.MetadataEnricherCoordinator
+import com.example.musicplayer.ui.tagger.UnreleasedScanState
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
@@ -80,6 +83,7 @@ class MusicViewModel(application: Application) : AndroidViewModel(application) {
         onReloadLibrary = { affectedMap -> handleEnricherPostSave(affectedMap) }
     )
     val enricherState: StateFlow<EnricherUiState> = metadataEnricherCoordinator.enricherState
+    val unreleasedScanState: StateFlow<UnreleasedScanState> = metadataEnricherCoordinator.unreleasedScanState
     val writeRequestIntentSender: StateFlow<IntentSender?> = metadataEnricherCoordinator.writeRequestIntentSender
     val currentLyrics: StateFlow<LyricsData?> = metadataEnricherCoordinator.currentLyrics
 
@@ -156,6 +160,8 @@ class MusicViewModel(application: Application) : AndroidViewModel(application) {
     val lastFmCustomSharedSecret: StateFlow<String> = lastFmCoordinator.lastFmCustomSharedSecret
     val pendingScrobblesCount: StateFlow<Int> = lastFmCoordinator.pendingScrobblesCount
 
+    private val playCountThresholdTracker = PlayCountThresholdTracker()
+
     val queueCoordinator = QueueCoordinator(
         scope = viewModelScope,
         appPreferences = appPreferences,
@@ -176,7 +182,10 @@ class MusicViewModel(application: Application) : AndroidViewModel(application) {
         },
         startProgressTicker = { startProgressTicker() },
         updateDuration = { updateDuration() },
-        onRecordTrackPlayed = { trackId -> libraryCoordinator.recordTrackPlayed(trackId) },
+        onTrackPlaySessionStarted = { trackId, initialPosMs ->
+            playCountThresholdTracker.onTrackSessionStarted(trackId, initialPosMs)
+        },
+        onResetPlaySession = { playCountThresholdTracker.reset() },
         onLastFmTrackStarted = { track -> lastFmCoordinator.handleTrackStarted(track) },
         onLastFmResetScrobble = { lastFmCoordinator.resetCurrentTrackScrobble() },
         onSavePlaybackState = { saveCurrentPlaybackState() },
@@ -196,6 +205,15 @@ class MusicViewModel(application: Application) : AndroidViewModel(application) {
     // --- Preferenze UI & Aggiornamenti GitHub ---
     private val _themeMode = MutableStateFlow(appPreferences.getThemeMode())
     val themeMode: StateFlow<ThemeMode> = _themeMode.asStateFlow()
+
+    private val _tracksViewMode = MutableStateFlow(appPreferences.getTracksViewMode())
+    val tracksViewMode: StateFlow<SectionViewMode> = _tracksViewMode.asStateFlow()
+
+    private val _albumsViewMode = MutableStateFlow(appPreferences.getAlbumsViewMode())
+    val albumsViewMode: StateFlow<SectionViewMode> = _albumsViewMode.asStateFlow()
+
+    private val _playlistsViewMode = MutableStateFlow(appPreferences.getPlaylistsViewMode())
+    val playlistsViewMode: StateFlow<SectionViewMode> = _playlistsViewMode.asStateFlow()
 
     private val _appLanguage = MutableStateFlow(appPreferences.getAppLanguage())
     val appLanguage: StateFlow<AppLanguage> = _appLanguage.asStateFlow()
@@ -231,7 +249,10 @@ class MusicViewModel(application: Application) : AndroidViewModel(application) {
                 if (!queueCoordinator.hasRecordedPlayForRestoredTrack) {
                     queueCoordinator.hasRecordedPlayForRestoredTrack = true
                     _currentTrack.value?.let { current ->
-                        libraryCoordinator.recordTrackPlayed(current.id)
+                        playCountThresholdTracker.onTrackSessionStarted(
+                            current.id,
+                            mediaController?.currentPosition?.coerceAtLeast(0L) ?: 0L
+                        )
                         queueCoordinator.recordRecentTrack(current.id)
                         lastFmCoordinator.handleTrackStarted(current)
                     }
@@ -410,6 +431,7 @@ class MusicViewModel(application: Application) : AndroidViewModel(application) {
     fun moveAutoplayItemToTop(fromIndex: Int) = queueCoordinator.moveAutoplayItemToTop(fromIndex)
     fun moveAutoplayItemToUserQueue(index: Int) = queueCoordinator.moveAutoplayItemToUserQueue(index)
     fun skipToAutoplayItem(index: Int) = queueCoordinator.skipToAutoplayItem(index)
+    fun refreshAutoplayQueue() = queueCoordinator.refreshAutoplayQueue()
 
     fun removeFromQueue(index: Int) = queueCoordinator.removeFromQueue(index)
     fun moveQueueItem(fromIndex: Int, toIndex: Int) = queueCoordinator.moveQueueItem(fromIndex, toIndex)
@@ -478,6 +500,7 @@ class MusicViewModel(application: Application) : AndroidViewModel(application) {
     fun setAutoplayEnabled(enabled: Boolean) = queueCoordinator.setAutoplayEnabled(enabled)
 
     fun seekTo(positionMs: Long) {
+        playCountThresholdTracker.onManualSeek(positionMs)
         mediaController?.seekTo(positionMs)
         _currentPositionMs.value = positionMs
     }
@@ -499,7 +522,18 @@ class MusicViewModel(application: Application) : AndroidViewModel(application) {
                         _durationMs.value = dur
                         dur
                     } else {
-                        _durationMs.value
+                        _durationMs.value.takeIf { it > 0L } ?: (_currentTrack.value?.duration ?: 0L)
+                    }
+                    _currentTrack.value?.let { track ->
+                        val validPlayReached = playCountThresholdTracker.onPlaybackTick(
+                            trackId = track.id,
+                            currentPositionMs = pos,
+                            durationMs = effectiveDur,
+                            isPlaying = controller.isPlaying
+                        )
+                        if (validPlayReached) {
+                            libraryCoordinator.recordTrackPlayed(track.id)
+                        }
                     }
                     lastFmCoordinator.checkAndTriggerScrobble(pos, effectiveDur)
                 }
@@ -531,6 +565,21 @@ class MusicViewModel(application: Application) : AndroidViewModel(application) {
     fun setThemeMode(mode: ThemeMode) {
         _themeMode.value = mode
         appPreferences.setThemeMode(mode)
+    }
+
+    fun setTracksViewMode(mode: SectionViewMode) {
+        _tracksViewMode.value = mode
+        appPreferences.setTracksViewMode(mode)
+    }
+
+    fun setAlbumsViewMode(mode: SectionViewMode) {
+        _albumsViewMode.value = mode
+        appPreferences.setAlbumsViewMode(mode)
+    }
+
+    fun setPlaylistsViewMode(mode: SectionViewMode) {
+        _playlistsViewMode.value = mode
+        appPreferences.setPlaylistsViewMode(mode)
     }
 
     fun setAppLanguage(language: AppLanguage) {
@@ -623,6 +672,19 @@ class MusicViewModel(application: Application) : AndroidViewModel(application) {
     fun onWritePermissionResult(isGranted: Boolean) = metadataEnricherCoordinator.onWritePermissionResult(isGranted)
     fun closeEnricher() = metadataEnricherCoordinator.closeEnricher()
 
+    fun scanAndOrganizeUnreleasedTracks() {
+        metadataEnricherCoordinator.scanAndOrganizeUnreleasedTracks(
+            allTracks = tracks.value,
+            onUnreleasedGrouped = {
+                libraryCoordinator.regroupAlbumsFromUnreleasedStore()
+            }
+        )
+    }
+
+    fun cancelUnreleasedScan() = metadataEnricherCoordinator.cancelUnreleasedScan()
+    fun dismissUnreleasedScanSummary() = metadataEnricherCoordinator.dismissUnreleasedScanSummary()
+    fun reviewOfficialMatchesFromScan(): Boolean = metadataEnricherCoordinator.reviewOfficialMatchesFromScan()
+
     @OptIn(coil.annotation.ExperimentalCoilApi::class)
     private suspend fun handleEnricherPostSave(appliedMetadataMap: Map<Long, EnrichedMetadata>) {
         libraryCoordinator.applyOptimisticMetadataPatch(appliedMetadataMap) { patchedTrack ->
@@ -705,6 +767,9 @@ class MusicViewModel(application: Application) : AndroidViewModel(application) {
             val result = backupRepository.importBackupFromUri(uri, tracks.value)
             if (result.isSuccess) {
                 _themeMode.value = appPreferences.getThemeMode()
+                _tracksViewMode.value = appPreferences.getTracksViewMode()
+                _albumsViewMode.value = appPreferences.getAlbumsViewMode()
+                _playlistsViewMode.value = appPreferences.getPlaylistsViewMode()
                 _appLanguage.value = appPreferences.getAppLanguage()
                 _isDynamicColorEnabled.value = appPreferences.isDynamicColorEnabled()
                 queueCoordinator.setAutoplayEnabled(appPreferences.isAutoplayEnabled())

@@ -131,4 +131,24 @@ class AppPreferencesTest {
         appPrefs.clearIgnoredDuplicateKeys()
         Mockito.verify(mockEditor).remove("ignored_duplicate_keys")
     }
+
+    @Test
+    fun testIndependentSectionViewModesDefaultsAndPersistence() {
+        val appPrefs = AppPreferences(mockContext)
+        assertEquals(SectionViewMode.LIST, appPrefs.getTracksViewMode())
+        assertEquals(SectionViewMode.GRID_2, appPrefs.getAlbumsViewMode())
+        assertEquals(SectionViewMode.LIST, appPrefs.getPlaylistsViewMode())
+
+        appPrefs.setTracksViewMode(SectionViewMode.GRID_3)
+        Mockito.verify(mockEditor).putString("tracks_view_mode", SectionViewMode.GRID_3.name)
+
+        appPrefs.setAlbumsViewMode(SectionViewMode.LIST)
+        Mockito.verify(mockEditor).putString("albums_view_mode", SectionViewMode.LIST.name)
+
+        appPrefs.setPlaylistsViewMode(SectionViewMode.GRID_4)
+        Mockito.verify(mockEditor).putString("playlists_view_mode", SectionViewMode.GRID_4.name)
+
+        `when`(mockPrefs.getString(eq("tracks_view_mode"), anyString())).thenReturn("INVALID")
+        assertEquals(SectionViewMode.LIST, appPrefs.getTracksViewMode())
+    }
 }

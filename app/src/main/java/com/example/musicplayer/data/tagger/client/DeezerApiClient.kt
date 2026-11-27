@@ -59,9 +59,23 @@ class DeezerApiClient(
                     results = executeSearch(primaryQuery)
                 }
 
+                // Tentativo 2.5: se il nome dell'artista contiene una virgola interna (es. "Tyler, The Creator")
+                // e il parser avanzato Deezer non restituisce match con la virgola tra virgolette, riprova senza virgola
+                val commaFreeArtist = (primaryArtist.ifBlank { cleanArtist })
+                    .replace(",", " ")
+                    .replace(Regex("""\s{2,}"""), " ")
+                    .trim()
+                if (results.isEmpty() && (cleanArtist.contains(',') || primaryArtist.contains(',')) && commaFreeArtist.isNotBlank()) {
+                    val commaFreeAdvanced = buildString {
+                        if (coreTitle.isNotBlank()) append("track:\"$coreTitle\" ")
+                        append("artist:\"$commaFreeArtist\"")
+                    }.trim()
+                    results = executeSearch(commaFreeAdvanced)
+                }
+
                 // Tentativo 3 (fallback): ricerca testuale libera se la query avanzata non ha trovato nulla
                 if (results.isEmpty() && (coreTitle.isNotBlank() || cleanArtist.isNotBlank())) {
-                    val searchArtist = primaryArtist.ifBlank { cleanArtist }
+                    val searchArtist = commaFreeArtist.ifBlank { primaryArtist.ifBlank { cleanArtist } }
                     val broadQuery = "$searchArtist $coreTitle".trim()
                     results = executeSearch(broadQuery)
                 }
@@ -82,6 +96,9 @@ class DeezerApiClient(
             if (cleanAlbumTitle.isBlank()) return@withContext Result.success(null)
 
             val primaryArtist = QuerySanitizer.extractPrimaryArtistForSearch(artist)
+                .replace(",", " ")
+                .replace(Regex("""\s{2,}"""), " ")
+                .trim()
             val query = buildString {
                 append(cleanAlbumTitle)
                 if (primaryArtist.isNotBlank()) {
@@ -156,7 +173,7 @@ class DeezerApiClient(
 
         client.newCall(request).execute().use { response ->
             if (!response.isSuccessful) {
-                return emptyList()
+                throw IOException("Deezer HTTP ${response.code}")
             }
             val body = response.body?.string().orEmpty()
             if (body.isBlank()) return emptyList()
@@ -167,6 +184,10 @@ class DeezerApiClient(
 
     private fun parseSearchResponse(jsonStr: String): List<DeezerSearchTrack> {
         val json = JSONObject(jsonStr)
+        if (json.has("error")) {
+            val errMsg = json.optJSONObject("error")?.optString("message", "Deezer error") ?: "Deezer error"
+            throw IOException(errMsg)
+        }
         if (!json.has("data")) return emptyList()
 
         val dataArray = json.getJSONArray("data")

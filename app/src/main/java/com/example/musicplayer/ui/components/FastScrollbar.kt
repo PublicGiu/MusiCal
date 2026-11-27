@@ -144,6 +144,7 @@ fun FastScrollbar(
     gridState: LazyGridState,
     totalItems: Int,
     modifier: Modifier = Modifier,
+    columnsCount: Int = 2,
     isAlphabetical: Boolean = false,
     letterProvider: ((Int) -> String?)? = null,
     thumbWidth: Dp = 4.dp,
@@ -151,11 +152,12 @@ fun FastScrollbar(
     thumbColor: Color = MaterialTheme.colorScheme.primary,
     draggedThumbColor: Color = LocalMusicVioletNeon
 ) {
+    val safeColumns = columnsCount.coerceAtLeast(1)
     val isScrollInProgress = gridState.isScrollInProgress
     val firstVisibleIndex by remember(gridState) {
         derivedStateOf { gridState.firstVisibleItemIndex }
     }
-    val scrollProgress by remember(gridState, totalItems) {
+    val scrollProgress by remember(gridState, totalItems, safeColumns) {
         derivedStateOf {
             val layoutInfo = gridState.layoutInfo
             val visibleItems = layoutInfo.visibleItemsInfo
@@ -166,7 +168,7 @@ fun FastScrollbar(
             val firstOffset = gridState.firstVisibleItemScrollOffset
             val firstHeight = first.size.height.coerceAtLeast(1)
             val itemProgress = (firstOffset.toFloat() / firstHeight.toFloat()).coerceIn(0f, 1f)
-            val floatIndex = firstIndex.toFloat() + itemProgress * 2f
+            val floatIndex = firstIndex.toFloat() + itemProgress * safeColumns.toFloat()
             val maxScrollIndex = (totalItems - visibleItems.size).coerceAtLeast(1).toFloat()
             (floatIndex / maxScrollIndex).coerceIn(0f, 1f)
         }
@@ -182,8 +184,8 @@ fun FastScrollbar(
         isScrollInProgress = isScrollInProgress,
         scrollProgress = scrollProgress,
         onScrollToIndex = { targetIndex ->
-            // Allinea sempre alla riga (2 colonne) per garantire stabilità visiva ed evitare salti orizzontali
-            val alignedIndex = (targetIndex / 2) * 2
+            // Allinea sempre all'inizio della riga secondo il numero di colonne attivo (2, 3 o 4)
+            val alignedIndex = (targetIndex / safeColumns) * safeColumns
             gridState.scrollToItem(alignedIndex)
         },
         modifier = modifier,

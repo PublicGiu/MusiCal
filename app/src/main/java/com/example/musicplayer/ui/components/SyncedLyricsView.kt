@@ -101,6 +101,7 @@ private fun LyricsPlaceholderView(
     Box(
         modifier = modifier
             .fillMaxSize()
+            .nestedScroll(LyricsVerticalScrollBlocker)
             .draggable(
                 orientation = Orientation.Vertical,
                 state = rememberDraggableState {}
@@ -335,7 +336,12 @@ fun SyncedLyricsView(
     }
 
     Box(
-        modifier = modifier.nestedScroll(LyricsVerticalScrollBlocker)
+        modifier = modifier
+            .nestedScroll(LyricsVerticalScrollBlocker)
+            .draggable(
+                orientation = Orientation.Vertical,
+                state = rememberDraggableState {}
+            )
     ) {
         LazyColumn(
             state = listState,

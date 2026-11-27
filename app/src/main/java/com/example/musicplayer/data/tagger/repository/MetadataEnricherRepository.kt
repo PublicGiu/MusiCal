@@ -1,7 +1,9 @@
 package com.example.musicplayer.data.tagger.repository
 
 import com.example.musicplayer.data.AudioTrack
+import com.example.musicplayer.data.UNRELEASED_ALBUM_TITLE
 import com.example.musicplayer.data.isGenericAlbum
+import com.example.musicplayer.data.isUnreleasedAlbumTitle
 import com.example.musicplayer.data.tagger.client.DeezerApiClient
 import com.example.musicplayer.data.tagger.client.LrclibApiClient
 import com.example.musicplayer.data.tagger.model.DeezerSearchTrack
@@ -54,7 +56,9 @@ class MetadataEnricherRepository(
                 }
             }
 
-            val deezerSearchResInitial = deezerDeferred.await().getOrNull().orEmpty()
+            val initialDeezerCall = deezerDeferred.await()
+            var hadSuccessfulDeezerQuery = initialDeezerCall.isSuccess
+            val deezerSearchResInitial = initialDeezerCall.getOrNull().orEmpty()
             var deezerSearchRes = deezerSearchResInitial
             var lrclibRes = lrclibDeferred.await()
 
@@ -99,7 +103,11 @@ class MetadataEnricherRepository(
 
                 val accumulatedCandidates = deezerSearchRes.toMutableList()
                 for ((fbArtist, fbTitle) in fallbackQueries) {
-                    val fbResults = deezerClient.searchTrack(fbTitle, fbArtist).getOrNull().orEmpty()
+                    val fbCall = deezerClient.searchTrack(fbTitle, fbArtist)
+                    if (fbCall.isSuccess) {
+                        hadSuccessfulDeezerQuery = true
+                    }
+                    val fbResults = fbCall.getOrNull().orEmpty()
                     if (fbResults.isNotEmpty()) {
                         accumulatedCandidates.addAll(fbResults)
                     }
@@ -160,14 +168,24 @@ class MetadataEnricherRepository(
                     .ifBlank { rawPreservedAlbumArtist }
 
                 val extractedTrack = QuerySanitizer.extractTrackNumberFromFileName(track.displayName)
+                val hasValidArtistForUnreleased = preservedAlbumArtist.isNotBlank() &&
+                    !QuerySanitizer.isArtistUnknownOrDirty(preservedAlbumArtist)
+                val rawLowerAlbum = track.album.trim().lowercase(java.util.Locale.ROOT)
+                val shouldAssignUnreleasedAlbum = hadSuccessfulDeezerQuery && hasValidArtistForUnreleased && (
+                    isGenericAlbum(track.album) ||
+                        track.album.contains("(Brani singoli)") ||
+                        isUnreleasedAlbumTitle(track.album) ||
+                        rawLowerAlbum in PLATFORM_OR_LEAK_ALBUM_NAMES
+                    )
+                val resolvedFallbackAlbum = when {
+                    shouldAssignUnreleasedAlbum -> UNRELEASED_ALBUM_TITLE
+                    options.normalizeAlbum && !isGenericAlbum(track.album) -> QuerySanitizer.normalizeAlbumTitle(track.album)
+                    else -> track.album
+                }
                 val fallbackMetadata = EnrichedMetadata(
                     title = preservedTitle,
                     artist = preservedArtist,
-                    album = if (options.normalizeAlbum && !isGenericAlbum(track.album)) {
-                        QuerySanitizer.normalizeAlbumTitle(track.album)
-                    } else {
-                        track.album
-                    },
+                    album = resolvedFallbackAlbum,
                     albumArtist = preservedAlbumArtist,
                     releaseYear = null,
                     trackNumber = track.trackNumber.takeIf { it > 0 } ?: extractedTrack,
@@ -178,7 +196,13 @@ class MetadataEnricherRepository(
                     plainLyrics = lrclibRes?.plainLyrics,
                     syncedLyrics = lrclibRes?.syncedLyrics,
                     isInstrumental = lrclibRes?.instrumental == true || track.isInstrumental(),
-                    source = if (lrclibRes != null) "LRCLIB ( Metadati locali preservati )" else "Metadati locali preservati"
+                    isUnreleased = shouldAssignUnreleasedAlbum || isUnreleasedAlbumTitle(resolvedFallbackAlbum),
+                    source = when {
+                        shouldAssignUnreleasedAlbum && lrclibRes != null -> "Unreleased (Testi LRCLIB)"
+                        shouldAssignUnreleasedAlbum -> "Non trovato su Deezer (Unreleased)"
+                        lrclibRes != null -> "LRCLIB ( Metadati locali preservati )"
+                        else -> "Metadati locali preservati"
+                    }
                 )
                 return@withContext Result.success(Pair(fallbackMetadata, deezerSearchRes))
             }
@@ -539,5 +563,22 @@ class MetadataEnricherRepository(
 
             penalty
         }
+    }
+
+    companion object {
+        private val PLATFORM_OR_LEAK_ALBUM_NAMES = setOf(
+            "youtube",
+            "youtube music",
+            "soundcloud",
+            "audiomack",
+            "bandcamp",
+            "datpiff",
+            "leak",
+            "leaks",
+            "unreleased",
+            "unreleased songs",
+            "discord",
+            "telegram"
+        )
     }
 }

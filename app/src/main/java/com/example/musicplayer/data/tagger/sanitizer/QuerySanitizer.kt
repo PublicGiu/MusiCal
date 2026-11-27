@@ -68,6 +68,66 @@ object QuerySanitizer {
         """(?i)(?:\s*(?:,|&|\+|/|;)\s*|\s+(?:feat\.?|ft\.?|featuring|with|con|vs\.?|x|and)\s+)"""
     )
 
+    private val UNRELEASED_NOISE_TAGS_REGEX = Regex(
+        """(?i)[\(\[]\s*(unreleased|leak|leaked|og\s*version|unmastered|snippet|vault)\s*[\)\]]"""
+    )
+
+    /**
+     * Elenco ordinato (dal più lungo al più corto) di singoli artisti o band il cui nome canonico
+     * contiene internamente una virgola (es. "Tyler, The Creator"), così da non spezzarli
+     * erroneamente in due artisti distinti durante Auto-Tag, ricerca e raggruppamento album.
+     */
+    private val PROTECTED_COMMA_ARTIST_PATTERNS: List<Pair<String, Regex>> = listOf(
+        "Crosby, Stills, Nash & Young" to Regex("""(?i)(?<![\p{L}\p{N}])crosby\s*,\s*stills\s*,\s*nash\s*(?:&|and)\s*young(?![\p{L}\p{N}])"""),
+        "Crosby, Stills & Nash" to Regex("""(?i)(?<![\p{L}\p{N}])crosby\s*,\s*stills\s*(?:&|and)\s*nash(?![\p{L}\p{N}])"""),
+        "Black Country, New Road" to Regex("""(?i)(?<![\p{L}\p{N}])black\s+country\s*,\s*new\s+road(?![\p{L}\p{N}])"""),
+        "Emerson, Lake & Palmer" to Regex("""(?i)(?<![\p{L}\p{N}])emerson\s*,\s*lake\s*(?:&|and)\s*palmer(?![\p{L}\p{N}])"""),
+        "Earth, Wind & Fire" to Regex("""(?i)(?<![\p{L}\p{N}])earth\s*,\s*wind\s*(?:&|and)\s*fire(?![\p{L}\p{N}])"""),
+        "Blood, Sweat & Tears" to Regex("""(?i)(?<![\p{L}\p{N}])blood\s*,\s*sweat\s*(?:&|and)\s*tears(?![\p{L}\p{N}])"""),
+        "Peter, Paul and Mary" to Regex("""(?i)(?<![\p{L}\p{N}])peter\s*,\s*paul\s*(?:&|and)\s*mary(?![\p{L}\p{N}])"""),
+        "Tyler, The Creator" to Regex("""(?i)(?<![\p{L}\p{N}])tyler\s*,\s*the\s+creator(?![\p{L}\p{N}])"""),
+        "Portugal, The Man" to Regex("""(?i)(?<![\p{L}\p{N}])portugal\s*,\s*the\s+man(?![\p{L}\p{N}])"""),
+        "10,000 Maniacs" to Regex("""(?i)(?<![\p{L}\p{N}])10,000\s+maniacs(?![\p{L}\p{N}])"""),
+        "Now, Now" to Regex("""(?i)(?<![\p{L}\p{N}])now\s*,\s*now(?![\p{L}\p{N}])""")
+    )
+
+    data class MaskedArtistResult(
+        val maskedText: String,
+        val placeholders: List<Pair<String, String>>
+    ) {
+        fun unmask(text: String): String {
+            var result = text
+            for ((token, original) in placeholders) {
+                result = result.replace(token, original)
+            }
+            return result
+        }
+    }
+
+    /**
+     * Maschera temporaneamente i nomi d'arte protetti che contengono virgole interne
+     * (es. "Tyler, The Creator") prima di applicare espressioni regolari di separazione
+     * collaboratori/featuring, preservando la grafia originale o canonica.
+     */
+    fun maskProtectedArtists(input: String): MaskedArtistResult {
+        if (input.isBlank() || !input.contains(',')) {
+            return MaskedArtistResult(input, emptyList())
+        }
+        var working = input
+        val placeholders = mutableListOf<Pair<String, String>>()
+        for ((_, regex) in PROTECTED_COMMA_ARTIST_PATTERNS) {
+            var match = regex.find(working)
+            while (match != null) {
+                val matchedValue = match.value
+                val token = "\u0000PROTART${placeholders.size}\u0000"
+                placeholders.add(token to matchedValue)
+                working = working.replaceRange(match.range, token)
+                match = regex.find(working)
+            }
+        }
+        return MaskedArtistResult(working, placeholders)
+    }
+
     private val UNKNOWN_TITLE_REGEX = Regex(
         """(?i)^(sconosciuto|unknown|untitled|<unknown>|(track|traccia|pista|brano|audio)\s*[-_#]?\s*\d+)$"""
     )
@@ -93,6 +153,7 @@ object QuerySanitizer {
         text = text.replace(AUDIO_EXTENSIONS_REGEX, "")
         text = text.replace(LEADING_TRACK_NUMBER_REGEX, "")
         text = text.replace(NOISE_TAGS_REGEX, "")
+        text = text.replace(UNRELEASED_NOISE_TAGS_REGEX, "")
         text = text.replace(TRAILING_DASH_NOISE_REGEX, "")
         text = text.replace(QUALITY_AND_BITRATE_REGEX, "")
         text = text.replace(EMPTY_BRACKETS_REGEX, "")
@@ -265,8 +326,9 @@ object QuerySanitizer {
         val withoutFeatParens = withoutTopic.replace(Regex("""[\(\[]\s*(feat\.?|ft\.?|featuring|with)\s+""", RegexOption.IGNORE_CASE), ", ")
             .replace(")", "")
             .replace("]", "")
-        return withoutFeatParens.split(ARTIST_SPLIT_REGEX)
-            .map { simplifyForComparison(it) }
+        val masked = maskProtectedArtists(withoutFeatParens)
+        return masked.maskedText.split(ARTIST_SPLIT_REGEX)
+            .map { simplifyForComparison(masked.unmask(it)) }
             .filter { it.isNotBlank() && it !in UNKNOWN_ARTIST_SET }
     }
 
@@ -276,6 +338,15 @@ object QuerySanitizer {
      * oppure il pattern grezzo "Artista - Titolo" o "Titolo - Artista" non separato).
      * Se restituisce `false`, il titolo locale è già pulito e attendibile.
      */
+    /**
+     * Rileva se un titolo o nome file contiene un marcatore esplicito di brano inedito/unreleased/leak.
+     */
+    fun hasExplicitUnreleasedMarker(text: String): Boolean {
+        if (text.isBlank()) return false
+        return UNRELEASED_NOISE_TAGS_REGEX.containsMatchIn(text) ||
+            Regex("""(?i)(?:^|[\s\-–—_(.\[])(unreleased|leaked)(?:$|[\s\-–—_).\]]|\.(?:mp3|flac|m4a|ogg|wav|aac|opus|wma)$)""").containsMatchIn(text)
+    }
+
     fun isTitleUnknownOrDirty(
         title: String,
         displayName: String = "",
@@ -288,6 +359,7 @@ object QuerySanitizer {
         if (AUDIO_EXTENSIONS_REGEX.containsMatchIn(trimmed)) return true
         if (LEADING_TRACK_NUMBER_REGEX.containsMatchIn(trimmed)) return true
         if (NOISE_TAGS_REGEX.containsMatchIn(trimmed)) return true
+        if (UNRELEASED_NOISE_TAGS_REGEX.containsMatchIn(trimmed)) return true
         if (TRAILING_DASH_NOISE_REGEX.containsMatchIn(trimmed)) return true
         if (QUALITY_AND_BITRATE_REGEX.containsMatchIn(trimmed)) return true
 
@@ -366,7 +438,12 @@ object QuerySanitizer {
         if (isArtistUnknownOrDirty(artist)) return ""
         val withoutTopic = artist.replace(TOPIC_CHANNEL_SUFFIX_REGEX, "").trim()
         val withoutParens = withoutTopic.replace(FEAT_SUFFIX_REGEX, "").trim()
-        val firstToken = withoutParens.split(ARTIST_SPLIT_REGEX).firstOrNull()?.trim().orEmpty()
+        val masked = maskProtectedArtists(withoutParens)
+        val firstToken = masked.maskedText.split(ARTIST_SPLIT_REGEX)
+            .firstOrNull()
+            ?.let { masked.unmask(it) }
+            ?.trim()
+            .orEmpty()
         return cleanRawString(firstToken.ifBlank { withoutParens })
     }
 

@@ -28,10 +28,17 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Lyrics
 import androidx.compose.material.icons.filled.MusicNote
+import androidx.compose.material.icons.filled.Refresh
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.width
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.derivedStateOf
@@ -96,7 +103,8 @@ private fun LyricsPlaceholderView(
     badgeBackgroundColor: Color,
     title: String,
     subtitle: String,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    actionButton: (@Composable () -> Unit)? = null
 ) {
     Box(
         modifier = modifier
@@ -141,6 +149,10 @@ private fun LyricsPlaceholderView(
                 color = Color.White.copy(alpha = 0.65f),
                 textAlign = TextAlign.Center
             )
+            if (actionButton != null) {
+                Spacer(modifier = Modifier.height(16.dp))
+                actionButton()
+            }
         }
     }
 }
@@ -186,7 +198,9 @@ fun SyncedLyricsView(
     modifier: Modifier = Modifier,
     currentPositionMs: Long = 0L,
     currentPositionProvider: () -> Long = { currentPositionMs },
-    isInstrumental: Boolean = lyricsData?.isInstrumental == true
+    isInstrumental: Boolean = lyricsData?.isInstrumental == true,
+    isFetchingLyrics: Boolean = false,
+    onRetryFetchLyrics: (() -> Unit)? = null
 ) {
     if (isInstrumental) {
         LyricsPlaceholderView(
@@ -201,13 +215,66 @@ fun SyncedLyricsView(
     }
 
     if (lyricsData == null || lyricsData.lines.isEmpty()) {
+        if (isFetchingLyrics) {
+            Box(
+                modifier = modifier
+                    .fillMaxSize()
+                    .nestedScroll(LyricsVerticalScrollBlocker)
+                    .draggable(
+                        orientation = Orientation.Vertical,
+                        state = rememberDraggableState {}
+                    ),
+                contentAlignment = Alignment.Center
+            ) {
+                Column(
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    verticalArrangement = Arrangement.Center,
+                    modifier = Modifier.padding(horizontal = 24.dp)
+                ) {
+                    CircularProgressIndicator(
+                        color = MaterialTheme.colorScheme.primary,
+                        strokeWidth = 3.dp,
+                        modifier = Modifier.size(40.dp)
+                    )
+                    Spacer(modifier = Modifier.height(16.dp))
+                    Text(
+                        text = stringResource(R.string.lyrics_loading),
+                        style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Medium),
+                        color = Color.White,
+                        textAlign = TextAlign.Center
+                    )
+                }
+            }
+            return
+        }
+
         LyricsPlaceholderView(
             icon = Icons.Default.Lyrics,
             iconTint = Color.White.copy(alpha = 0.6f),
             badgeBackgroundColor = Color.White.copy(alpha = 0.1f),
             title = stringResource(R.string.lyrics_no_lyrics_available),
-            subtitle = stringResource(R.string.lyrics_use_auto_tagger),
-            modifier = modifier
+            subtitle = stringResource(R.string.lyrics_not_found_subtitle),
+            modifier = modifier,
+            actionButton = if (onRetryFetchLyrics != null) {
+                {
+                    OutlinedButton(
+                        onClick = onRetryFetchLyrics,
+                        shape = RoundedCornerShape(50),
+                        border = BorderStroke(1.dp, Color.White.copy(alpha = 0.35f)),
+                        colors = ButtonDefaults.outlinedButtonColors(contentColor = Color.White)
+                    ) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Icon(
+                                imageVector = Icons.Default.Refresh,
+                                contentDescription = null,
+                                modifier = Modifier.size(16.dp)
+                            )
+                            Spacer(modifier = Modifier.width(6.dp))
+                            Text(text = stringResource(R.string.retry))
+                        }
+                    }
+                }
+            } else null
         )
         return
     }

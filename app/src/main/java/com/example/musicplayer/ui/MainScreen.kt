@@ -883,19 +883,6 @@ fun MainScreen(
         label = "HeaderCollapseProgress"
     )
 
-    var activeArtistForOverlay by remember { mutableStateOf<String?>(null) }
-    if (selectedArtistForSheet != null) {
-        activeArtistForOverlay = selectedArtistForSheet
-    }
-    LaunchedEffect(selectedArtistForSheet) {
-        if (selectedArtistForSheet == null && activeArtistForOverlay != null) {
-            kotlinx.coroutines.delay(250L)
-            if (selectedArtistForSheet == null) {
-                activeArtistForOverlay = null
-            }
-        }
-    }
-
     Scaffold(
         modifier = modifier.fillMaxSize(),
         containerColor = MaterialTheme.colorScheme.surface,
@@ -1816,82 +1803,73 @@ fun MainScreen(
         }
     }
 
-    // Livello Profilo Artista sopra la vista principale ma sotto il mini-player condiviso
-    AnimatedVisibility(
-        visible = selectedArtistForSheet != null,
-        enter = slideInHorizontally(
-            initialOffsetX = { fullWidth -> (fullWidth * 0.16f).toInt() },
-            animationSpec = tween(durationMillis = 260, easing = FastOutSlowInEasing)
-        ) + fadeIn(animationSpec = tween(durationMillis = 260)),
-        exit = slideOutHorizontally(
-            targetOffsetX = { fullWidth -> (fullWidth * 0.16f).toInt() },
-            animationSpec = tween(durationMillis = 200, easing = FastOutSlowInEasing)
-        ) + fadeOut(animationSpec = tween(durationMillis = 200)),
-        modifier = Modifier.fillMaxSize()
-    ) {
-        val targetArtist = activeArtistForOverlay
-        if (targetArtist != null) {
-            AnimatedContent(
-                targetState = targetArtist,
-                transitionSpec = {
-                    (fadeIn(tween(220)) + slideInHorizontally(
-                        initialOffsetX = { fullWidth -> (fullWidth * 0.12f).toInt() },
-                        animationSpec = tween(durationMillis = 220, easing = FastOutSlowInEasing)
-                    )).togetherWith(
-                        fadeOut(tween(180)) + slideOutHorizontally(
-                            targetOffsetX = { fullWidth -> -(fullWidth * 0.08f).toInt() },
-                            animationSpec = tween(durationMillis = 180, easing = FastOutSlowInEasing)
-                        )
+    // Livello Profilo Artista sopra la vista principale ma sotto il mini-player condiviso (singolo AnimatedContent rapido, zero doppi layer)
+    AnimatedContent(
+        targetState = selectedArtistForSheet,
+        transitionSpec = {
+            if (targetState != null) {
+                (fadeIn(tween(180)) + slideInHorizontally(
+                    initialOffsetX = { fullWidth -> (fullWidth * 0.12f).toInt() },
+                    animationSpec = tween(durationMillis = 180, easing = FastOutSlowInEasing)
+                )).togetherWith(
+                    fadeOut(tween(150))
+                )
+            } else {
+                fadeIn(tween(120)).togetherWith(
+                    fadeOut(tween(160)) + slideOutHorizontally(
+                        targetOffsetX = { fullWidth -> (fullWidth * 0.12f).toInt() },
+                        animationSpec = tween(durationMillis = 160, easing = FastOutSlowInEasing)
                     )
-                },
-                label = "ArtistProfileOverlayTransition",
-                modifier = Modifier.fillMaxSize()
-            ) { artistName ->
-                val artistTracks = remember(artistName, tracks) {
-                    tracks.filter { it.matchesArtist(artistName) }
-                }
-                ArtistDetailSheet(
-                    artistName = artistName,
-                    tracks = tracks,
-                    albums = albums,
-                    currentTrack = currentTrack,
-                    isPlaying = isPlaying,
-                    onDismissRequest = { selectedArtistForSheet = null },
-                    onPlayTrackIndex = { index ->
-                        viewModel.playArtist(artistName, index)
-                    },
-                    onPlayAllClick = {
-                        viewModel.playArtist(artistName, 0)
-                    },
-                    onAddAllToQueueClick = {
-                        viewModel.addTracksToQueue(artistTracks)
-                        coroutineScope.launch {
-                            snackbarHostState.showSnackbar(
-                                message = context.getString(
-                                    R.string.snackbar_artist_tracks_added_to_queue,
-                                    artistTracks.size,
-                                    artistName
-                                ),
-                                duration = SnackbarDuration.Short
-                            )
-                        }
-                    },
-                    onAlbumClick = { album ->
-                        if (searchQuery.isNotBlank()) viewModel.onSearchQueryChanged("")
-                        isSearchExpandedInDetail = false
-                        selectedArtistForSheet = null
-                        selectedAlbum = album
-                        selectedPlaylist = null
-                    },
-                    onAddToQueueClick = handleAddTrackToQueue,
-                    onAddToPlaylistClick = { trackToAddToPlaylist = it },
-                    onAddToFavoritesClick = handleAddToFavorites,
-                    favoriteTrackIds = favoriteTrackIds,
-                    onAutoTagTrackClick = { viewModel.startTrackEnrichment(it) },
-                    artistInfoRepository = viewModel.artistInfoRepository,
-                    onNavigateToArtist = { target -> selectedArtistForSheet = target }
                 )
             }
+        },
+        label = "ArtistProfileOverlayTransition",
+        modifier = Modifier.fillMaxSize()
+    ) { artistName ->
+        if (artistName != null) {
+            ArtistDetailSheet(
+                artistName = artistName,
+                tracks = tracks,
+                albums = albums,
+                currentTrack = currentTrack,
+                isPlaying = isPlaying,
+                onDismissRequest = { selectedArtistForSheet = null },
+                onPlayTrackIndex = { index ->
+                    viewModel.playArtist(artistName, index)
+                },
+                onPlayAllClick = {
+                    viewModel.playArtist(artistName, 0)
+                },
+                onAddAllToQueueClick = { resolvedArtistTracks ->
+                    viewModel.addTracksToQueue(resolvedArtistTracks)
+                    coroutineScope.launch {
+                        snackbarHostState.showSnackbar(
+                            message = context.getString(
+                                R.string.snackbar_artist_tracks_added_to_queue,
+                                resolvedArtistTracks.size,
+                                artistName
+                            ),
+                            duration = SnackbarDuration.Short
+                        )
+                    }
+                },
+                onAlbumClick = { album ->
+                    if (searchQuery.isNotBlank()) viewModel.onSearchQueryChanged("")
+                    isSearchExpandedInDetail = false
+                    selectedArtistForSheet = null
+                    selectedAlbum = album
+                    selectedPlaylist = null
+                },
+                onAddToQueueClick = handleAddTrackToQueue,
+                onAddToPlaylistClick = { trackToAddToPlaylist = it },
+                onAddToFavoritesClick = handleAddToFavorites,
+                favoriteTrackIds = favoriteTrackIds,
+                onAutoTagTrackClick = { viewModel.startTrackEnrichment(it) },
+                artistInfoRepository = viewModel.artistInfoRepository,
+                onNavigateToArtist = { target -> selectedArtistForSheet = target }
+            )
+        } else {
+            Spacer(modifier = Modifier)
         }
     }
         }

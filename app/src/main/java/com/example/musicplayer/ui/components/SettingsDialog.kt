@@ -26,6 +26,7 @@ import androidx.compose.foundation.gestures.rememberDraggableState
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.WindowInsets
@@ -78,6 +79,8 @@ import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
@@ -120,6 +123,7 @@ import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
@@ -392,6 +396,7 @@ fun SettingsDialog(
                     title = stringResource(R.string.settings_appearance_short)
                 )
                 SettingsTileSelectorCard(
+                    title = stringResource(R.string.settings_theme_card_title),
                     selectedOption = themeMode,
                     onOptionSelected = { viewModel.setThemeMode(it) },
                     options = listOf(
@@ -941,7 +946,9 @@ fun SettingsDialog(
                                                         if (viewModel.reviewOfficialMatchesFromScan()) {
                                                             onDismiss()
                                                         }
-                                                    }
+                                                    },
+                                                    contentPadding = PaddingValues(horizontal = 14.dp, vertical = 8.dp),
+                                                    modifier = Modifier.weight(1f, fill = false)
                                                 ) {
                                                     Icon(
                                                         imageVector = Icons.Default.AutoFixHigh,
@@ -950,15 +957,24 @@ fun SettingsDialog(
                                                     )
                                                     Spacer(modifier = Modifier.width(6.dp))
                                                     Text(
-                                                        stringResource(
+                                                        text = stringResource(
                                                             R.string.settings_unreleased_scan_review_official,
                                                             scanState.officialMatches.size
-                                                        )
+                                                        ),
+                                                        maxLines = 1,
+                                                        overflow = TextOverflow.Ellipsis
                                                     )
                                                 }
                                             }
-                                            TextButton(onClick = { viewModel.dismissUnreleasedScanSummary() }) {
-                                                Text(stringResource(R.string.done))
+                                            TextButton(
+                                                onClick = { viewModel.dismissUnreleasedScanSummary() },
+                                                contentPadding = PaddingValues(horizontal = 12.dp, vertical = 8.dp)
+                                            ) {
+                                                Text(
+                                                    text = stringResource(R.string.done),
+                                                    maxLines = 1,
+                                                    softWrap = false
+                                                )
                                             }
                                         }
                                     }
@@ -1448,7 +1464,8 @@ private data class TileSelectorOption<T>(
 private fun <T> SettingsTileSelectorCard(
     options: List<TileSelectorOption<T>>,
     selectedOption: T,
-    onOptionSelected: (T) -> Unit
+    onOptionSelected: (T) -> Unit,
+    title: String? = null
 ) {
     Card(
         modifier = Modifier.fillMaxWidth(),
@@ -1456,13 +1473,24 @@ private fun <T> SettingsTileSelectorCard(
             containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)
         )
     ) {
-        Row(
+        Column(
             modifier = Modifier
                 .fillMaxWidth()
                 .padding(16.dp),
-            horizontalArrangement = Arrangement.spacedBy(10.dp)
+            verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {
-            options.forEach { option ->
+            if (!title.isNullOrBlank()) {
+                Text(
+                    text = title,
+                    style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.SemiBold),
+                    color = MaterialTheme.colorScheme.onSurface
+                )
+            }
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(10.dp)
+            ) {
+                options.forEach { option ->
                 val selected = option.value == selectedOption
                 val tileContainerColor by animateColorAsState(
                     targetValue = if (selected) {
@@ -1535,6 +1563,7 @@ private fun <T> SettingsTileSelectorCard(
                         )
                     }
                 }
+            }
             }
         }
     }
@@ -1616,81 +1645,93 @@ private fun SectionLayoutRow(
     if (currentMode.isGrid && rememberedGridMode != currentMode) {
         rememberedGridMode = currentMode
     }
+    var showGridSizePopup by remember { mutableStateOf(false) }
 
-    Column(
+    Row(
         modifier = Modifier.fillMaxWidth(),
-        verticalArrangement = Arrangement.spacedBy(8.dp)
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.SpaceBetween
     ) {
         Row(
-            modifier = Modifier.fillMaxWidth(),
             verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.SpaceBetween
+            modifier = Modifier
+                .weight(1f)
+                .padding(end = 8.dp)
         ) {
-            Row(
-                verticalAlignment = Alignment.CenterVertically,
-                modifier = Modifier.weight(1f).padding(end = 8.dp)
-            ) {
-                Icon(
-                    imageVector = icon,
-                    contentDescription = null,
-                    tint = MaterialTheme.colorScheme.primary,
-                    modifier = Modifier.size(20.dp)
-                )
-                Spacer(modifier = Modifier.width(10.dp))
-                Text(
-                    text = sectionTitle,
-                    style = MaterialTheme.typography.bodyLarge.copy(fontWeight = FontWeight.Medium)
-                )
-            }
+            Icon(
+                imageVector = icon,
+                contentDescription = null,
+                tint = MaterialTheme.colorScheme.primary,
+                modifier = Modifier.size(20.dp)
+            )
+            Spacer(modifier = Modifier.width(10.dp))
+            Text(
+                text = sectionTitle,
+                style = MaterialTheme.typography.bodyLarge.copy(fontWeight = FontWeight.Medium)
+            )
+        }
 
-            Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                LayoutOptionChip(
-                    selected = !currentMode.isGrid,
-                    label = stringResource(R.string.layout_mode_list),
-                    icon = Icons.AutoMirrored.Filled.FormatListBulleted,
-                    onClick = { onModeSelected(SectionViewMode.LIST) }
-                )
+        Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+            LayoutOptionChip(
+                selected = !currentMode.isGrid,
+                label = stringResource(R.string.layout_mode_list),
+                icon = Icons.AutoMirrored.Filled.FormatListBulleted,
+                onClick = {
+                    showGridSizePopup = false
+                    onModeSelected(SectionViewMode.LIST)
+                }
+            )
+            Box {
                 LayoutOptionChip(
                     selected = currentMode.isGrid,
                     label = stringResource(R.string.layout_mode_grid),
                     icon = Icons.Default.GridView,
                     onClick = {
-                        onModeSelected(if (currentMode.isGrid) currentMode else rememberedGridMode)
+                        if (!currentMode.isGrid) {
+                            onModeSelected(rememberedGridMode)
+                        }
+                        showGridSizePopup = true
                     }
                 )
-            }
-        }
-
-        AnimatedVisibility(
-            visible = currentMode.isGrid,
-            enter = expandVertically(animationSpec = tween(180)) + fadeIn(animationSpec = tween(180)),
-            exit = shrinkVertically(animationSpec = tween(150)) + fadeOut(animationSpec = tween(150))
-        ) {
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(start = 30.dp, top = 2.dp),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.SpaceBetween
-            ) {
-                Text(
-                    text = stringResource(R.string.layout_grid_size_label),
-                    style = MaterialTheme.typography.labelMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.padding(end = 8.dp)
-                )
-                Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                DropdownMenu(
+                    expanded = showGridSizePopup,
+                    onDismissRequest = { showGridSizePopup = false },
+                    shape = RoundedCornerShape(12.dp)
+                ) {
                     val gridSizes = listOf(
                         SectionViewMode.GRID_2 to stringResource(R.string.layout_grid_2x2),
                         SectionViewMode.GRID_3 to stringResource(R.string.layout_grid_3x3),
                         SectionViewMode.GRID_4 to stringResource(R.string.layout_grid_4x4)
                     )
+                    val activeGridMode = if (currentMode.isGrid) currentMode else SectionViewMode.GRID_2
                     gridSizes.forEach { (gridMode, label) ->
-                        LayoutOptionChip(
-                            selected = currentMode == gridMode,
-                            label = label,
-                            icon = null,
-                            onClick = { onModeSelected(gridMode) }
+                        val isSizeSelected = activeGridMode == gridMode
+                        DropdownMenuItem(
+                            text = {
+                                Text(
+                                    text = label,
+                                    style = MaterialTheme.typography.labelLarge,
+                                    fontWeight = if (isSizeSelected) FontWeight.Bold else FontWeight.Medium,
+                                    color = if (isSizeSelected) {
+                                        MaterialTheme.colorScheme.primary
+                                    } else {
+                                        MaterialTheme.colorScheme.onSurface
+                                    },
+                                    textAlign = TextAlign.Center,
+                                    modifier = Modifier.fillMaxWidth()
+                                )
+                            },
+                            onClick = {
+                                onModeSelected(gridMode)
+                                showGridSizePopup = false
+                            },
+                            modifier = Modifier.background(
+                                if (isSizeSelected) {
+                                    MaterialTheme.colorScheme.primary.copy(alpha = 0.12f)
+                                } else {
+                                    Color.Transparent
+                                }
+                            )
                         )
                     }
                 }

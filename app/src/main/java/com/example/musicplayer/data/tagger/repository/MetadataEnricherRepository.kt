@@ -224,6 +224,92 @@ class MetadataEnricherRepository(
     }
 
     /**
+     * Recupera esclusivamente i testi (sincronizzati, semplici o flag strumentale) per una traccia da LRCLIB,
+     * senza modificare né restituire altri metadati. In caso di mancato riscontro diretto sui termini locali,
+     * tenta i fallback dal titolo/nome file e infine una risoluzione canonica di sola lettura su Deezer.
+     */
+    suspend fun fetchLyricsOnly(
+        track: AudioTrack
+    ): Result<com.example.musicplayer.data.tagger.model.LrclibResponse?> = withContext(Dispatchers.IO) {
+        try {
+            val (cleanArtist, cleanTitle) = QuerySanitizer.getEffectiveSearchTerms(track)
+            val durationSec = if (track.duration > 0) track.duration / 1000 else null
+            val albumParam = track.album.takeIf {
+                !isGenericAlbum(it) && !it.contains("(Brani singoli)") && !isUnreleasedAlbumTitle(it)
+            }
+
+            // 1. Tentativo diretto su LRCLIB con i termini sanitizzati
+            val primaryRes = lrclibClient.getLyrics(cleanTitle, cleanArtist, albumParam, durationSec).getOrNull()
+            if (primaryRes != null && (primaryRes.hasSyncedLyrics || primaryRes.hasPlainLyrics || primaryRes.instrumental)) {
+                return@withContext Result.success(primaryRes)
+            }
+
+            // 2. Fallback da pattern "Artista - Canzone" o nome file
+            val fallbackQueries = buildList {
+                QuerySanitizer.extractFallbackArtistAndTitle(track.title)?.let { (parsedArtist, parsedTitle) ->
+                    add(parsedArtist to parsedTitle)
+                    if (cleanArtist.isNotBlank() && !QuerySanitizer.artistsMatch(cleanArtist, parsedArtist)) {
+                        add(cleanArtist to parsedTitle)
+                    }
+                }
+                QuerySanitizer.extractReversedTitleAndArtist(track.title)?.let { (revArtist, revTitle) ->
+                    add(revArtist to revTitle)
+                    if (cleanArtist.isNotBlank() && !QuerySanitizer.artistsMatch(cleanArtist, revArtist)) {
+                        add(cleanArtist to revTitle)
+                    }
+                }
+                if (track.displayName.isNotBlank()) {
+                    val fn = QuerySanitizer.cleanFileName(track.displayName)
+                    if (!fn.artist.isNullOrBlank() && fn.title.isNotBlank()) {
+                        val fnTitle = QuerySanitizer.stripFeaturingAndEdition(fn.title).ifBlank { fn.title }
+                        val fnArtist = QuerySanitizer.cleanArtistString(fn.artist).ifBlank { fn.artist }
+                        add(fnArtist to fnTitle)
+                    }
+                }
+            }.distinctBy { (a, t) ->
+                a.lowercase(java.util.Locale.ROOT) to t.lowercase(java.util.Locale.ROOT)
+            }.filterNot { (a, t) ->
+                a.equals(cleanArtist, ignoreCase = true) && t.equals(cleanTitle, ignoreCase = true)
+            }
+
+            for ((fbArtist, fbTitle) in fallbackQueries) {
+                val fbLyrics = lrclibClient.getLyrics(fbTitle, fbArtist, null, durationSec).getOrNull()
+                if (fbLyrics != null && (fbLyrics.hasSyncedLyrics || fbLyrics.hasPlainLyrics || fbLyrics.instrumental)) {
+                    return@withContext Result.success(fbLyrics)
+                }
+            }
+
+            // 3. Risoluzione canonica di sola lettura su Deezer (nessun metadato Deezer viene applicato al brano)
+            val deezerCandidates = deezerClient.searchTrack(cleanTitle, cleanArtist).getOrNull().orEmpty()
+            val bestCandidate = selectBestCandidate(
+                track = track,
+                candidates = deezerCandidates,
+                cleanTitle = cleanTitle,
+                cleanArtist = cleanArtist,
+                options = EnricherOptions()
+            )
+            if (bestCandidate != null) {
+                val canonicalTitle = bestCandidate.titleShort.ifBlank { bestCandidate.title }
+                val canonicalLyrics = lrclibClient.getLyrics(
+                    canonicalTitle,
+                    bestCandidate.artistName,
+                    bestCandidate.albumTitle,
+                    durationSec
+                ).getOrNull()
+                if (canonicalLyrics != null &&
+                    (canonicalLyrics.hasSyncedLyrics || canonicalLyrics.hasPlainLyrics || canonicalLyrics.instrumental)
+                ) {
+                    return@withContext Result.success(canonicalLyrics)
+                }
+            }
+
+            Result.success(null)
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
+    }
+
+    /**
      * Arricchisce i metadati di una traccia interrogando in parallelo Deezer e LRCLIB.
      */
     suspend fun enrichTrack(

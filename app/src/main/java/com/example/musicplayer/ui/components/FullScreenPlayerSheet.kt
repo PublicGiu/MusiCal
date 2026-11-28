@@ -168,7 +168,10 @@ fun FullScreenPlayerSheet(
     onOpenSleepTimer: () -> Unit = {},
     artistInfoRepository: ArtistInfoRepository? = null,
     referenceTrackTitles: List<String> = emptyList(),
-    referenceAlbumTitles: List<String> = emptyList()
+    referenceAlbumTitles: List<String> = emptyList(),
+    isFetchingLyrics: Boolean = false,
+    lyricsFetchNotFoundTrackId: Long? = null,
+    onFetchLyricsClick: ((AudioTrack) -> Unit)? = null
 ) {
     val context = LocalContext.current
     var isLyricsViewActive by remember { mutableStateOf(false) }
@@ -203,6 +206,11 @@ fun FullScreenPlayerSheet(
             listOfNotNull(currentTrack?.album?.takeIf { it.isNotBlank() })
         }
     }
+    val initialCachedArtistInfo = remember(displayArtistName, artistInfoRepository) {
+        if (displayArtistName.isNotBlank()) {
+            artistInfoRepository?.peekCachedArtistInfo(displayArtistName)
+        } else null
+    }
     val artistInfoFlow = remember(displayArtistName, artistInfoRepository, effectiveReferenceTracks, effectiveReferenceAlbums) {
         if (displayArtistName.isNotBlank() && artistInfoRepository != null) {
             artistInfoRepository.getArtistInfoFlow(
@@ -212,8 +220,26 @@ fun FullScreenPlayerSheet(
             )
         } else null
     }
-    val artistInfo by (artistInfoFlow?.collectAsStateWithLifecycle(initialValue = null)
-        ?: remember { mutableStateOf<ArtistInfo?>(null) })
+    val artistInfo by (artistInfoFlow?.collectAsStateWithLifecycle(initialValue = initialCachedArtistInfo)
+        ?: remember(initialCachedArtistInfo) { mutableStateOf(initialCachedArtistInfo) })
+
+    val trackHasLyricsOrInstrumental = (currentLyrics != null &&
+        (currentLyrics.lines.isNotEmpty() || currentLyrics.isInstrumental)) ||
+        currentTrack?.isInstrumental() == true
+
+    LaunchedEffect(isLyricsViewActive, currentTrack?.id) {
+        val activeTrack = currentTrack
+        if (isLyricsViewActive && activeTrack != null && onFetchLyricsClick != null) {
+            kotlinx.coroutines.delay(140L)
+            val stillMissing = (currentLyrics == null ||
+                (currentLyrics.trackId != activeTrack.id) ||
+                (currentLyrics.lines.isEmpty() && !currentLyrics.isInstrumental)) &&
+                !activeTrack.isInstrumental()
+            if (stillMissing && !isFetchingLyrics && lyricsFetchNotFoundTrackId != activeTrack.id) {
+                onFetchLyricsClick(activeTrack)
+            }
+        }
+    }
 
     // Coda effettiva per il Pager: usa la coda completa o la traccia corrente come fallback
     val effectiveQueue = remember(queue, currentTrack) {
@@ -613,6 +639,10 @@ fun FullScreenPlayerSheet(
                             currentPositionProvider = currentPositionProvider,
                             onSeekTo = onSeekTo,
                             isInstrumental = currentLyrics?.isInstrumental == true || currentTrack?.isInstrumental() == true,
+                            isFetchingLyrics = isFetchingLyrics,
+                            onRetryFetchLyrics = if (currentTrack != null && onFetchLyricsClick != null) {
+                                { onFetchLyricsClick(currentTrack) }
+                            } else null,
                             modifier = Modifier.fillMaxSize()
                         )
                     }
@@ -859,8 +889,16 @@ fun FullScreenPlayerSheet(
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.SpaceBetween
             ) {
-                // Pulsante Testi Sincronizzati (in basso a sinistra)
-                IconButton(onClick = { isLyricsViewActive = !isLyricsViewActive }) {
+                // Pulsante Testi Sincronizzati (in basso a sinistra): se il brano è privo di testo, lo scarica automaticamente senza Auto-Tag
+                IconButton(
+                    onClick = {
+                        val nextActive = !isLyricsViewActive
+                        isLyricsViewActive = nextActive
+                        if (nextActive && currentTrack != null && !trackHasLyricsOrInstrumental && !isFetchingLyrics) {
+                            onFetchLyricsClick?.invoke(currentTrack)
+                        }
+                    }
+                ) {
                     Icon(
                         imageVector = Icons.Default.Lyrics,
                         contentDescription = stringResource(R.string.synced_lyrics_desc),

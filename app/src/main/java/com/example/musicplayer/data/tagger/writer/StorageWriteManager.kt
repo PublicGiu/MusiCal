@@ -124,7 +124,7 @@ class StorageWriteManager(private val context: Context) {
             try {
                 val externalDir = android.os.Environment.getExternalStorageDirectory()
                 val physicalFile = if (track.relativePath.isNotBlank() && track.displayName.isNotBlank()) {
-                    File(externalDir, "${track.relativePath}${track.displayName}")
+                    File(File(externalDir, track.relativePath), track.displayName)
                 } else null
 
                 if (physicalFile != null && physicalFile.exists()) {

@@ -235,4 +235,65 @@ class DeezerAndLrclibParsingTest {
         val aligned = repo.alignAlbumTracks(localTracks, official)
         assertEquals(3, aligned[201L]?.trackPosition)
     }
+
+    @Test
+    fun testFetchLyricsOnlyRetrievesSyncedLyricsWithoutAlteringTrackMetadata() = runBlocking {
+        var deezerAlbumCalled = false
+        val mockClient = OkHttpClient.Builder()
+            .addInterceptor(Interceptor { chain ->
+                val url = chain.request().url.toString()
+                val path = chain.request().url.encodedPath
+                if (path.startsWith("/album/")) {
+                    deezerAlbumCalled = true
+                }
+                val jsonBody = when {
+                    url.contains("lrclib.net/api/get") && url.contains("Brivido") -> {
+                        """
+                        {
+                          "id": 777,
+                          "trackName": "Brivido",
+                          "artistName": "Marracash",
+                          "instrumental": false,
+                          "plainLyrics": "Testo normale",
+                          "syncedLyrics": "[00:12.00] Verso sincronizzato"
+                        }
+                        """.trimIndent()
+                    }
+                    else -> """{"data": []}"""
+                }
+                Response.Builder()
+                    .request(chain.request())
+                    .protocol(Protocol.HTTP_1_1)
+                    .code(200)
+                    .message("OK")
+                    .body(jsonBody.toResponseBody("application/json".toMediaType()))
+                    .build()
+            })
+            .build()
+
+        val repo = MetadataEnricherRepository(
+            deezerClient = DeezerApiClient(mockClient),
+            lrclibClient = LrclibApiClient(mockClient)
+        )
+        val mockUri = Mockito.mock(android.net.Uri::class.java)
+        val originalTrack = AudioTrack(
+            id = 500L,
+            title = "Marracash - Brivido",
+            artist = "Marracash Custom Tag",
+            album = "Il Mio Album Custom",
+            duration = 200_000L,
+            uri = mockUri,
+            displayName = "marracash_brivido.mp3"
+        )
+
+        val lrclib = repo.fetchLyricsOnly(originalTrack).getOrThrow()
+        assertNotNull(lrclib)
+        assertTrue(lrclib!!.hasSyncedLyrics)
+        assertEquals("[00:12.00] Verso sincronizzato", lrclib.syncedLyrics)
+        // Nessun recupero di dettagli album Deezer e nessuna modifica ai metadati di AudioTrack
+        org.junit.Assert.assertFalse(deezerAlbumCalled)
+        assertEquals("Marracash - Brivido", originalTrack.title)
+        assertEquals("Marracash Custom Tag", originalTrack.artist)
+        assertEquals("Il Mio Album Custom", originalTrack.album)
+    }
 }

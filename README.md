@@ -1,11 +1,11 @@
 # 🎵 MusiCal — Lettore Musicale Nativo per Android 16
 
-![Versione](https://img.shields.io/badge/versione-0.2.13-8B5CF6)
+![Versione](https://img.shields.io/badge/versione-0.2.15-8B5CF6)
 ![Android](https://img.shields.io/badge/Android-16%20(API%2036)-7C3AED)
 ![Kotlin](https://img.shields.io/badge/Kotlin-2.1.0-A855F7)
 ![Jetpack Compose](https://img.shields.io/badge/UI-Jetpack%20Compose%20%2B%20Material%203-C084FC)
 ![Media3](https://img.shields.io/badge/Audio-AndroidX%20Media3%20(ExoPlayer)-6D28D9)
-![Test](https://img.shields.io/badge/test-390%20passed-success)
+![Test](https://img.shields.io/badge/test-395%20passed-success)
 
 **MusiCal** è un lettore musicale locale moderno, veloce e privo di pubblicità o tracciamento, progettato nativamente ed esclusivamente per **Android 16 (API 36)**.
 
@@ -13,9 +13,11 @@ Realizzato interamente in **Kotlin** e **Jetpack Compose** con un'identità visi
 
 ---
 
-## 🆕 Novità Principali fino alla v0.2.13
+## 🆕 Novità Principali fino alla v0.2.15
 
-Dalla v0.2.0 alla **v0.2.13** MusiCal è stato ampliato con numerose funzionalità e miglioramenti strutturali:
+Dalla v0.2.0 alla **v0.2.15** MusiCal è stato ampliato con numerose funzionalità e miglioramenti strutturali:
+- **v0.2.15**: **Apertura istantanea del Profilo Artista** (memoizzazione regex artista e calcolo asincrono delle collaborazioni per eliminare qualsiasi ritardo), **download automatico solo-testo al tocco sull'icona Testi** nel player quando un brano ne è sprovvisto (salvato su `.lrc` locale senza aprire l'Auto-Tagger né alterare gli altri metadati).
+- **v0.2.14**: **Fix definitivo dei caratteri sostituiti da simboli strani** nei tag audio (scrittura forzata in Unicode `UTF-16`/`UTF-8` e rimozione tag legacy `ID3v1`/`ID3v2.2`), **pulsante solo-icona** per il refresh nella Riproduzione Automatica, **popup dimensioni griglia (`2×2`, `3×3`, `4×4`)**, titolo `"Tema dell'applicazione"` in *"Aspetto & Visualizzazione"*, fix UI pulsante `"Fine"` su singola riga e **miglioramento gestione Unreleased** (estrazione artista dal nome file e recupero foto artista per gli album `"Unreleased"`).
 - **v0.2.13**: **Album automatico `"Unreleased"` per singolo artista** (creato automaticamente solo quando sono presenti brani inediti non trovati su Deezer o contrassegnati localmente, con fallback copertina sulla foto dell'artista), **scansione batch Unreleased** con barra di avanzamento nelle Impostazioni (sezione Libreria) e **fix completo per artisti con virgola interna** (es. `"Tyler, The Creator"`) in Auto-Tag, ricerca e raggruppamento album senza regressioni sulle collaborazioni.
 - **v0.2.12**: **Ricerca globale uniformata** (`50.dp` per Brani, Album, Playlist e Artisti trovati) e **nuova barra filtri fluida** a 5 categorie (`Tutto`, `Brani`, `Artista`, `Album`, `Playlist`) sincronizzata con `HorizontalPager`.
 - **v0.2.11**: **Mini-player visibile e cliccabile nel Profilo Artista** per aprire subito il player a schermo intero, e **rimozione dello swipe-down accidentale** in Profilo Artista e Smart Auto-Tagger (chiusura esplicita tramite pulsante dedicato o tasto Indietro).
@@ -161,7 +163,7 @@ Dalla v0.2.0 alla **v0.2.13** MusiCal è stato ampliato con numerose funzionalit
 | **Persistenza Locale & Backup** | `AtomicFile` JSON (`playlists.json`, `track_stats.json`, `artist_cache.json`), `LibraryCacheRepository` (`library_cache.json`), `TaggedCoverStore` (SHA-1), Backup/Ripristino JSON portabile SAF, Room `2.6.1` (`scrobble_cache.db`), `SharedPreferences` |
 | **Immagini & Rete** | Coil Compose `2.7.0`, `SharedHttpClient` (OkHttp `4.12.0`: Deezer API, LRCLIB API, Wikipedia/MediaWiki API, Last.fm REST API, GitHub API) |
 | **Localizzazione** | Android 16 Per-App Language (`LocaleManager`), `strings.xml` (Italiano) e `values-en/strings.xml` (Inglese) |
-| **Test Automatizzati** | JUnit 4, Mockito Core, `org.json`, suite completa di **390 unit test** su JVM |
+| **Test Automatizzati** | JUnit 4, Mockito Core, `org.json`, suite completa di **395 unit test** su JVM |
 
 ```
 app/src/main/java/com/example/musicplayer/
@@ -231,9 +233,9 @@ Il repository e gli APK distribuiti sono concepiti per proteggere rigorosamente 
 
 ## 📲 Download Diretto APK
 
-Se desideri installare subito **MusiCal v0.2.13** sul tuo dispositivo Android 16 senza compilare il sorgente, scarica il file `.apk` direttamente dalla sezione [**Releases**](https://github.com/PublicGiu/MusiCal/releases/tag/v0.2.13) di questo repository:
+Se desideri installare subito **MusiCal v0.2.15** sul tuo dispositivo Android 16 senza compilare il sorgente, scarica il file `.apk` direttamente dalla sezione [**Releases**](https://github.com/PublicGiu/MusiCal/releases/tag/v0.2.15) di questo repository:
 
-👉 **[Scarica MusiCal-v0.2.13.apk](https://github.com/PublicGiu/MusiCal/releases/download/v0.2.13/MusiCal-v0.2.13.apk)**
+👉 **[Scarica MusiCal-v0.2.15.apk](https://github.com/PublicGiu/MusiCal/releases/download/v0.2.15/MusiCal-v0.2.15.apk)**
 
 ---
 
@@ -278,7 +280,7 @@ Se desideri installare subito **MusiCal v0.2.13** sul tuo dispositivo Android 16
    .\gradlew.bat assembleRelease -PexcludeLastFmKeys=true
    ```
 
-5. **Esegui la suite di Test Unitari (390 test su JVM)**:
+5. **Esegui la suite di Test Unitari (395 test su JVM)**:
    ```powershell
    .\gradlew.bat testDebugUnitTest
    ```

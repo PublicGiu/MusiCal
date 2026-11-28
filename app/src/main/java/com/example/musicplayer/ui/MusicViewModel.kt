@@ -58,9 +58,11 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.firstOrNull
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import kotlinx.coroutines.withTimeoutOrNull
 
 class MusicViewModel(application: Application) : AndroidViewModel(application) {
 
@@ -86,6 +88,8 @@ class MusicViewModel(application: Application) : AndroidViewModel(application) {
     val unreleasedScanState: StateFlow<UnreleasedScanState> = metadataEnricherCoordinator.unreleasedScanState
     val writeRequestIntentSender: StateFlow<IntentSender?> = metadataEnricherCoordinator.writeRequestIntentSender
     val currentLyrics: StateFlow<LyricsData?> = metadataEnricherCoordinator.currentLyrics
+    val isFetchingLyrics: StateFlow<Boolean> = metadataEnricherCoordinator.isFetchingLyrics
+    val lyricsFetchNotFoundTrackId: StateFlow<Long?> = metadataEnricherCoordinator.lyricsFetchNotFoundTrackId
 
     val libraryCoordinator = LibraryCoordinator(
         application = application,
@@ -657,6 +661,8 @@ class MusicViewModel(application: Application) : AndroidViewModel(application) {
         metadataEnricherCoordinator.searchCustomTrackEnrichment(track, customTitle, customArtist)
     fun adjustLyricsOffset(offsetDeltaMs: Long) =
         metadataEnricherCoordinator.adjustLyricsOffset(_currentTrack.value, offsetDeltaMs)
+    fun fetchLyricsOnlyForTrack(track: AudioTrack) =
+        metadataEnricherCoordinator.fetchAndSaveLyricsOnly(track)
     fun startAlbumEnrichment(album: Album, separateAlbums: Boolean? = null) =
         metadataEnricherCoordinator.startAlbumEnrichment(album, separateAlbums)
     fun toggleAlbumEnrichmentMode(separate: Boolean) = metadataEnricherCoordinator.toggleAlbumEnrichmentMode(separate)
@@ -677,6 +683,23 @@ class MusicViewModel(application: Application) : AndroidViewModel(application) {
             allTracks = tracks.value,
             onUnreleasedGrouped = {
                 libraryCoordinator.regroupAlbumsFromUnreleasedStore()
+                val unreleasedWithoutCover = albums.value.filter {
+                    com.example.musicplayer.data.isUnreleasedAlbumTitle(it.title) &&
+                        it.albumArtUri == null &&
+                        it.artist.isNotBlank()
+                }
+                if (unreleasedWithoutCover.isNotEmpty()) {
+                    unreleasedWithoutCover.forEach { album ->
+                        withTimeoutOrNull(3500L) {
+                            artistInfoRepository.getArtistInfoFlow(
+                                artistName = album.artist,
+                                referenceTrackTitles = album.tracks.map { it.title },
+                                referenceAlbumTitles = listOf("Unreleased")
+                            ).firstOrNull { !it.photoUrl.isNullOrBlank() }
+                        }
+                    }
+                    libraryCoordinator.regroupAlbumsFromUnreleasedStore()
+                }
             }
         )
     }

@@ -6,14 +6,67 @@ import com.example.musicplayer.data.tagger.repository.EnricherOptions
 import org.jaudiotagger.audio.AudioFileIO
 import org.jaudiotagger.audio.mp3.MP3File
 import org.jaudiotagger.tag.FieldKey
+import org.jaudiotagger.tag.Tag
+import org.jaudiotagger.tag.TagOptionSingleton
+import org.jaudiotagger.tag.id3.AbstractID3v2Frame
+import org.jaudiotagger.tag.id3.AbstractID3v2Tag
+import org.jaudiotagger.tag.id3.ID3v22Tag
+import org.jaudiotagger.tag.id3.ID3v23Tag
+import org.jaudiotagger.tag.id3.ID3v24Tag
+import org.jaudiotagger.tag.id3.framebody.AbstractFrameBodyTextInfo
+import org.jaudiotagger.tag.id3.framebody.FrameBodyCOMM
+import org.jaudiotagger.tag.id3.framebody.FrameBodyUSLT
+import org.jaudiotagger.tag.id3.valuepair.TextEncoding
 import org.jaudiotagger.tag.images.AndroidArtwork
 import java.io.File
 
 /**
  * Gestisce la scrittura fisica dei metadati e dell'artwork all'interno dei file audio.
- * Supporta MP3 (ID3v2), FLAC (Vorbis Comments + Picture Block), M4A/MP4 (atomi iTunes) e OGG.
+ * Supporta MP3 (ID3v2 Unicode UTF-16/UTF-8), FLAC (Vorbis Comments + Picture Block), M4A/MP4 (atomi iTunes) e OGG.
  */
 object AudioTagWriter {
+
+    init {
+        configureUnicodeTagOptions()
+    }
+
+    /**
+     * Configura jaudiotagger per usare sempre codifiche Unicode reali (UTF-16 per ID3v2.3, UTF-8 per ID3v2.4)
+     * anziché ISO-8859-1 di default, forzando la ricodifica anche sui frame preesistenti.
+     */
+    internal fun configureUnicodeTagOptions() {
+        TagOptionSingleton.getInstance().apply {
+            id3v23DefaultTextEncoding = TextEncoding.UTF_16
+            id3v24DefaultTextEncoding = TextEncoding.UTF_8
+            isResetTextEncodingForExistingFrames = true
+        }
+    }
+
+    private fun replaceFieldCleanly(tag: Tag, key: FieldKey, value: String) {
+        try {
+            tag.deleteField(key)
+        } catch (_: Exception) {}
+        tag.setField(key, value)
+    }
+
+    /**
+     * Forza tutti i frame testuali di un tag ID3v2 alla codifica Unicode appropriata
+     * (UTF-16 per ID3v2.3, UTF-8 per ID3v2.4), prevenendo caratteri sostituiti ('?' o simboli corrotti).
+     */
+    private fun enforceUnicodeOnId3v2Frames(tag: AbstractID3v2Tag) {
+        val targetEncoding: Byte = if (tag is ID3v24Tag) TextEncoding.UTF_8 else TextEncoding.UTF_16
+        val fieldsIterator = tag.fields
+        while (fieldsIterator.hasNext()) {
+            val field = fieldsIterator.next()
+            if (field is AbstractID3v2Frame) {
+                when (val body = field.body) {
+                    is AbstractFrameBodyTextInfo -> body.textEncoding = targetEncoding
+                    is FrameBodyUSLT -> body.textEncoding = targetEncoding
+                    is FrameBodyCOMM -> body.textEncoding = targetEncoding
+                }
+            }
+        }
+    }
 
     /**
      * Scrive i campi di metadati e incorpora l'eventuale copertina nel file audio specificato.
@@ -24,33 +77,44 @@ object AudioTagWriter {
         options: EnricherOptions = EnricherOptions()
     ): Boolean {
         return try {
+            configureUnicodeTagOptions()
             val audioFile = AudioFileIO.read(file)
             val tag = if (audioFile is MP3File) {
-                audioFile.tagOrCreateAndSetDefault
+                val existingV2 = audioFile.iD3v2Tag
+                val activeV2: AbstractID3v2Tag = when {
+                    existingV2 is ID3v22Tag -> ID3v23Tag(existingV2).also { audioFile.iD3v2Tag = it }
+                    existingV2 != null -> existingV2
+                    else -> ID3v23Tag().also { audioFile.iD3v2Tag = it }
+                }
+                // Rimuove eventuali tag legacy ID3v1 (limitati a 30 byte ISO-8859-1) che causano simboli corrotti o troncamenti
+                if (audioFile.hasID3v1Tag()) {
+                    audioFile.iD3v1Tag = null
+                }
+                activeV2
             } else {
                 audioFile.tagOrCreateAndSetDefault ?: audioFile.createDefaultTag().also { audioFile.tag = it }
             }
 
             // 1. Titolo traccia (TIT2 / Vorbis TITLE / MP4 ©nam)
             if (metadata.title.isNotBlank()) {
-                tag.setField(FieldKey.TITLE, metadata.title)
+                replaceFieldCleanly(tag, FieldKey.TITLE, metadata.title)
             }
 
             // 2. Artista specifico della traccia (TPE1 / Vorbis ARTIST / MP4 ©ART)
             if (metadata.artist.isNotBlank()) {
-                tag.setField(FieldKey.ARTIST, metadata.artist)
+                replaceFieldCleanly(tag, FieldKey.ARTIST, metadata.artist)
             }
 
             // 3. Titolo dell'album (TALB / Vorbis ALBUM / MP4 ©alb)
             if (metadata.album.isNotBlank()) {
-                tag.setField(FieldKey.ALBUM, metadata.album)
+                replaceFieldCleanly(tag, FieldKey.ALBUM, metadata.album)
             }
 
             // 4. Artista principale dell'album (TPE2 / Vorbis ALBUMARTIST / MP4 aART)
             // Risolve la frammentazione degli album in Android MediaStore!
             if (metadata.albumArtist.isNotBlank()) {
                 try {
-                    tag.setField(FieldKey.ALBUM_ARTIST, metadata.albumArtist)
+                    replaceFieldCleanly(tag, FieldKey.ALBUM_ARTIST, metadata.albumArtist)
                 } catch (_: Exception) {}
             }
 
@@ -58,7 +122,7 @@ object AudioTagWriter {
             metadata.releaseYear?.let { year ->
                 if (year > 0) {
                     try {
-                        tag.setField(FieldKey.YEAR, year.toString())
+                        replaceFieldCleanly(tag, FieldKey.YEAR, year.toString())
                     } catch (_: Exception) {}
                 }
             }
@@ -67,7 +131,7 @@ object AudioTagWriter {
             metadata.trackNumber?.let { trackNum ->
                 if (trackNum > 0) {
                     try {
-                        tag.setField(FieldKey.TRACK, trackNum.toString())
+                        replaceFieldCleanly(tag, FieldKey.TRACK, trackNum.toString())
                     } catch (_: Exception) {}
                 }
             }
@@ -76,7 +140,7 @@ object AudioTagWriter {
             metadata.discNumber?.let { discNum ->
                 if (discNum > 0) {
                     try {
-                        tag.setField(FieldKey.DISC_NO, discNum.toString())
+                        replaceFieldCleanly(tag, FieldKey.DISC_NO, discNum.toString())
                     } catch (_: Exception) {}
                 }
             }
@@ -84,7 +148,7 @@ object AudioTagWriter {
             // 8. Genere (TCON / Vorbis GENRE / MP4 ©gen)
             if (!metadata.genre.isNullOrBlank()) {
                 try {
-                    tag.setField(FieldKey.GENRE, metadata.genre)
+                    replaceFieldCleanly(tag, FieldKey.GENRE, metadata.genre)
                 } catch (_: Exception) {}
             }
 
@@ -92,8 +156,12 @@ object AudioTagWriter {
             val lyricsToWrite = metadata.syncedLyrics ?: metadata.plainLyrics
             if (!lyricsToWrite.isNullOrBlank() && options.includeLyrics) {
                 try {
-                    tag.setField(FieldKey.LYRICS, lyricsToWrite)
+                    replaceFieldCleanly(tag, FieldKey.LYRICS, lyricsToWrite)
                 } catch (_: Exception) {}
+            }
+
+            if (tag is AbstractID3v2Tag) {
+                enforceUnicodeOnId3v2Frames(tag)
             }
 
             // 10. Incorporamento copertina JPEG/PNG HD (APIC / Picture Block FLAC / MP4 covr / Vorbis METADATA_BLOCK_PICTURE)

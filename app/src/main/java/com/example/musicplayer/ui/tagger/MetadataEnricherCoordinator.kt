@@ -80,10 +80,18 @@ class MetadataEnricherCoordinator(
     private val _currentLyrics = MutableStateFlow<LyricsData?>(null)
     val currentLyrics: StateFlow<LyricsData?> = _currentLyrics.asStateFlow()
 
+    private val _isFetchingLyrics = MutableStateFlow(false)
+    val isFetchingLyrics: StateFlow<Boolean> = _isFetchingLyrics.asStateFlow()
+
+    private val _lyricsFetchNotFoundTrackId = MutableStateFlow<Long?>(null)
+    val lyricsFetchNotFoundTrackId: StateFlow<Long?> = _lyricsFetchNotFoundTrackId.asStateFlow()
+
     private val pendingWrites = ConcurrentHashMap<AudioTrack, Pair<File, EnrichedMetadata>>()
     private var activeSearchJob: Job? = null
     private var unreleasedScanJob: Job? = null
     private var lyricsLoadJob: Job? = null
+    private var lyricsOnlineFetchJob: Job? = null
+    private var activeOnlineLyricsTrackId: Long? = null
 
     private fun clearPendingWrites() {
         pendingWrites.values.forEach { (file, _) ->
@@ -96,6 +104,15 @@ class MetadataEnricherCoordinator(
 
     fun updateCurrentLyricsForTrack(track: AudioTrack?) {
         lyricsLoadJob?.cancel()
+        if (track?.id != activeOnlineLyricsTrackId) {
+            lyricsOnlineFetchJob?.cancel()
+            lyricsOnlineFetchJob = null
+            activeOnlineLyricsTrackId = null
+            _isFetchingLyrics.value = false
+        }
+        if (_lyricsFetchNotFoundTrackId.value != track?.id) {
+            _lyricsFetchNotFoundTrackId.value = null
+        }
         if (track == null) {
             _currentLyrics.value = null
             return
@@ -103,6 +120,53 @@ class MetadataEnricherCoordinator(
         lyricsLoadJob = scope.launch(Dispatchers.IO) {
             val loaded = lyricsRepository.getLyricsForTrack(track.id)
             _currentLyrics.value = loaded
+        }
+    }
+
+    /**
+     * Scarica automaticamente e salva localmente solo il testo (.lrc) del brano [track],
+     * senza passare per lo Smart Auto-Tagger e lasciando inalterati tutti gli altri metadati del file audio.
+     */
+    fun fetchAndSaveLyricsOnly(track: AudioTrack) {
+        if (_isFetchingLyrics.value && activeOnlineLyricsTrackId == track.id) return
+        lyricsOnlineFetchJob?.cancel()
+        activeOnlineLyricsTrackId = track.id
+        _isFetchingLyrics.value = true
+        _lyricsFetchNotFoundTrackId.value = null
+
+        lyricsOnlineFetchJob = scope.launch {
+            try {
+                val existing = withContext(Dispatchers.IO) {
+                    lyricsRepository.getLyricsForTrack(track.id)
+                }
+                if (existing != null && (existing.lines.isNotEmpty() || existing.isInstrumental)) {
+                    _currentLyrics.value = existing
+                    return@launch
+                }
+
+                val lrclibRes = enricherRepository.fetchLyricsOnly(track).getOrNull()
+                if (lrclibRes != null && (lrclibRes.hasSyncedLyrics || lrclibRes.hasPlainLyrics || lrclibRes.instrumental)) {
+                    val contentToSave = when {
+                        !lrclibRes.syncedLyrics.isNullOrBlank() -> lrclibRes.syncedLyrics
+                        !lrclibRes.plainLyrics.isNullOrBlank() -> lrclibRes.plainLyrics
+                        else -> "[instrumental:true]\n"
+                    }
+                    val savedLyrics = withContext(Dispatchers.IO) {
+                        storageWriteManager.saveLyricsLocally(track.id, contentToSave)
+                        lyricsRepository.getLyricsForTrack(track.id)
+                    }
+                    if (activeOnlineLyricsTrackId == track.id) {
+                        _currentLyrics.value = savedLyrics
+                    }
+                } else if (activeOnlineLyricsTrackId == track.id) {
+                    _lyricsFetchNotFoundTrackId.value = track.id
+                }
+            } finally {
+                if (activeOnlineLyricsTrackId == track.id) {
+                    _isFetchingLyrics.value = false
+                    activeOnlineLyricsTrackId = null
+                }
+            }
         }
     }
 
@@ -1046,8 +1110,17 @@ class MetadataEnricherCoordinator(
             "datpiff",
             "leak",
             "leaks",
+            "snippets",
+            "demos",
+            "demo",
+            "vault",
+            "throwaways",
+            "b-sides",
             "discord",
-            "telegram"
+            "telegram",
+            "whatsapp",
+            "spotify",
+            "local"
         )
 
         /**

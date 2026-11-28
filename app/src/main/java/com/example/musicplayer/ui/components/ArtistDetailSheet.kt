@@ -46,6 +46,7 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
@@ -57,6 +58,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import com.example.musicplayer.R
@@ -66,6 +68,8 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import coil.compose.AsyncImage
+import coil.request.ImageRequest
+import coil.size.Precision
 import com.example.musicplayer.data.Album
 import com.example.musicplayer.data.ArtistInfo
 import com.example.musicplayer.data.ArtistInfoRepository
@@ -77,7 +81,9 @@ import com.example.musicplayer.data.isPartnerInCollab
 import com.example.musicplayer.data.matchesArtist
 import com.example.musicplayer.data.matchesCollabArtist
 import com.example.musicplayer.ui.theme.LocalMusicVioletNeon
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 
 @Composable
 fun ArtistDetailSheet(
@@ -89,7 +95,7 @@ fun ArtistDetailSheet(
     onDismissRequest: () -> Unit,
     onPlayTrackIndex: (Int) -> Unit,
     onPlayAllClick: () -> Unit,
-    onAddAllToQueueClick: () -> Unit,
+    onAddAllToQueueClick: (List<AudioTrack>) -> Unit,
     onAlbumClick: (Album) -> Unit,
     onAddToQueueClick: ((AudioTrack) -> Unit)? = null,
     onAddToPlaylistClick: ((AudioTrack) -> Unit)? = null,
@@ -100,6 +106,7 @@ fun ArtistDetailSheet(
     onNavigateToArtist: ((String) -> Unit)? = null,
     modifier: Modifier = Modifier
 ) {
+    val context = LocalContext.current
     val artistListState = rememberLazyListState()
 
     val displayArtistName = remember(artistName) {
@@ -120,28 +127,44 @@ fun ArtistDetailSheet(
         albums.filter { it.matchesArtist(artistName) }
     }
 
-    // Progetti collaborativi (di coppia) correlati per artisti solisti
-    val relatedCollabs = remember(artistName, albums, tracks) {
-        if (!isCollabArtist(artistName)) {
-            val distinctCollabNames = (tracks.map { it.artist } + tracks.map { it.albumArtist } + albums.map { it.artist })
-                .map { it.trim() }
-                .filter { isCollabArtist(it) && isPartnerInCollab(artistName, it) }
-                .distinct()
+    // Progetti collaborativi (di coppia) calcolati in asincrono su Dispatchers.Default (con deduplica preventiva)
+    // affinché il primo frame dell'apertura del profilo artista sia istantaneo (<16ms, zero jank).
+    val relatedCollabs by produceState(
+        initialValue = emptyList<CollabProjectInfo>(),
+        artistName,
+        albums,
+        tracks
+    ) {
+        value = withContext(Dispatchers.Default) {
+            if (!isCollabArtist(artistName)) {
+                val distinctCollabNames = buildSet {
+                    tracks.forEach { t ->
+                        val a = t.artist.trim()
+                        if (a.isNotEmpty()) add(a)
+                        val aa = t.albumArtist.trim()
+                        if (aa.isNotEmpty()) add(aa)
+                    }
+                    albums.forEach { alb ->
+                        val a = alb.artist.trim()
+                        if (a.isNotEmpty()) add(a)
+                    }
+                }.filter { isCollabArtist(it) && isPartnerInCollab(artistName, it) }
 
-            distinctCollabNames.map { collabName ->
-                val cTracks = tracks.filter { it.matchesCollabArtist(collabName) }
-                val cAlbums = albums.filter { it.matchesCollabArtist(collabName) }
-                val cover = cTracks.firstOrNull { it.albumArtUri != null }?.albumArtUri
-                    ?: cAlbums.firstOrNull { it.albumArtUri != null }?.albumArtUri
-                CollabProjectInfo(
-                    name = collabName,
-                    tracksCount = cTracks.size,
-                    albumsCount = cAlbums.size,
-                    coverUri = cover
-                )
-            }.filter { it.tracksCount > 0 || it.albumsCount > 0 }
-        } else {
-            emptyList()
+                distinctCollabNames.map { collabName ->
+                    val cTracks = tracks.filter { it.matchesCollabArtist(collabName) }
+                    val cAlbums = albums.filter { it.matchesCollabArtist(collabName) }
+                    val cover = cTracks.firstOrNull { it.albumArtUri != null }?.albumArtUri
+                        ?: cAlbums.firstOrNull { it.albumArtUri != null }?.albumArtUri
+                    CollabProjectInfo(
+                        name = collabName,
+                        tracksCount = cTracks.size,
+                        albumsCount = cAlbums.size,
+                        coverUri = cover
+                    )
+                }.filter { it.tracksCount > 0 || it.albumsCount > 0 }
+            } else {
+                emptyList()
+            }
         }
     }
 
@@ -155,6 +178,13 @@ fun ArtistDetailSheet(
             .distinct()
     }
 
+    // Valore iniziale immediato dalla cache in-memory (zero I/O sul Main Thread)
+    val initialCachedInfo = remember(displayArtistName, artistInfoRepository) {
+        if (displayArtistName.isNotBlank()) {
+            artistInfoRepository?.peekCachedArtistInfo(displayArtistName)
+        } else null
+    }
+
     // Informazioni profilo artista (foto HD Deezer e biografia Wikipedia/Last.fm disambiguate)
     val artistInfoFlow = remember(displayArtistName, artistInfoRepository, referenceTrackTitles, referenceAlbumTitles) {
         if (displayArtistName.isNotBlank() && artistInfoRepository != null) {
@@ -165,8 +195,8 @@ fun ArtistDetailSheet(
             )
         } else null
     }
-    val artistInfo by (artistInfoFlow?.collectAsStateWithLifecycle(initialValue = null)
-        ?: remember { mutableStateOf<ArtistInfo?>(null) })
+    val artistInfo by (artistInfoFlow?.collectAsStateWithLifecycle(initialValue = initialCachedInfo)
+        ?: remember(initialCachedInfo) { mutableStateOf(initialCachedInfo) })
 
     var showBiographyDialog by remember { mutableStateOf(false) }
     var showEditSheet by remember { mutableStateOf(false) }
@@ -247,8 +277,16 @@ fun ArtistDetailSheet(
                             contentAlignment = Alignment.Center
                         ) {
                             if (displayPhotoModel != null) {
+                                val heroImageRequest = remember(displayPhotoModel) {
+                                    ImageRequest.Builder(context)
+                                        .data(displayPhotoModel)
+                                        .size(360)
+                                        .precision(Precision.INEXACT)
+                                        .allowHardware(true)
+                                        .build()
+                                }
                                 AsyncImage(
-                                    model = displayPhotoModel,
+                                    model = heroImageRequest,
                                     contentDescription = artistName,
                                     contentScale = ContentScale.Crop,
                                     modifier = Modifier.fillMaxSize()
@@ -336,7 +374,7 @@ fun ArtistDetailSheet(
                             }
 
                             OutlinedButton(
-                                onClick = onAddAllToQueueClick,
+                                onClick = { onAddAllToQueueClick(artistTracks) },
                                 modifier = Modifier.weight(1f),
                                 shape = RoundedCornerShape(12.dp)
                             ) {

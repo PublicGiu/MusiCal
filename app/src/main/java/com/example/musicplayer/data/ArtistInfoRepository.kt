@@ -90,6 +90,17 @@ class ArtistInfoRepository(
     }
 
     /**
+     * Restituisce in modo istantaneo e non bloccante (zero I/O su disco) le informazioni
+     * dell'artista se la cache in memoria è già stata inizializzata. Sicuro sul Main Thread.
+     */
+    fun peekCachedArtistInfo(artistName: String): ArtistInfo? {
+        if (!isCacheLoaded) return null
+        val clean = cleanArtistName(artistName)
+        if (clean.isBlank()) return null
+        return memoryCache[clean.lowercase(Locale.ROOT)]
+    }
+
+    /**
      * Restituisce le informazioni dell'artista da cache in-memory se presenti,
      * altrimenti null.
      */

@@ -134,6 +134,27 @@ class UnreleasedAlbumGroupingTest {
     }
 
     @Test
+    fun `extracts artist from displayName when track artist and title lack artist prefix`() {
+        val mockUri = Mockito.mock(Uri::class.java)
+        val track = AudioTrack(
+            id = 55L,
+            title = "Molly (Unreleased)",
+            artist = "Artista sconosciuto",
+            album = "Download",
+            duration = 140_000L,
+            uri = mockUri,
+            displayName = "Playboi Carti - Molly (Unreleased).mp3"
+        )
+        val albums = groupTracksIntoAlbums(
+            tracks = listOf(track),
+            unreleasedSnapshot = UnreleasedSnapshot(trackIds = setOf(55L))
+        )
+        assertEquals(1, albums.size)
+        assertEquals("Unreleased", albums.first().title)
+        assertEquals("Playboi Carti", albums.first().artist)
+    }
+
+    @Test
     fun `enrichTrack marks track as Unreleased with album Unreleased when Deezer returns empty results`() = runBlocking {
         val mockClient = OkHttpClient.Builder()
             .addInterceptor(Interceptor { chain ->

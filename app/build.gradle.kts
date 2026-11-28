@@ -36,8 +36,8 @@ android {
         applicationId = "com.example.musicplayer"
         minSdk = 36
         targetSdk = 36
-        versionCode = 31
-        versionName = "0.2.13"
+        versionCode = 33
+        versionName = "0.2.15"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
 

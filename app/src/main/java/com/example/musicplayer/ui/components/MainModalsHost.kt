@@ -84,6 +84,8 @@ fun MainModalsHost(
     val userQueue by viewModel.userQueue.collectAsStateWithLifecycle()
     val autoplayQueue by viewModel.autoplayQueue.collectAsStateWithLifecycle()
     val currentLyrics by viewModel.currentLyrics.collectAsStateWithLifecycle()
+    val isFetchingLyrics by viewModel.isFetchingLyrics.collectAsStateWithLifecycle()
+    val lyricsFetchNotFoundTrackId by viewModel.lyricsFetchNotFoundTrackId.collectAsStateWithLifecycle()
     val playbackContext by viewModel.playbackContext.collectAsStateWithLifecycle()
 
     // Stati Last.fm
@@ -238,7 +240,10 @@ fun MainModalsHost(
             },
             artistInfoRepository = viewModel.artistInfoRepository,
             referenceTrackTitles = currentArtistTracks,
-            referenceAlbumTitles = currentArtistAlbums
+            referenceAlbumTitles = currentArtistAlbums,
+            isFetchingLyrics = isFetchingLyrics,
+            lyricsFetchNotFoundTrackId = lyricsFetchNotFoundTrackId,
+            onFetchLyricsClick = { viewModel.fetchLyricsOnlyForTrack(it) }
         )
     }
 

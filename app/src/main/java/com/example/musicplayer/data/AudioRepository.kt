@@ -5,6 +5,7 @@ import android.content.Context
 import android.net.Uri
 import android.provider.MediaStore
 import com.example.musicplayer.data.tagger.sanitizer.QuerySanitizer
+import java.util.concurrent.ConcurrentHashMap
 
 private val EXCLUDED_PATH_SUBSTRINGS = listOf(
     "com.whatsapp",
@@ -601,6 +602,11 @@ private val FEAT_ARTIST_REGEX = Regex(
 )
 private val COLLAB_SEPARATORS_REGEX = Regex("""(?i)(\s*,\s*|\s+(&|x|\+|and)\s+)""")
 
+private const val ARTIST_MEMO_CACHE_LIMIT = 4096
+private val isCollabArtistMemoCache = ConcurrentHashMap<String, Boolean>(512)
+private val extractCollaboratorsMemoCache = ConcurrentHashMap<String, List<String>>(256)
+private val extractMainArtistMemoCache = ConcurrentHashMap<String, String>(512)
+
 /**
  * Verifica se un nome artista rappresenta un progetto collaborativo o di coppia
  * (es. "Drake & 21 Savage", "Salmo & Noyz Narcos"), escludendo singoli artisti
@@ -609,9 +615,19 @@ private val COLLAB_SEPARATORS_REGEX = Regex("""(?i)(\s*,\s*|\s+(&|x|\+|and)\s+)"
 fun isCollabArtist(artistName: String?): Boolean {
     if (artistName.isNullOrBlank()) return false
     val trimmed = artistName.trim()
-    if (isVariousArtists(trimmed)) return false
-    val masked = QuerySanitizer.maskProtectedArtists(trimmed)
-    return COLLAB_SEPARATORS_REGEX.containsMatchIn(masked.maskedText)
+    isCollabArtistMemoCache[trimmed]?.let { return it }
+
+    val computed = if (isVariousArtists(trimmed)) {
+        false
+    } else {
+        val masked = QuerySanitizer.maskProtectedArtists(trimmed)
+        COLLAB_SEPARATORS_REGEX.containsMatchIn(masked.maskedText)
+    }
+    if (isCollabArtistMemoCache.size >= ARTIST_MEMO_CACHE_LIMIT) {
+        isCollabArtistMemoCache.clear()
+    }
+    isCollabArtistMemoCache[trimmed] = computed
+    return computed
 }
 
 /**
@@ -621,9 +637,17 @@ fun isCollabArtist(artistName: String?): Boolean {
  */
 fun extractCollaborators(artistName: String?): List<String> {
     if (artistName.isNullOrBlank()) return emptyList()
-    val masked = QuerySanitizer.maskProtectedArtists(artistName.trim())
+    val trimmed = artistName.trim()
+    extractCollaboratorsMemoCache[trimmed]?.let { return it }
+
+    val masked = QuerySanitizer.maskProtectedArtists(trimmed)
     val parts = masked.maskedText.split(COLLAB_SEPARATORS_REGEX)
-    return parts.map { masked.unmask(it).trim() }.filter { it.isNotBlank() }
+    val computed = parts.map { masked.unmask(it).trim() }.filter { it.isNotBlank() }
+    if (extractCollaboratorsMemoCache.size >= ARTIST_MEMO_CACHE_LIMIT) {
+        extractCollaboratorsMemoCache.clear()
+    }
+    extractCollaboratorsMemoCache[trimmed] = computed
+    return computed
 }
 
 /**
@@ -659,9 +683,17 @@ fun isVariousArtists(name: String?): Boolean {
  */
 fun extractMainArtist(artist: String?): String {
     if (artist.isNullOrBlank()) return ""
-    val masked = QuerySanitizer.maskProtectedArtists(artist.trim())
+    val trimmed = artist.trim()
+    extractMainArtistMemoCache[trimmed]?.let { return it }
+
+    val masked = QuerySanitizer.maskProtectedArtists(trimmed)
     val stripped = masked.maskedText.replace(FEAT_ARTIST_REGEX, "").trim()
-    return masked.unmask(stripped).trim()
+    val computed = masked.unmask(stripped).trim()
+    if (extractMainArtistMemoCache.size >= ARTIST_MEMO_CACHE_LIMIT) {
+        extractMainArtistMemoCache.clear()
+    }
+    extractMainArtistMemoCache[trimmed] = computed
+    return computed
 }
 
 /**
@@ -871,6 +903,14 @@ fun groupTracksIntoAlbums(
             .orEmpty()
         if (fromTitleFallback.isNotBlank() && fromTitleFallback.lowercase(java.util.Locale.ROOT) !in GENERIC_ALBUM_NAMES) {
             return fromTitleFallback
+        }
+
+        val fromDisplayNameFallback = QuerySanitizer.cleanFileName(track.displayName).artist
+            ?.takeIf { !isVariousArtists(it) && !QuerySanitizer.isArtistUnknownOrDirty(it) }
+            ?.let { getMainArtist(it) }
+            .orEmpty()
+        if (fromDisplayNameFallback.isNotBlank() && fromDisplayNameFallback.lowercase(java.util.Locale.ROOT) !in GENERIC_ALBUM_NAMES) {
+            return fromDisplayNameFallback
         }
 
         return ""

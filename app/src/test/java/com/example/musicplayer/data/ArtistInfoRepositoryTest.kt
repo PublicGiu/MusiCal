@@ -474,6 +474,35 @@ class ArtistInfoRepositoryTest {
     }
 
     @Test
+    fun testMemoizedArtistMatchingConsistencyAcrossLargeCatalog() {
+        val catalog = (1..2000).map { idx ->
+            val artist = when (idx % 5) {
+                0 -> "Marracash feat. Guè"
+                1 -> "Tyler, The Creator feat. Kali Uchis"
+                2 -> "Drake & 21 Savage"
+                3 -> "Lazza"
+                else -> "Playboi Carti"
+            }
+            AudioTrack(
+                id = idx.toLong(),
+                title = "Track $idx",
+                artist = artist,
+                album = "Album ${idx % 20}",
+                duration = 180_000L,
+                uri = dummyUri
+            )
+        }
+
+        val marraTracks = catalog.filter { it.matchesArtist("Marracash") }
+        val tylerTracks = catalog.filter { it.matchesArtist("Tyler, The Creator") }
+        val duoTracks = catalog.filter { it.matchesArtist("Drake & 21 Savage") }
+
+        assertEquals(400, marraTracks.size)
+        assertEquals(400, tylerTracks.size)
+        assertEquals(400, duoTracks.size)
+    }
+
+    @Test
     fun testCountCatalogMentionsInTextAndBoundaryProtection() {
         val text = "Nicola Pittalis, in arte Pitta, è un rapper italiano noto per l'album Sardegna e il singolo Fino all'alba."
         val stats = countCatalogMentionsInText(

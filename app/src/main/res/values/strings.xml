@@ -59,6 +59,7 @@
     <string name="settings_section_appearance">Aspetto &amp; Visualizzazione</string>
     <string name="settings_appearance_short">Aspetto &amp; Visualizzazione</string>
     <string name="settings_theme_mode">Modalità tema</string>
+    <string name="settings_theme_card_title">Tema dell\'applicazione</string>
     <string name="settings_layout_card_title">Visualizzazione sezioni</string>
     <string name="settings_layout_card_desc">Scegli in modo indipendente come mostrare brani, album e playlist</string>
     <string name="layout_mode_list">Elenco</string>
@@ -164,6 +165,7 @@
     <string name="lyrics_no_lyrics_available">Nessun testo disponibile per questo brano</string>
     <string name="lyrics_use_auto_tagger">Usa l\'Auto-Tagger per cercarlo su LRCLIB</string>
     <string name="lyrics_loading">Caricamento testo in corso…</string>
+    <string name="lyrics_not_found_subtitle">Nessuna corrispondenza trovata su LRCLIB</string>
     <string name="lyrics_no_synced_available">Nessun testo sincronizzato disponibile</string>
 
     <!-- Player a tutto schermo (Full Screen Player) -->
